@@ -286,4 +286,110 @@ router.post('/update-username', async (req, res) => {
   }
 });
 
+// Helper to strip non-digits from phone number
+const extractPhoneDigits = (phone) => {
+  if (!phone || typeof phone !== 'string') return '';
+  return phone.replace(/\D/g, '');
+};
+
+// Check if two phone numbers match (exact digits or last 10 digits)
+const phonesMatch = (p1, p2) => {
+  const d1 = extractPhoneDigits(p1);
+  const d2 = extractPhoneDigits(p2);
+  if (!d1 || !d2) return false;
+  if (d1 === d2) return true;
+  if (d1.length >= 10 && d2.length >= 10) {
+    return d1.slice(-10) === d2.slice(-10);
+  }
+  return false;
+};
+
+// POST /api/users/sync-contacts
+// WhatsApp-style: sync phone contacts against registered Assistance users
+router.post('/sync-contacts', async (req, res) => {
+  try {
+    const { contacts = [] } = req.body;
+
+    let allUsers = [];
+    if (mongoose.connection.readyState === 1) {
+      allUsers = await User.find({}, 'username email phone displayName avatar status createdAt').lean();
+    } else {
+      allUsers = [];
+    }
+
+    const registeredContacts = [];
+    const nonRegisteredContacts = [];
+
+    contacts.forEach((contact) => {
+      const contactPhone = contact.phone || '';
+      const matchedUser = allUsers.find((u) => phonesMatch(u.phone, contactPhone));
+      if (matchedUser) {
+        registeredContacts.push({
+          id: matchedUser._id || matchedUser.username,
+          phoneBookName: contact.name || matchedUser.displayName || matchedUser.username,
+          username: matchedUser.username,
+          phone: matchedUser.phone || contactPhone,
+          email: matchedUser.email,
+          status: matchedUser.status || 'Hey there! I am using Assistance',
+          avatar: matchedUser.avatar || null,
+          registered: true,
+          registeredAt: matchedUser.createdAt,
+        });
+      } else {
+        nonRegisteredContacts.push({
+          phoneBookName: contact.name || 'Unknown Contact',
+          phone: contactPhone,
+          registered: false,
+        });
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      totalPhoneContacts: contacts.length,
+      registeredCount: registeredContacts.length,
+      registeredContacts,
+      nonRegisteredContacts,
+    });
+  } catch (error) {
+    console.error('Sync contacts error:', error);
+    res.status(500).json({ success: false, message: 'Server error syncing contacts', error: error.message });
+  }
+});
+
+// GET /api/users/registered-contacts
+router.get('/registered-contacts', async (req, res) => {
+  try {
+    let users = [];
+    if (mongoose.connection.readyState === 1) {
+      users = await User.find({}, 'username email phone displayName avatar status createdAt').lean();
+    } else {
+      users = [];
+    }
+
+    const contacts = users
+      .filter((u) => Boolean(u.phone && u.username))
+      .map((u) => ({
+        id: u._id || u.username,
+        phoneBookName: u.displayName || u.username,
+        username: u.username,
+        phone: u.phone,
+        email: u.email,
+        status: u.status || 'Hey there! I am using Assistance',
+        avatar: u.avatar || null,
+        registered: true,
+        registeredAt: u.createdAt,
+      }));
+
+    return res.status(200).json({
+      success: true,
+      count: contacts.length,
+      contacts,
+    });
+  } catch (error) {
+    console.error('Get registered contacts error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching contacts', error: error.message });
+  }
+});
+
 export default router;

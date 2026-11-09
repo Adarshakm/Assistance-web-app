@@ -21,6 +21,14 @@ function App() {
     if (window.location.pathname === '/account' || window.location.hash === '#account') {
       return 'account';
     }
+    if (
+      window.location.pathname === '/contacts' ||
+      window.location.hash === '#contacts' ||
+      window.location.pathname === '/my-contacts' ||
+      window.location.hash === '#my-contacts'
+    ) {
+      return 'contacts';
+    }
     if (window.location.pathname === '/profile' || window.location.hash === '#profile') {
       return 'profile';
     }
@@ -233,6 +241,8 @@ function App() {
         ? '/reset-password'
         : view === 'account'
         ? '/account'
+        : view === 'contacts'
+        ? '/contacts'
         : view === 'profile'
         ? '/profile'
         : view === 'social'
@@ -305,6 +315,13 @@ function App() {
         setCurrentView('reset-password');
       } else if (window.location.pathname === '/account' || window.location.hash === '#account') {
         setCurrentView('account');
+      } else if (
+        window.location.pathname === '/contacts' ||
+        window.location.hash === '#contacts' ||
+        window.location.pathname === '/my-contacts' ||
+        window.location.hash === '#my-contacts'
+      ) {
+        setCurrentView('contacts');
       } else if (window.location.pathname === '/profile' || window.location.hash === '#profile') {
         setCurrentView('profile');
       } else if (
@@ -1059,9 +1076,256 @@ function App() {
     }
   };
 
+  // Contacts on Assistance
+  const [phoneContacts, setPhoneContacts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_phone_contacts');
+      if (saved) {
+        const dummyNames = new Set([
+          'Adarsh K M', 'Alex', 'Tony Stark', 'David Miller', 'Jack Sparrow',
+          'Mohanan', 'Sophia Patel', 'Alex Chen', 'Liam Smith', 'Olivia Taylor',
+          'Emma Watson', 'Robert Brown'
+        ]);
+        const parsed = JSON.parse(saved);
+        const realContacts = parsed.filter((c) => !dummyNames.has(c.name));
+        return realContacts;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Ensure any cached dummy contacts are purged from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('assistance_phone_contacts');
+      if (saved) {
+        const dummyNames = new Set([
+          'Adarsh K M', 'Alex', 'Tony Stark', 'David Miller', 'Jack Sparrow',
+          'Mohanan', 'Sophia Patel', 'Alex Chen', 'Liam Smith', 'Olivia Taylor',
+          'Emma Watson', 'Robert Brown'
+        ]);
+        const parsed = JSON.parse(saved);
+        const realContacts = parsed.filter((c) => !dummyNames.has(c.name));
+        localStorage.setItem('assistance_phone_contacts', JSON.stringify(realContacts));
+        setPhoneContacts(realContacts);
+      }
+    } catch {}
+  }, []);
+
+  const [registeredContacts, setRegisteredContacts] = useState([]);
+  const [nonRegisteredContacts, setNonRegisteredContacts] = useState([]);
+  const [isSyncingContacts, setIsSyncingContacts] = useState(false);
+  const [contactsSearchQuery, setContactsSearchQuery] = useState('');
+  const [contactsFilterTab, setContactsFilterTab] = useState('registered');
+  const [syncFeedback, setSyncFeedback] = useState(null);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+
+  const syncPhoneContacts = async (contactsList = null) => {
+    setIsSyncingContacts(true);
+    const listToSync = contactsList || phoneContacts;
+    try {
+      const res = await fetch('/api/users/sync-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: listToSync }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRegisteredContacts(data.registeredContacts || []);
+        setNonRegisteredContacts(data.nonRegisteredContacts || []);
+        setSyncFeedback({
+          type: 'success',
+          text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Assistance!`,
+        });
+      } else {
+        setSyncFeedback({ type: 'error', text: data.message || 'Failed to sync contacts' });
+      }
+    } catch (err) {
+      console.error('Sync contacts error:', err);
+      try {
+        const fallbackRes = await fetch('/api/users/registered-contacts');
+        const fallbackData = await fallbackRes.json();
+        if (fallbackRes.ok && fallbackData.contacts) {
+          setRegisteredContacts(fallbackData.contacts);
+          setSyncFeedback({
+            type: 'success',
+            text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
+          });
+        }
+      } catch {
+        setSyncFeedback({ type: 'error', text: 'Unable to connect to server to sync contacts' });
+      }
+    } finally {
+      setIsSyncingContacts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentView === 'contacts' && registeredContacts.length === 0 && !isSyncingContacts && phoneContacts.length > 0) {
+      syncPhoneContacts();
+    }
+  }, [currentView, phoneContacts]);
+
+  const handleDeviceContactSync = async () => {
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        const props = ['name', 'tel'];
+        const deviceContacts = await navigator.contacts.select(props, { multiple: true });
+        if (deviceContacts && deviceContacts.length > 0) {
+          const formatted = deviceContacts
+            .map((c) => ({
+              name: c.name?.[0] || 'Unknown',
+              phone: c.tel?.[0] || '',
+            }))
+            .filter((c) => c.phone);
+
+          if (formatted.length > 0) {
+            const merged = [...phoneContacts];
+            formatted.forEach((item) => {
+              if (!merged.some((m) => m.phone === item.phone)) {
+                merged.push(item);
+              }
+            });
+            setPhoneContacts(merged);
+            try {
+              localStorage.setItem('assistance_phone_contacts', JSON.stringify(merged));
+            } catch {}
+            syncPhoneContacts(merged);
+            return;
+          }
+        }
+      } catch (err) {
+        console.log('Native contact picker dismissed or unsupported:', err);
+      }
+    }
+    syncPhoneContacts();
+  };
+
+  const handleAddNewContact = (e) => {
+    e.preventDefault();
+    if (!newContactName.trim() || !newContactPhone.trim()) return;
+    const newEntry = { name: newContactName.trim(), phone: newContactPhone.trim() };
+    const updated = [newEntry, ...phoneContacts.filter((c) => c.phone !== newEntry.phone)];
+    setPhoneContacts(updated);
+    try {
+      localStorage.setItem('assistance_phone_contacts', JSON.stringify(updated));
+    } catch {}
+    setNewContactName('');
+    setNewContactPhone('');
+    setShowAddContactModal(false);
+    syncPhoneContacts(updated);
+  };
+
+  const getAvatarColor = (name = '') => {
+    const colors = ['#25D366', '#128C7E', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const getInitials = (name = '') => {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return (name[0] || '?').toUpperCase();
+  };
+
+  const filteredRegisteredContacts = registeredContacts.filter((contact) => {
+    if (!contactsSearchQuery.trim()) return true;
+    const query = contactsSearchQuery.toLowerCase();
+    const nameMatch = (contact.phoneBookName || '').toLowerCase().includes(query);
+    const userMatch = (contact.username || '').toLowerCase().includes(query);
+    const phoneMatch = (contact.phone || '').includes(query);
+    return nameMatch || userMatch || phoneMatch;
+  });
+
+  const filteredInviteContacts = nonRegisteredContacts.filter((contact) => {
+    if (!contactsSearchQuery.trim()) return true;
+    const query = contactsSearchQuery.toLowerCase();
+    const nameMatch = (contact.phoneBookName || '').toLowerCase().includes(query);
+    const phoneMatch = (contact.phone || '').includes(query);
+    return nameMatch || phoneMatch;
+  });
+
+  // Direct Chat / Messaging State
+  const [selectedChatContact, setSelectedChatContact] = useState(null);
+  const [chatConversations, setChatConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_chat_conversations');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [chatInputText, setChatInputText] = useState('');
+  const chatMessagesEndRef = useRef(null);
+
+  const handleStartChat = (contact) => {
+    setSelectedChatContact(contact);
+    navigateTo('messages');
+  };
+
+  const handleSendMessage = (e) => {
+    if (e) e.preventDefault();
+    if (!chatInputText.trim() || !selectedChatContact) return;
+
+    const targetUsername = selectedChatContact.username;
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newMsg = {
+      id: Date.now().toString(),
+      text: chatInputText.trim(),
+      sender: 'me',
+      timestamp: nowTime,
+    };
+
+    const updatedThread = [...(chatConversations[targetUsername] || []), newMsg];
+    const updatedAll = {
+      ...chatConversations,
+      [targetUsername]: updatedThread,
+    };
+
+    setChatConversations(updatedAll);
+    setChatInputText('');
+    try {
+      localStorage.setItem('assistance_chat_conversations', JSON.stringify(updatedAll));
+    } catch {}
+
+    // Simulated friendly response from contact after short delay
+    setTimeout(() => {
+      const replyMsg = {
+        id: (Date.now() + 1).toString(),
+        text: `Hi! Thanks for reaching out. Great connecting with you on Assistance!`,
+        sender: targetUsername,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setChatConversations((prev) => {
+        const nextThread = [...(prev[targetUsername] || []), replyMsg];
+        const nextAll = { ...prev, [targetUsername]: nextThread };
+        try {
+          localStorage.setItem('assistance_chat_conversations', JSON.stringify(nextAll));
+        } catch {}
+        return nextAll;
+      });
+    }, 1200);
+  };
+
+  useEffect(() => {
+    if (currentView === 'messages' && chatMessagesEndRef.current) {
+      chatMessagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [currentView, selectedChatContact, chatConversations]);
+
   if (
     currentView === 'blank' ||
     currentView === 'account' ||
+    currentView === 'contacts' ||
     currentView === 'profile' ||
     currentView === 'social' ||
     currentView === 'search-and-discovery' ||
@@ -1122,6 +1386,24 @@ function App() {
 
           <div className="sidebar-body">
             <nav className="sidebar-nav">
+              <button
+                type="button"
+                className={`sidebar-nav-item ${currentView === 'contacts' ? 'active' : ''}`}
+                id="my-contacts-btn"
+                onClick={() => navigateTo(currentView === 'contacts' ? 'blank' : 'contacts')}
+                title="My Contacts"
+                aria-label="My Contacts"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 2v2"></path>
+                  <path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"></path>
+                  <path d="M8 2v2"></path>
+                  <circle cx="12" cy="11" r="3"></circle>
+                  <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                </svg>
+                {!isSidebarCollapsed && <span>My Contacts</span>}
+              </button>
+
               <button
                 type="button"
                 className={`sidebar-nav-item ${currentView === 'profile' ? 'active' : ''}`}
@@ -1740,6 +2022,359 @@ function App() {
                     </div>
                   )}
                 </form>
+              </div>
+            </div>
+          ) : currentView === 'contacts' ? (
+            <div className="contacts-space" id="contacts-space">
+              <div className="contacts-container" id="contacts-container">
+                {/* Header with Title and Sync Controls */}
+                <div className="contacts-header-wrapper">
+                  <div className="contacts-title-col">
+                    <h1 className="heading contacts-heading" id="contacts-heading">
+                      Contacts on Assistance
+                    </h1>
+                    <p className="contacts-subheading">
+                      Synced from phone contacts
+                    </p>
+                  </div>
+
+                  <div className="contacts-header-actions">
+                    <button
+                      type="button"
+                      className="contacts-sync-btn"
+                      id="sync-contacts-btn"
+                      onClick={handleDeviceContactSync}
+                      disabled={isSyncingContacts}
+                      title="Sync Phone Contacts with Assistance"
+                    >
+                      <svg
+                        className={isSyncingContacts ? 'spin' : ''}
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                      </svg>
+                      {isSyncingContacts ? 'Syncing...' : 'Sync Contacts'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="contacts-add-btn"
+                      id="add-phone-contact-btn"
+                      onClick={() => setShowAddContactModal(true)}
+                      title="Add a phone contact to sync"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <line x1="20" y1="8" x2="20" y2="14" />
+                        <line x1="23" y1="11" x2="17" y2="11" />
+                      </svg>
+                      Add Contact
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sync Feedback Message */}
+                {syncFeedback && (
+                  <div className={`contacts-feedback-banner feedback-${syncFeedback.type}`} role="alert">
+                    <span>{syncFeedback.text}</span>
+                    <button
+                      type="button"
+                      className="contacts-feedback-close"
+                      onClick={() => setSyncFeedback(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* Search Bar */}
+                <div className="contacts-search-box">
+                  <svg
+                    className="contacts-search-icon"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    type="text"
+                    id="contacts-search-input"
+                    className="contacts-search-input"
+                    placeholder="Search registered contacts by name, username, or phone..."
+                    value={contactsSearchQuery}
+                    onChange={(e) => setContactsSearchQuery(e.target.value)}
+                    aria-label="Search registered contacts"
+                  />
+                  {contactsSearchQuery && (
+                    <button
+                      type="button"
+                      className="contacts-search-clear"
+                      onClick={() => setContactsSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* WhatsApp Filter Tabs: Registered on Assistance vs Invite */}
+                <div className="contacts-tabs-bar">
+                  <button
+                    type="button"
+                    className={`contacts-tab-btn ${contactsFilterTab === 'registered' ? 'active' : ''}`}
+                    onClick={() => setContactsFilterTab('registered')}
+                  >
+                    <span className="contacts-tab-label">Registered on Assistance</span>
+                    <span className="contacts-tab-badge">{registeredContacts.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`contacts-tab-btn ${contactsFilterTab === 'invite' ? 'active' : ''}`}
+                    onClick={() => setContactsFilterTab('invite')}
+                  >
+                    <span className="contacts-tab-label">Invite to Assistance</span>
+                    <span className="contacts-tab-badge secondary">{nonRegisteredContacts.length}</span>
+                  </button>
+                </div>
+
+                {/* Main Contacts List */}
+                {contactsFilterTab === 'registered' ? (
+                  <div className="contacts-list" id="contacts-list">
+                    {filteredRegisteredContacts.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <div className="contacts-empty-icon">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                          </svg>
+                        </div>
+                        <h3 className="contacts-empty-title">
+                          {contactsSearchQuery ? 'No matching registered contacts' : 'No contacts registered yet'}
+                        </h3>
+                        <p className="contacts-empty-text">
+                          {contactsSearchQuery
+                            ? `No registered contact found matching "${contactsSearchQuery}"`
+                            : 'Sync your phone contacts to see which of your friends and colleagues are already on Assistance.'}
+                        </p>
+                        {!contactsSearchQuery && (
+                          <button
+                            type="button"
+                            className="contacts-sync-btn"
+                            onClick={handleDeviceContactSync}
+                            disabled={isSyncingContacts}
+                          >
+                            Sync Phone Contacts Now
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      filteredRegisteredContacts.map((contact) => (
+                        <div key={contact.id || contact.username} className="contact-card">
+                          <div className="contact-card-left">
+                            <div
+                              className="contact-avatar"
+                              style={{
+                                backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username),
+                              }}
+                            >
+                              {contact.avatar ? (
+                                <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
+                              ) : (
+                                <span>{getInitials(contact.phoneBookName || contact.username)}</span>
+                              )}
+                              <span className="contact-online-dot" title="Active on Assistance"></span>
+                            </div>
+
+                            <div className="contact-info">
+                              <div className="contact-name-row">
+                                <span className="contact-name">{contact.phoneBookName}</span>
+                                <span className="contact-username">@{contact.username}</span>
+                                <span className="contact-verified-badge" title="Registered Assistance User">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                                  </svg>
+                                  Registered
+                                </span>
+                              </div>
+
+                              <div className="contact-status" title={contact.status}>
+                                {contact.status}
+                              </div>
+
+                              <div className="contact-meta-row">
+                                <span className="contact-phone">
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                  {contact.phone}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="contact-card-actions">
+                            <button
+                              type="button"
+                              className="contact-action-btn primary"
+                              onClick={() => navigateTo('messages')}
+                              title={`Message ${contact.phoneBookName}`}
+                              aria-label={`Message ${contact.phoneBookName}`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                              </svg>
+                              <span>Message</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="contact-action-btn icon-only"
+                              onClick={() => navigateTo('voice-and-video-call')}
+                              title={`Call ${contact.phoneBookName}`}
+                              aria-label={`Call ${contact.phoneBookName}`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  /* Invite Section (WhatsApp model for phone contacts not yet registered) */
+                  <div className="contacts-list" id="invite-contacts-list">
+                    {filteredInviteContacts.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <h3 className="contacts-empty-title">All your phone contacts are already on Assistance!</h3>
+                        <p className="contacts-empty-text">Every synced phone contact has registered on Assistance.</p>
+                      </div>
+                    ) : (
+                      filteredInviteContacts.map((contact, idx) => (
+                        <div key={contact.phone || idx} className="contact-card invite-card">
+                          <div className="contact-card-left">
+                            <div
+                              className="contact-avatar invite"
+                              style={{ backgroundColor: '#9ca3af' }}
+                            >
+                              <span>{getInitials(contact.phoneBookName)}</span>
+                            </div>
+                            <div className="contact-info">
+                              <span className="contact-name">{contact.phoneBookName}</span>
+                              <span className="contact-phone">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                </svg>
+                                {contact.phone}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="contact-card-actions">
+                            <button
+                              type="button"
+                              className="contact-invite-btn"
+                              onClick={() => {
+                                navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
+                                setSyncFeedback({
+                                  type: 'success',
+                                  text: `Invitation link copied for ${contact.phoneBookName}!`,
+                                });
+                              }}
+                            >
+                              Invite
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Add Phone Contact Modal */}
+                {showAddContactModal && (
+                  <div className="contacts-modal-backdrop" onClick={() => setShowAddContactModal(false)}>
+                    <div className="contacts-modal" onClick={(e) => e.stopPropagation()}>
+                      <div className="contacts-modal-header">
+                        <h3 className="contacts-modal-title">Add Phone Contact to Sync</h3>
+                        <button
+                          type="button"
+                          className="contacts-modal-close-btn"
+                          onClick={() => setShowAddContactModal(false)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <p className="contacts-modal-desc">
+                        Add a contact from your phonebook. If they are already registered on Assistance, they will immediately appear in your registered contacts list!
+                      </p>
+                      <form onSubmit={handleAddNewContact} className="contacts-modal-form">
+                        <div className="form-group">
+                          <label className="input-label" htmlFor="new-contact-name">Contact Name</label>
+                          <input
+                            type="text"
+                            id="new-contact-name"
+                            className="input-field"
+                            placeholder="e.g. Adarsh"
+                            value={newContactName}
+                            onChange={(e) => setNewContactName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="input-label" htmlFor="new-contact-phone">Phone Number</label>
+                          <input
+                            type="tel"
+                            id="new-contact-phone"
+                            className="input-field"
+                            placeholder="e.g. 9074762258 or +1 415-555-0101"
+                            value={newContactPhone}
+                            onChange={(e) => setNewContactPhone(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="contacts-modal-footer">
+                          <button
+                            type="button"
+                            className="contacts-modal-cancel-btn"
+                            onClick={() => setShowAddContactModal(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button type="submit" className="contacts-modal-submit-btn">
+                            Save & Sync
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'profile' ? (

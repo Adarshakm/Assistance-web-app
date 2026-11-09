@@ -20,6 +20,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    displayName: {
+      type: String,
+      trim: true,
+    },
+    avatar: {
+      type: String,
+      trim: true,
+    },
+    status: {
+      type: String,
+      trim: true,
+      default: 'Hey there! I am using Assistance',
+    },
+    password: {
+      type: String,
+    },
   },
   { timestamps: true }
 );
