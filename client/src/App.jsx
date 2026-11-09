@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import SplashScreen from './components/SplashScreen.jsx';
 
 function App() {
@@ -1254,7 +1255,7 @@ function App() {
     return nameMatch || phoneMatch;
   });
 
-  // Message System State
+  // Message System State & Real-time Integration
   const [conversations, setConversations] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_messaging_chats');
@@ -1289,84 +1290,332 @@ function App() {
       return null;
     }
   });
+
+  const [activeChatMessages, setActiveChatMessages] = useState([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const [chatAttachment, setChatAttachment] = useState(null);
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [messageInputText, setMessageInputText] = useState('');
+
   const messagesScrollRef = useRef(null);
+  const chatFileInputRef = useRef(null);
+  const socketRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const activeChat =
-    conversations.find((c) => c.id === activeChatId) ||
+    conversations.find((c) => c.id === activeChatId || c.conversationId === activeChatId) ||
     (conversations.length > 0 ? conversations[0] : null);
+
+  const activeChatRef = useRef(activeChat);
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+  }, [activeChat]);
 
   const filteredConversations = conversations.filter((c) => {
     if (!messageSearchQuery.trim()) return true;
     const q = messageSearchQuery.toLowerCase();
-    return c.name.toLowerCase().includes(q) || (c.username && c.username.toLowerCase().includes(q));
+    return (c.name && c.name.toLowerCase().includes(q)) || (c.username && c.username.toLowerCase().includes(q));
   });
 
-  const handleSendMessage = (e) => {
-    if (e) e.preventDefault();
-    if (!messageInputText.trim() || !activeChat) return;
-
-    const newMsg = {
-      id: 'msg_' + Date.now(),
-      sender: 'me',
-      text: messageInputText.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    const updated = conversations.map((conv) => {
-      if (conv.id === activeChat.id) {
-        return {
-          ...conv,
-          messages: [...conv.messages, newMsg],
-        };
+  // Fetch conversations from backend
+  const fetchConversations = async () => {
+    const userToQuery = loggedInUser || 'user';
+    try {
+      const res = await fetch(`/api/chat/conversations?username=${encodeURIComponent(userToQuery)}`);
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.conversations)) {
+        setConversations(data.conversations);
+        try {
+          localStorage.setItem('assistance_messaging_chats', JSON.stringify(data.conversations));
+        } catch {}
+        if (data.conversations.length > 0 && !activeChatId) {
+          setActiveChatId(data.conversations[0].id);
+        }
       }
-      return conv;
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err);
+    }
+  };
+
+  // Socket.io Real-time connection
+  useEffect(() => {
+    const socket = io({
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
+
+    const userToJoin = loggedInUser || 'user';
+    socket.emit('join', userToJoin);
+
+    socket.on('chat:message', (newMsg) => {
+      const currentActive = activeChatRef.current;
+      const isCurrentChat =
+        currentActive &&
+        (newMsg.sender === currentActive.username ||
+          newMsg.receiver === currentActive.username);
+
+      if (isCurrentChat) {
+        setActiveChatMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [
+            ...prev,
+            {
+              ...newMsg,
+              sender: newMsg.sender === userToJoin ? 'me' : 'them',
+            },
+          ];
+        });
+
+        if (newMsg.receiver === userToJoin) {
+          fetch('/api/chat/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: userToJoin,
+              otherUser: newMsg.sender,
+            }),
+          }).catch(() => {});
+        }
+      }
+
+      setConversations((prev) => {
+        const otherUser = newMsg.sender === userToJoin ? newMsg.receiver : newMsg.sender;
+        const existingIdx = prev.findIndex((c) => c.username === otherUser);
+        const unreadInc = !isCurrentChat && newMsg.receiver === userToJoin ? 1 : 0;
+
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          const conv = { ...updated[existingIdx] };
+          conv.lastMessage = {
+            text: newMsg.text || '📎 Attachment',
+            sender: newMsg.sender,
+            createdAt: newMsg.createdAt,
+            read: isCurrentChat,
+          };
+          conv.unread = (conv.unread || 0) + unreadInc;
+          conv.updatedAt = newMsg.createdAt;
+          updated.splice(existingIdx, 1);
+          return [conv, ...updated];
+        } else {
+          fetchConversations();
+          return prev;
+        }
+      });
     });
 
-    setConversations(updated);
-    setMessageInputText('');
-    try {
-      localStorage.setItem('assistance_messaging_chats', JSON.stringify(updated));
-    } catch {}
-  };
+    socket.on('chat:read', () => {
+      setActiveChatMessages((prev) =>
+        prev.map((m) => (m.sender === 'me' ? { ...m, read: true } : m))
+      );
+    });
 
-  const handleStartChatWithContact = (contact) => {
-    let existing = conversations.find(
-      (c) => c.username === contact.username || c.name === contact.phoneBookName
-    );
-    if (!existing) {
-      existing = {
-        id: 'chat_' + (contact.username || Date.now()),
-        name: contact.phoneBookName || contact.username,
-        username: contact.username,
-        status: 'Online',
-        lastSeen: 'online',
-        unread: 0,
-        messages: [
-          {
-            id: 'm_' + Date.now(),
-            sender: 'them',
-            text: contact.status || 'Hey there! I am using Assistance',
-            time: 'Just now',
-          },
-        ],
-      };
-      const updated = [existing, ...conversations];
-      setConversations(updated);
-      try {
-        localStorage.setItem('assistance_messaging_chats', JSON.stringify(updated));
-      } catch {}
+    socket.on('chat:typing', ({ sender, isTyping }) => {
+      const currentActive = activeChatRef.current;
+      if (currentActive && currentActive.username === sender) {
+        setIsPeerTyping(Boolean(isTyping));
+      }
+    });
+
+    socket.on('user:status', ({ username: statusUser, status }) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.username === statusUser ? { ...c, status } : c))
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [loggedInUser]);
+
+  // Load conversations when view changes to messages or loggedInUser updates
+  useEffect(() => {
+    if (currentView === 'messages') {
+      fetchConversations();
     }
-    setActiveChatId(existing.id);
-    navigateTo('messages');
-  };
+  }, [currentView, loggedInUser]);
 
+  // Load messages whenever activeChat changes
+  useEffect(() => {
+    if (!activeChat || !activeChat.username) {
+      setActiveChatMessages([]);
+      return;
+    }
+
+    const currentUser = loggedInUser || 'user';
+    setIsLoadingMessages(true);
+    setIsPeerTyping(false);
+
+    fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.messages)) {
+          setActiveChatMessages(data.messages);
+          setConversations((prev) =>
+            prev.map((c) => (c.username === activeChat.username ? { ...c, unread: 0 } : c))
+          );
+        }
+      })
+      .catch((err) => console.error('Error fetching chat messages:', err))
+      .finally(() => setIsLoadingMessages(false));
+  }, [activeChat?.id, activeChat?.conversationId, activeChat?.username, loggedInUser]);
+
+  // Auto-scroll on new message
   useEffect(() => {
     if (currentView === 'messages' && messagesScrollRef.current) {
       messagesScrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [currentView, activeChatId, conversations]);
+  }, [currentView, activeChatId, activeChatMessages]);
+
+  const handleMessageInputChange = (e) => {
+    const text = e.target.value;
+    setMessageInputText(text);
+
+    if (socketRef.current && activeChat?.username) {
+      socketRef.current.emit('typing', {
+        receiver: activeChat.username,
+        isTyping: true,
+      });
+
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (socketRef.current && activeChat?.username) {
+          socketRef.current.emit('typing', {
+            receiver: activeChat.username,
+            isTyping: false,
+          });
+        }
+      }, 1500);
+    }
+  };
+
+  const handleChatFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be under 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setChatAttachment(event.target.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
+    if ((!messageInputText.trim() && !chatAttachment) || !activeChat) return;
+
+    const textToSend = messageInputText.trim();
+    const attachmentToSend = chatAttachment;
+    const currentUser = loggedInUser || 'user';
+    const targetUsername = activeChat.username;
+    const tempId = 'temp_' + Date.now();
+    const now = new Date();
+
+    setMessageInputText('');
+    setChatAttachment(null);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (socketRef.current) {
+      socketRef.current.emit('typing', { receiver: targetUsername, isTyping: false });
+    }
+
+    const optimisticMsg = {
+      id: tempId,
+      sender: 'me',
+      senderUsername: currentUser,
+      receiverUsername: targetUsername,
+      text: textToSend,
+      attachment: attachmentToSend,
+      read: false,
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: now.toISOString(),
+    };
+
+    setActiveChatMessages((prev) => [...prev, optimisticMsg]);
+
+    setConversations((prev) =>
+      prev.map((conv) => {
+        if (conv.username === targetUsername) {
+          return {
+            ...conv,
+            lastMessage: {
+              text: textToSend || '📎 Attachment',
+              sender: currentUser,
+              createdAt: now.toISOString(),
+              read: false,
+            },
+            updatedAt: now.toISOString(),
+          };
+        }
+        return conv;
+      })
+    );
+
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: currentUser,
+          receiver: targetUsername,
+          text: textToSend,
+          attachment: attachmentToSend,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.message) {
+        setActiveChatMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, id: data.message.id } : m))
+        );
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
+  };
+
+  const handleStartChatWithContact = async (contact) => {
+    const currentUser = loggedInUser || 'user';
+    const targetUsername = contact.username;
+
+    try {
+      const res = await fetch('/api/chat/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: currentUser, receiver: targetUsername }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.conversation) {
+        setConversations((prev) => {
+          const exists = prev.some((c) => c.username === targetUsername);
+          if (exists) {
+            return prev.map((c) => (c.username === targetUsername ? { ...c, ...data.conversation } : c));
+          }
+          return [data.conversation, ...prev];
+        });
+        setActiveChatId(data.conversation.id);
+      }
+    } catch {
+      const convId = [currentUser, targetUsername].sort().join(':');
+      const fallback = {
+        id: convId,
+        conversationId: convId,
+        name: contact.phoneBookName || contact.displayName || contact.username,
+        username: targetUsername,
+        avatar: contact.avatar || null,
+        status: contact.status || 'Hey there! I am using Assistance',
+        unread: 0,
+        lastMessage: null,
+      };
+      setConversations((prev) => [fallback, ...prev.filter((c) => c.username !== targetUsername)]);
+      setActiveChatId(convId);
+    }
+
+    navigateTo('messages');
+  };
 
   if (
     currentView === 'blank' ||
@@ -2729,44 +2978,54 @@ function App() {
                       </div>
                     ) : (
                       filteredConversations.map((conv) => {
-                      const isSelected = activeChat?.id === conv.id;
-                      const lastMsg = conv.messages[conv.messages.length - 1];
+                        const isSelected = activeChat?.id === conv.id || activeChat?.conversationId === conv.conversationId;
+                        const lastMsg = conv.lastMessage;
+                        const lastTime = lastMsg?.createdAt
+                          ? new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : '';
 
-                      return (
-                        <div
-                          key={conv.id}
-                          className={`messaging-conv-item ${isSelected ? 'active' : ''}`}
-                          onClick={() => setActiveChatId(conv.id)}
-                        >
+                        return (
                           <div
-                            className="messaging-conv-avatar"
-                            style={{ backgroundColor: getAvatarColor(conv.name) }}
+                            key={conv.id || conv.conversationId || conv.username}
+                            className={`messaging-conv-item ${isSelected ? 'active' : ''}`}
+                            onClick={() => setActiveChatId(conv.id || conv.conversationId)}
                           >
-                            <span>{getInitials(conv.name)}</span>
-                            {conv.status === 'Online' && (
-                              <span className="messaging-online-indicator"></span>
-                            )}
-                          </div>
+                            <div
+                              className="messaging-conv-avatar"
+                              style={{ backgroundColor: conv.avatar ? 'transparent' : getAvatarColor(conv.name) }}
+                            >
+                              {conv.avatar ? (
+                                <img src={conv.avatar} alt={conv.name} className="contact-avatar-img" />
+                              ) : (
+                                <span>{getInitials(conv.name)}</span>
+                              )}
+                              {conv.status === 'Online' && (
+                                <span className="messaging-online-indicator"></span>
+                              )}
+                            </div>
 
-                          <div className="messaging-conv-info">
-                            <div className="messaging-conv-top">
-                              <span className="messaging-conv-name">{conv.name}</span>
-                              {lastMsg && (
-                                <span className="messaging-conv-time">{lastMsg.time}</span>
-                              )}
-                            </div>
-                            <div className="messaging-conv-bottom">
-                              <span className="messaging-conv-preview">
-                                {lastMsg ? (lastMsg.sender === 'me' ? 'You: ' : '') + lastMsg.text : 'No messages yet'}
-                              </span>
-                              {conv.unread > 0 && !isSelected && (
-                                <span className="messaging-unread-badge">{conv.unread}</span>
-                              )}
+                            <div className="messaging-conv-info">
+                              <div className="messaging-conv-top">
+                                <span className="messaging-conv-name">{conv.name}</span>
+                                {lastTime && (
+                                  <span className="messaging-conv-time">{lastTime}</span>
+                                )}
+                              </div>
+                              <div className="messaging-conv-bottom">
+                                <span className="messaging-conv-preview">
+                                  {lastMsg?.text
+                                    ? (lastMsg.sender === (loggedInUser || 'user') ? 'You: ' : '') + lastMsg.text
+                                    : 'No messages yet'}
+                                </span>
+                                {conv.unread > 0 && !isSelected && (
+                                  <span className="messaging-unread-badge">{conv.unread}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    }))}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -2778,17 +3037,21 @@ function App() {
                         <div className="messaging-chat-user-info">
                           <div
                             className="messaging-chat-avatar"
-                            style={{ backgroundColor: getAvatarColor(activeChat.name) }}
+                            style={{ backgroundColor: activeChat.avatar ? 'transparent' : getAvatarColor(activeChat.name) }}
                           >
-                            <span>{getInitials(activeChat.name)}</span>
+                            {activeChat.avatar ? (
+                              <img src={activeChat.avatar} alt={activeChat.name} className="contact-avatar-img" />
+                            ) : (
+                              <span>{getInitials(activeChat.name)}</span>
+                            )}
                             {activeChat.status === 'Online' && (
                               <span className="messaging-online-indicator"></span>
                             )}
                           </div>
                           <div className="messaging-chat-user-details">
                             <span className="messaging-chat-user-name">{activeChat.name}</span>
-                            <span className={`messaging-chat-user-status ${activeChat.status === 'Online' ? 'online' : ''}`}>
-                              {activeChat.status === 'Online' ? 'Online' : activeChat.lastSeen}
+                            <span className={`messaging-chat-user-status ${isPeerTyping ? 'online' : activeChat.status === 'Online' ? 'online' : ''}`}>
+                              {isPeerTyping ? 'typing...' : activeChat.status === 'Online' ? 'Online' : activeChat.status || 'Offline'}
                             </span>
                           </div>
                         </div>
@@ -2837,55 +3100,110 @@ function App() {
                           <span>Today</span>
                         </div>
 
-                        {activeChat.messages.map((msg) => {
-                          const isMe = msg.sender === 'me';
-                          return (
-                            <div
-                              key={msg.id}
-                              className={`messaging-bubble-wrapper ${isMe ? 'sent' : 'received'}`}
-                            >
-                              <div className={`messaging-bubble ${isMe ? 'sent' : 'received'}`}>
-                                <p className="messaging-bubble-text">{msg.text}</p>
-                                <div className="messaging-bubble-footer">
-                                  <span className="messaging-bubble-time">{msg.time}</span>
-                                  {isMe && (
-                                    <svg className="messaging-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                      <polyline points="20 6 9 17 4 12" />
-                                    </svg>
+                        {isLoadingMessages ? (
+                          <div className="messaging-loading">Loading messages...</div>
+                        ) : activeChatMessages.length === 0 ? (
+                          <div className="messaging-no-messages">
+                            <p>No messages yet. Say hello to {activeChat.name}!</p>
+                          </div>
+                        ) : (
+                          activeChatMessages.map((msg) => {
+                            const isMe = msg.sender === 'me' || msg.senderUsername === (loggedInUser || 'user');
+                            return (
+                              <div
+                                key={msg.id}
+                                className={`messaging-bubble-wrapper ${isMe ? 'sent' : 'received'}`}
+                              >
+                                <div className={`messaging-bubble ${isMe ? 'sent' : 'received'}`}>
+                                  {msg.attachment && (
+                                    <div className="messaging-bubble-attachment">
+                                      {msg.attachment.startsWith('data:image') || msg.attachment.match(/\.(jpeg|jpg|gif|png|webp)/i) ? (
+                                        <img src={msg.attachment} alt="attachment" className="messaging-attachment-img" />
+                                      ) : (
+                                        <a href={msg.attachment} download="attachment" className="messaging-attachment-link">
+                                          📎 Attached File
+                                        </a>
+                                      )}
+                                    </div>
                                   )}
+                                  {msg.text && <p className="messaging-bubble-text">{msg.text}</p>}
+                                  <div className="messaging-bubble-footer">
+                                    <span className="messaging-bubble-time">{msg.time}</span>
+                                    {isMe && (
+                                      <svg className={`messaging-check-icon ${msg.read ? 'read' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+                            );
+                          })
+                        )}
+                        {isPeerTyping && (
+                          <div className="messaging-bubble-wrapper received">
+                            <div className="messaging-bubble received messaging-typing-bubble">
+                              <span className="typing-dot"></span>
+                              <span className="typing-dot"></span>
+                              <span className="typing-dot"></span>
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
                         <div ref={messagesScrollRef} />
                       </div>
 
                       <form className="messaging-input-area" onSubmit={handleSendMessage}>
+                        <input
+                          type="file"
+                          ref={chatFileInputRef}
+                          style={{ display: 'none' }}
+                          onChange={handleChatFileUpload}
+                        />
+
                         <button
                           type="button"
                           className="messaging-attach-btn"
                           title="Attach file"
                           aria-label="Attach file"
+                          onClick={() => chatFileInputRef.current && chatFileInputRef.current.click()}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                           </svg>
                         </button>
 
-                        <input
-                          type="text"
-                          className="messaging-input-field"
-                          placeholder="Type a message..."
-                          value={messageInputText}
-                          onChange={(e) => setMessageInputText(e.target.value)}
-                          aria-label="Type a message"
-                        />
+                        <div className="messaging-input-wrapper">
+                          {chatAttachment && (
+                            <div className="messaging-attachment-preview">
+                              {chatAttachment.startsWith('data:image') ? (
+                                <img src={chatAttachment} alt="preview" className="attachment-thumb" />
+                              ) : (
+                                <span className="attachment-file-badge">📎 File attached</span>
+                              )}
+                              <button
+                                type="button"
+                                className="attachment-remove-btn"
+                                onClick={() => setChatAttachment(null)}
+                                aria-label="Remove attachment"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
+                          <input
+                            type="text"
+                            className="messaging-input-field"
+                            placeholder={activeChat ? `Message ${activeChat.name}...` : 'Type a message...'}
+                            value={messageInputText}
+                            onChange={handleMessageInputChange}
+                            aria-label="Type a message"
+                          />
+                        </div>
 
                         <button
                           type="submit"
                           className="messaging-send-btn"
-                          disabled={!messageInputText.trim()}
+                          disabled={!messageInputText.trim() && !chatAttachment}
                           title="Send message"
                           aria-label="Send message"
                         >

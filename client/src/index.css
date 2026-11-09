@@ -2612,6 +2612,111 @@ body,
   cursor: not-allowed;
 }
 
+.messaging-input-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.messaging-attachment-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.attachment-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.attachment-file-badge {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.attachment-remove-btn {
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+.attachment-remove-btn:hover {
+  color: #ef4444;
+}
+
+.messaging-bubble-attachment {
+  margin-bottom: 0.4rem;
+}
+
+.messaging-attachment-img {
+  max-width: 240px;
+  max-height: 220px;
+  border-radius: 8px;
+  display: block;
+}
+
+.messaging-attachment-link {
+  color: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+.messaging-typing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.9rem;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9ca3af;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.messaging-check-icon.read {
+  color: #38bdf8;
+}
+
+.messaging-loading,
+.messaging-no-messages {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  padding: 3rem 1rem;
+  margin: auto;
+}
+
 .messaging-no-chat {
   flex: 1;
   display: flex;
