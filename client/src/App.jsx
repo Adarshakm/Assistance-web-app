@@ -1254,6 +1254,120 @@ function App() {
     return nameMatch || phoneMatch;
   });
 
+  // Message System State
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_messaging_chats');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.filter(
+          (c) =>
+            !['chat_1', 'chat_2', 'chat_4'].includes(c.id) &&
+            !['alex_chen', 'sophia_patel', 'tony'].includes(c.username)
+        );
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [activeChatId, setActiveChatId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_messaging_chats');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const filtered = parsed.filter(
+          (c) =>
+            !['chat_1', 'chat_2', 'chat_4'].includes(c.id) &&
+            !['alex_chen', 'sophia_patel', 'tony'].includes(c.username)
+        );
+        return filtered[0]?.id || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [messageInputText, setMessageInputText] = useState('');
+  const messagesScrollRef = useRef(null);
+
+  const activeChat =
+    conversations.find((c) => c.id === activeChatId) ||
+    (conversations.length > 0 ? conversations[0] : null);
+
+  const filteredConversations = conversations.filter((c) => {
+    if (!messageSearchQuery.trim()) return true;
+    const q = messageSearchQuery.toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.username && c.username.toLowerCase().includes(q));
+  });
+
+  const handleSendMessage = (e) => {
+    if (e) e.preventDefault();
+    if (!messageInputText.trim() || !activeChat) return;
+
+    const newMsg = {
+      id: 'msg_' + Date.now(),
+      sender: 'me',
+      text: messageInputText.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    const updated = conversations.map((conv) => {
+      if (conv.id === activeChat.id) {
+        return {
+          ...conv,
+          messages: [...conv.messages, newMsg],
+        };
+      }
+      return conv;
+    });
+
+    setConversations(updated);
+    setMessageInputText('');
+    try {
+      localStorage.setItem('assistance_messaging_chats', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleStartChatWithContact = (contact) => {
+    let existing = conversations.find(
+      (c) => c.username === contact.username || c.name === contact.phoneBookName
+    );
+    if (!existing) {
+      existing = {
+        id: 'chat_' + (contact.username || Date.now()),
+        name: contact.phoneBookName || contact.username,
+        username: contact.username,
+        status: 'Online',
+        lastSeen: 'online',
+        unread: 0,
+        messages: [
+          {
+            id: 'm_' + Date.now(),
+            sender: 'them',
+            text: contact.status || 'Hey there! I am using Assistance',
+            time: 'Just now',
+          },
+        ],
+      };
+      const updated = [existing, ...conversations];
+      setConversations(updated);
+      try {
+        localStorage.setItem('assistance_messaging_chats', JSON.stringify(updated));
+      } catch {}
+    }
+    setActiveChatId(existing.id);
+    navigateTo('messages');
+  };
+
+  useEffect(() => {
+    if (currentView === 'messages' && messagesScrollRef.current) {
+      messagesScrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [currentView, activeChatId, conversations]);
+
   if (
     currentView === 'blank' ||
     currentView === 'account' ||
@@ -2174,7 +2288,7 @@ function App() {
                             <button
                               type="button"
                               className="contact-action-btn primary"
-                              onClick={() => navigateTo('messages')}
+                              onClick={() => handleStartChatWithContact(contact)}
                               title={`Message ${contact.phoneBookName}`}
                               aria-label={`Message ${contact.phoneBookName}`}
                             >
@@ -2572,7 +2686,223 @@ function App() {
             </div>
           ) : currentView === 'messages' ? (
             <div className="messages-space" id="messages-space">
-              {/* Messages space without any content */}
+              <div className="messaging-system-container" id="messaging-system-container">
+                {/* Conversations Sidebar */}
+                <div className="messaging-sidebar">
+                  <div className="messaging-sidebar-header">
+                    <h2 className="messaging-sidebar-title">Chats</h2>
+                    <div className="messaging-header-actions">
+                      <button
+                        type="button"
+                        className="messaging-icon-btn"
+                        title="New Chat"
+                        aria-label="New Chat"
+                        onClick={() => navigateTo('contacts')}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9"></path>
+                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="messaging-search-wrapper">
+                    <svg className="messaging-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="2" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input
+                      type="text"
+                      className="messaging-search-input"
+                      placeholder="Search chats..."
+                      value={messageSearchQuery}
+                      onChange={(e) => setMessageSearchQuery(e.target.value)}
+                      aria-label="Search chats"
+                    />
+                  </div>
+
+                  <div className="messaging-conversations-list">
+                    {filteredConversations.length === 0 ? (
+                      <div className="messaging-empty-convs">
+                        <span>No conversations yet</span>
+                      </div>
+                    ) : (
+                      filteredConversations.map((conv) => {
+                      const isSelected = activeChat?.id === conv.id;
+                      const lastMsg = conv.messages[conv.messages.length - 1];
+
+                      return (
+                        <div
+                          key={conv.id}
+                          className={`messaging-conv-item ${isSelected ? 'active' : ''}`}
+                          onClick={() => setActiveChatId(conv.id)}
+                        >
+                          <div
+                            className="messaging-conv-avatar"
+                            style={{ backgroundColor: getAvatarColor(conv.name) }}
+                          >
+                            <span>{getInitials(conv.name)}</span>
+                            {conv.status === 'Online' && (
+                              <span className="messaging-online-indicator"></span>
+                            )}
+                          </div>
+
+                          <div className="messaging-conv-info">
+                            <div className="messaging-conv-top">
+                              <span className="messaging-conv-name">{conv.name}</span>
+                              {lastMsg && (
+                                <span className="messaging-conv-time">{lastMsg.time}</span>
+                              )}
+                            </div>
+                            <div className="messaging-conv-bottom">
+                              <span className="messaging-conv-preview">
+                                {lastMsg ? (lastMsg.sender === 'me' ? 'You: ' : '') + lastMsg.text : 'No messages yet'}
+                              </span>
+                              {conv.unread > 0 && !isSelected && (
+                                <span className="messaging-unread-badge">{conv.unread}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }))}
+                  </div>
+                </div>
+
+                {/* Main Chat View */}
+                <div className="messaging-main">
+                  {activeChat ? (
+                    <>
+                      <div className="messaging-chat-header">
+                        <div className="messaging-chat-user-info">
+                          <div
+                            className="messaging-chat-avatar"
+                            style={{ backgroundColor: getAvatarColor(activeChat.name) }}
+                          >
+                            <span>{getInitials(activeChat.name)}</span>
+                            {activeChat.status === 'Online' && (
+                              <span className="messaging-online-indicator"></span>
+                            )}
+                          </div>
+                          <div className="messaging-chat-user-details">
+                            <span className="messaging-chat-user-name">{activeChat.name}</span>
+                            <span className={`messaging-chat-user-status ${activeChat.status === 'Online' ? 'online' : ''}`}>
+                              {activeChat.status === 'Online' ? 'Online' : activeChat.lastSeen}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="messaging-chat-header-actions">
+                          <button
+                            type="button"
+                            className="messaging-icon-btn"
+                            title="Voice Call"
+                            aria-label="Voice Call"
+                            onClick={() => navigateTo('voice-and-video-call')}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="messaging-icon-btn"
+                            title="Video Call"
+                            aria-label="Video Call"
+                            onClick={() => navigateTo('voice-and-video-call')}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="23 7 16 12 23 17 23 7" />
+                              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="messaging-icon-btn"
+                            title="Chat Options"
+                            aria-label="Chat Options"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="1" />
+                              <circle cx="12" cy="5" r="1" />
+                              <circle cx="12" cy="19" r="1" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="messaging-messages-area">
+                        <div className="messaging-date-badge">
+                          <span>Today</span>
+                        </div>
+
+                        {activeChat.messages.map((msg) => {
+                          const isMe = msg.sender === 'me';
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`messaging-bubble-wrapper ${isMe ? 'sent' : 'received'}`}
+                            >
+                              <div className={`messaging-bubble ${isMe ? 'sent' : 'received'}`}>
+                                <p className="messaging-bubble-text">{msg.text}</p>
+                                <div className="messaging-bubble-footer">
+                                  <span className="messaging-bubble-time">{msg.time}</span>
+                                  {isMe && (
+                                    <svg className="messaging-check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div ref={messagesScrollRef} />
+                      </div>
+
+                      <form className="messaging-input-area" onSubmit={handleSendMessage}>
+                        <button
+                          type="button"
+                          className="messaging-attach-btn"
+                          title="Attach file"
+                          aria-label="Attach file"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                          </svg>
+                        </button>
+
+                        <input
+                          type="text"
+                          className="messaging-input-field"
+                          placeholder="Type a message..."
+                          value={messageInputText}
+                          onChange={(e) => setMessageInputText(e.target.value)}
+                          aria-label="Type a message"
+                        />
+
+                        <button
+                          type="submit"
+                          className="messaging-send-btn"
+                          disabled={!messageInputText.trim()}
+                          title="Send message"
+                          aria-label="Send message"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                          </svg>
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className="messaging-no-chat">
+                      <p>Select a chat to start messaging</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           ) : currentView === 'whats-happening' ? (
             <div className="whats-happening-space" id="whats-happening-space">
