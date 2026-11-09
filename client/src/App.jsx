@@ -1365,18 +1365,24 @@ function App() {
     const socket = io({
       transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 3000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 5000,
       timeout: 10000,
     });
     socketRef.current = socket;
 
     socket.on('connect_error', () => {
-      // Silently catch connection error when backend is offline
+      // Silently catch connection error when backend is offline or restarting
     });
 
     const userToJoin = loggedInUser || 'user';
-    socket.emit('join', userToJoin);
+    if (socket.connected) {
+      socket.emit('join', userToJoin);
+    }
+    socket.on('connect', () => {
+      socket.emit('join', userToJoin);
+    });
 
     socket.on('chat:message', (newMsg) => {
       const currentActive = activeChatRef.current;
