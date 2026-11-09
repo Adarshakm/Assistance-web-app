@@ -39,10 +39,12 @@ echo "🔄 Step 4/4: Reloading application with PM2..."
 if command -v pm2 >/dev/null 2>&1; then
   if pm2 list | grep -q "assistance-server"; then
     pm2 reload assistance-server --update-env || pm2 restart assistance-server --update-env
+  elif pm2 list | grep -q "myapp"; then
+    pm2 reload myapp --update-env || pm2 restart myapp --update-env
   elif pm2 list | grep -q "server"; then
     pm2 reload server --update-env || pm2 restart server --update-env
   else
-    echo "⚠️ Starting new PM2 instance for assistance-server..."
+    echo "⚠️ Starting PM2 instance for assistance-server..."
     cd "$APP_DIR/server"
     pm2 start src/server.js --name "assistance-server"
     pm2 save
