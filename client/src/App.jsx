@@ -1298,15 +1298,23 @@ function App() {
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [messageInputText, setMessageInputText] = useState('');
   const [mobileChatViewActive, setMobileChatViewActive] = useState(false);
+  const [selectedChatContact, setSelectedChatContact] = useState(null);
 
   const messagesScrollRef = useRef(null);
   const chatFileInputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   const activeChat =
-    conversations.find((c) => c.id === activeChatId || c.conversationId === activeChatId) ||
-    (conversations.length > 0 ? conversations[0] : null);
+    conversations.find(
+      (c) =>
+        c.id === activeChatId ||
+        c.conversationId === activeChatId ||
+        (c.username && activeChatId && c.username.toLowerCase() === activeChatId.toLowerCase())
+    ) ||
+    selectedChatContact ||
+    (conversations.length > 0 && !activeChatId ? conversations[0] : null);
 
   const activeChatRef = useRef(activeChat);
   useEffect(() => {
@@ -1314,8 +1322,12 @@ function App() {
   }, [activeChat]);
 
   const handleSelectConversation = (conv) => {
+    setSelectedChatContact(conv);
     setActiveChatId(conv.id || conv.conversationId);
     setMobileChatViewActive(true);
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 150);
   };
 
   const handleBackToConversations = () => {
@@ -1589,7 +1601,47 @@ function App() {
 
   const handleStartChatWithContact = async (contact) => {
     const currentUser = loggedInUser || 'user';
-    const targetUsername = contact.username;
+    const targetUsername = (contact.username || '').trim().toLowerCase();
+    const convId = [currentUser.toLowerCase(), targetUsername].sort().join(':');
+
+    const directConv = {
+      id: convId,
+      conversationId: convId,
+      name: contact.phoneBookName || contact.displayName || contact.username,
+      username: targetUsername,
+      avatar: contact.avatar || null,
+      status: contact.status || 'Hey there! I am using Assistance',
+      phone: contact.phone || '',
+      unread: 0,
+      lastMessage: null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setSelectedChatContact(directConv);
+    setActiveChatId(convId);
+    setMobileChatViewActive(true);
+
+    setConversations((prev) => {
+      const exists = prev.some(
+        (c) => c.username?.toLowerCase() === targetUsername || c.conversationId === convId || c.id === convId
+      );
+      if (exists) {
+        return prev.map((c) =>
+          c.username?.toLowerCase() === targetUsername || c.conversationId === convId || c.id === convId
+            ? { ...c, ...directConv }
+            : c
+        );
+      }
+      return [directConv, ...prev];
+    });
+
+    navigateTo('messages');
+
+    setTimeout(() => {
+      if (messageInputRef.current) {
+        messageInputRef.current.focus();
+      }
+    }, 150);
 
     try {
       const res = await fetch('/api/chat/start', {
@@ -1599,34 +1651,17 @@ function App() {
       });
       const data = await res.json();
       if (res.ok && data.success && data.conversation) {
-        setConversations((prev) => {
-          const exists = prev.some((c) => c.username === targetUsername);
-          if (exists) {
-            return prev.map((c) => (c.username === targetUsername ? { ...c, ...data.conversation } : c));
-          }
-          return [data.conversation, ...prev];
-        });
-        setActiveChatId(data.conversation.id);
-        setMobileChatViewActive(true);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.username?.toLowerCase() === targetUsername || c.conversationId === convId || c.id === convId
+              ? { ...c, ...data.conversation }
+              : c
+          )
+        );
       }
-    } catch {
-      const convId = [currentUser, targetUsername].sort().join(':');
-      const fallback = {
-        id: convId,
-        conversationId: convId,
-        name: contact.phoneBookName || contact.displayName || contact.username,
-        username: targetUsername,
-        avatar: contact.avatar || null,
-        status: contact.status || 'Hey there! I am using Assistance',
-        unread: 0,
-        lastMessage: null,
-      };
-      setConversations((prev) => [fallback, ...prev.filter((c) => c.username !== targetUsername)]);
-      setActiveChatId(convId);
-      setMobileChatViewActive(true);
+    } catch (err) {
+      console.error('Error starting chat on backend:', err);
     }
-
-    navigateTo('messages');
   };
 
   if (
@@ -2505,7 +2540,12 @@ function App() {
                       </div>
                     ) : (
                       filteredRegisteredContacts.map((contact) => (
-                        <div key={contact.id || contact.username} className="contact-card">
+                        <div
+                          key={contact.id || contact.username}
+                          className="contact-card"
+                          onClick={() => handleStartChatWithContact(contact)}
+                          title={`Chat with ${contact.phoneBookName}`}
+                        >
                           <div className="contact-card-left">
                             <div
                               className="contact-avatar"
@@ -2552,7 +2592,10 @@ function App() {
                             <button
                               type="button"
                               className="contact-action-btn primary"
-                              onClick={() => handleStartChatWithContact(contact)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartChatWithContact(contact);
+                              }}
                               title={`Message ${contact.phoneBookName}`}
                               aria-label={`Message ${contact.phoneBookName}`}
                             >
@@ -2565,7 +2608,10 @@ function App() {
                             <button
                               type="button"
                               className="contact-action-btn icon-only"
-                              onClick={() => navigateTo('voice-and-video-call')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateTo('voice-and-video-call');
+                              }}
                               title={`Call ${contact.phoneBookName}`}
                               aria-label={`Call ${contact.phoneBookName}`}
                             >
@@ -3220,6 +3266,7 @@ function App() {
                             </div>
                           )}
                           <input
+                            ref={messageInputRef}
                             type="text"
                             className="messaging-input-field"
                             placeholder={activeChat ? `Message ${activeChat.name}...` : 'Type a message...'}
