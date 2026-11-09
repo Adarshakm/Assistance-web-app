@@ -97,6 +97,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [Server Error] Port ${PORT} is already in use by another process.`);
+    console.error(`👉 Run: fuser -k ${PORT}/tcp (or npx kill-port ${PORT}) to free port ${PORT}.\n`);
+  } else {
+    console.error('[Server Error]', err);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
 });
