@@ -1363,9 +1363,17 @@ function App() {
   // Socket.io Real-time connection
   useEffect(() => {
     const socket = io({
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 3000,
+      timeout: 10000,
     });
     socketRef.current = socket;
+
+    socket.on('connect_error', () => {
+      // Silently catch connection error when backend is offline
+    });
 
     const userToJoin = loggedInUser || 'user';
     socket.emit('join', userToJoin);
