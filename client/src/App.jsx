@@ -2242,7 +2242,7 @@ function App() {
                             <button
                               type="button"
                               className="contact-action-btn primary"
-                              onClick={() => navigateTo('messages')}
+                              onClick={() => handleStartChat(contact)}
                               title={`Message ${contact.phoneBookName}`}
                               aria-label={`Message ${contact.phoneBookName}`}
                             >
