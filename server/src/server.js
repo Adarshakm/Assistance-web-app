@@ -54,7 +54,15 @@ io.on('connection', (socket) => {
     if (!username) return;
     const cleanUser = String(username).trim().toLowerCase();
     currentUser = cleanUser;
+
+    // Join all normalized variations of username so messages always route
     socket.join(cleanUser);
+    const noSpace = cleanUser.replace(/\s+/g, '');
+    if (noSpace && noSpace !== cleanUser) socket.join(noSpace);
+    const firstWord = cleanUser.split(' ')[0];
+    if (firstWord && firstWord !== cleanUser) socket.join(firstWord);
+    const rawUser = String(username).trim();
+    if (rawUser && rawUser !== cleanUser) socket.join(rawUser);
 
     if (!activeSockets.has(cleanUser)) {
       activeSockets.set(cleanUser, new Set());
@@ -67,10 +75,21 @@ io.on('connection', (socket) => {
 
   socket.on('typing', ({ receiver, isTyping }) => {
     if (receiver && currentUser) {
-      io.to(String(receiver).trim().toLowerCase()).emit('chat:typing', {
-        sender: currentUser,
-        isTyping: Boolean(isTyping),
-      });
+      const cleanReceiver = String(receiver).trim().toLowerCase();
+      const targets = new Set([
+        cleanReceiver,
+        cleanReceiver.replace(/\s+/g, ''),
+        cleanReceiver.split(' ')[0],
+        String(receiver).trim(),
+      ]);
+      for (const target of targets) {
+        if (target) {
+          io.to(target).emit('chat:typing', {
+            sender: currentUser,
+            isTyping: Boolean(isTyping),
+          });
+        }
+      }
     }
   });
 

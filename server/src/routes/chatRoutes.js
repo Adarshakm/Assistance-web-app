@@ -153,7 +153,15 @@ router.get('/messages/:otherUser', async (req, res) => {
 
         const io = req.app.get('io');
         if (io) {
-          io.to(otherUser).emit('chat:read', { conversationId: convId, reader: username });
+          const readTargets = new Set([
+            otherUser,
+            cleanOther,
+            cleanOther.replace(/\s+/g, ''),
+            cleanOther.split(' ')[0],
+          ]);
+          for (const t of readTargets) {
+            if (t) io.to(t).emit('chat:read', { conversationId: convId, reader: username });
+          }
         }
       }
 
@@ -317,9 +325,22 @@ router.post('/send', async (req, res) => {
     // Broadcast via Socket.io if initialized
     const io = req.app.get('io');
     if (io) {
-      // Emit to receiver's room and sender's room
-      io.to(cleanReceiver).emit('chat:message', savedMessage);
-      io.to(cleanSender).emit('chat:message', savedMessage);
+      const targets = new Set([
+        cleanReceiver,
+        cleanReceiver.replace(/\s+/g, ''),
+        cleanReceiver.split(' ')[0],
+        cleanSender,
+        cleanSender.replace(/\s+/g, ''),
+        cleanSender.split(' ')[0],
+        String(receiver).trim(),
+        String(sender).trim(),
+      ]);
+
+      for (const target of targets) {
+        if (target) {
+          io.to(target).emit('chat:message', savedMessage);
+        }
+      }
     }
 
     return res.status(201).json({

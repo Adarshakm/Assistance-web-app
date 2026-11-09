@@ -1324,6 +1324,15 @@ function App() {
   const handleSelectConversation = (conv) => {
     setSelectedChatContact(conv);
     setActiveChatId(conv.id || conv.conversationId);
+    setConversations((prev) =>
+      prev.map((c) =>
+        (c.id && c.id === conv.id) ||
+        (c.conversationId && c.conversationId === conv.conversationId) ||
+        (c.username && c.username.toLowerCase() === conv.username?.toLowerCase())
+          ? { ...c, unread: 0 }
+          : c
+      )
+    );
     setMobileChatViewActive(true);
     setTimeout(() => {
       messageInputRef.current?.focus();
@@ -1362,11 +1371,17 @@ function App() {
 
   // Socket.io Real-time connection
   useEffect(() => {
-    const socket = io({
-      transports: ['polling', 'websocket'],
+    // In dev mode on port 5173, connect directly to backend on port 5000 to bypass Vite's HMR proxy
+    const socketUrl =
+      typeof window !== 'undefined' && window.location.port === '5173'
+        ? `http://${window.location.hostname}:5000`
+        : undefined;
+
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 10000,
     });
@@ -1376,49 +1391,95 @@ function App() {
       // Silently catch connection error when backend is offline or restarting
     });
 
-    const userToJoin = loggedInUser || 'user';
+    const myUser = (loggedInUser || 'user').trim();
     if (socket.connected) {
-      socket.emit('join', userToJoin);
+      socket.emit('join', myUser);
     }
     socket.on('connect', () => {
-      socket.emit('join', userToJoin);
+      socket.emit('join', myUser);
     });
 
     socket.on('chat:message', (newMsg) => {
+      if (!newMsg) return;
+
       const currentActive = activeChatRef.current;
+      const myUsername = (loggedInUser || 'user').trim().toLowerCase();
+      const msgSender = (newMsg.sender || '').trim().toLowerCase();
+      const msgReceiver = (newMsg.receiver || '').trim().toLowerCase();
+      const isFromMe = msgSender === myUsername;
+
+      const msgConvId = (newMsg.conversationId || '').toLowerCase();
+      const activeConvId = (currentActive?.conversationId || currentActive?.id || '').toLowerCase();
+      const activeUser = (currentActive?.username || '').trim().toLowerCase();
+
+      // Check if message belongs to currently open chat
       const isCurrentChat =
-        currentActive &&
-        (newMsg.sender === currentActive.username ||
-          newMsg.receiver === currentActive.username);
+        Boolean(currentActive) &&
+        (
+          (activeConvId && msgConvId && activeConvId === msgConvId) ||
+          (activeUser && (activeUser === msgSender || activeUser === msgReceiver))
+        );
 
       if (isCurrentChat) {
         setActiveChatMessages((prev) => {
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          if (prev.some((m) => m.id === newMsg.id)) {
+            return prev;
+          }
+
+          // If sender sent this message optimistically, replace temp message with server confirmed message
+          const tempIdx = prev.findIndex(
+            (m) => m.id && String(m.id).startsWith('temp_') && m.text === newMsg.text && isFromMe
+          );
+          if (tempIdx !== -1) {
+            const updated = [...prev];
+            updated[tempIdx] = {
+              ...newMsg,
+              id: newMsg.id || newMsg._id,
+              sender: isFromMe ? 'me' : 'them',
+              senderUsername: newMsg.sender,
+              receiverUsername: newMsg.receiver,
+              time: newMsg.time || new Date(newMsg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            return updated;
+          }
+
           return [
             ...prev,
             {
               ...newMsg,
-              sender: newMsg.sender === userToJoin ? 'me' : 'them',
+              id: newMsg.id || newMsg._id,
+              sender: isFromMe ? 'me' : 'them',
+              senderUsername: newMsg.sender,
+              receiverUsername: newMsg.receiver,
+              time: newMsg.time || new Date(newMsg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             },
           ];
         });
 
-        if (newMsg.receiver === userToJoin) {
+        // Mark as read if received from peer
+        if (!isFromMe) {
           fetch('/api/chat/read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              username: userToJoin,
+              username: myUsername,
               otherUser: newMsg.sender,
             }),
           }).catch(() => {});
         }
       }
 
+      // Update sidebar conversation list
+      const otherUsername = isFromMe ? msgReceiver : msgSender;
+
       setConversations((prev) => {
-        const otherUser = newMsg.sender === userToJoin ? newMsg.receiver : newMsg.sender;
-        const existingIdx = prev.findIndex((c) => c.username === otherUser);
-        const unreadInc = !isCurrentChat && newMsg.receiver === userToJoin ? 1 : 0;
+        const existingIdx = prev.findIndex(
+          (c) =>
+            (c.username && c.username.trim().toLowerCase() === otherUsername) ||
+            (c.conversationId && msgConvId && c.conversationId.toLowerCase() === msgConvId) ||
+            (c.id && msgConvId && c.id.toLowerCase() === msgConvId)
+        );
+        const unreadInc = !isCurrentChat && !isFromMe ? 1 : 0;
 
         if (existingIdx !== -1) {
           const updated = [...prev];
@@ -1429,11 +1490,12 @@ function App() {
             createdAt: newMsg.createdAt,
             read: isCurrentChat,
           };
-          conv.unread = (conv.unread || 0) + unreadInc;
-          conv.updatedAt = newMsg.createdAt;
+          conv.unread = isCurrentChat ? 0 : (conv.unread || 0) + unreadInc;
+          conv.updatedAt = newMsg.createdAt || new Date().toISOString();
           updated.splice(existingIdx, 1);
           return [conv, ...updated];
         } else {
+          // New conversation: refresh list so it appears in sidebar immediately
           fetchConversations();
           return prev;
         }
@@ -1448,14 +1510,19 @@ function App() {
 
     socket.on('chat:typing', ({ sender, isTyping }) => {
       const currentActive = activeChatRef.current;
-      if (currentActive && currentActive.username === sender) {
+      const cleanSender = (sender || '').trim().toLowerCase();
+      const activeUser = (currentActive?.username || '').trim().toLowerCase();
+      if (currentActive && activeUser === cleanSender) {
         setIsPeerTyping(Boolean(isTyping));
       }
     });
 
     socket.on('user:status', ({ username: statusUser, status }) => {
+      const cleanStatusUser = (statusUser || '').trim().toLowerCase();
       setConversations((prev) =>
-        prev.map((c) => (c.username === statusUser ? { ...c, status } : c))
+        prev.map((c) =>
+          c.username && c.username.trim().toLowerCase() === cleanStatusUser ? { ...c, status } : c
+        )
       );
     });
 
@@ -1495,6 +1562,33 @@ function App() {
       .catch((err) => console.error('Error fetching chat messages:', err))
       .finally(() => setIsLoadingMessages(false));
   }, [activeChat?.id, activeChat?.conversationId, activeChat?.username, loggedInUser]);
+
+  // Live sync polling every 3 seconds for active chat to guarantee 100% sync reliability
+  useEffect(() => {
+    if (currentView !== 'messages' || !activeChat || !activeChat.username) return;
+
+    const interval = setInterval(() => {
+      const currentUser = (loggedInUser || 'user').trim().toLowerCase();
+      fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.messages)) {
+            setActiveChatMessages((prev) => {
+              if (
+                data.messages.length !== prev.length ||
+                (data.messages.length > 0 && prev.length > 0 && data.messages[data.messages.length - 1].id !== prev[prev.length - 1].id)
+              ) {
+                return data.messages;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [currentView, activeChat?.id, activeChat?.conversationId, activeChat?.username, loggedInUser]);
 
   // Auto-scroll on new message
   useEffect(() => {
@@ -1546,8 +1640,8 @@ function App() {
 
     const textToSend = messageInputText.trim();
     const attachmentToSend = chatAttachment;
-    const currentUser = loggedInUser || 'user';
-    const targetUsername = activeChat.username;
+    const currentUser = (loggedInUser || 'user').trim().toLowerCase();
+    const targetUsername = (activeChat.username || '').trim().toLowerCase();
     const tempId = 'temp_' + Date.now();
     const now = new Date();
 
@@ -1575,7 +1669,11 @@ function App() {
 
     setConversations((prev) =>
       prev.map((conv) => {
-        if (conv.username === targetUsername) {
+        const cUser = (conv.username || '').trim().toLowerCase();
+        const cConvId = (conv.conversationId || conv.id || '').trim().toLowerCase();
+        const targetConvId = (activeChat.conversationId || activeChat.id || '').trim().toLowerCase();
+
+        if (cUser === targetUsername || (targetConvId && cConvId === targetConvId)) {
           return {
             ...conv,
             lastMessage: {
@@ -1614,9 +1712,9 @@ function App() {
   };
 
   const handleStartChatWithContact = async (contact) => {
-    const currentUser = loggedInUser || 'user';
+    const currentUser = (loggedInUser || 'user').trim().toLowerCase();
     const targetUsername = (contact.username || '').trim().toLowerCase();
-    const convId = [currentUser.toLowerCase(), targetUsername].sort().join(':');
+    const convId = [currentUser, targetUsername].sort().join(':');
 
     const directConv = {
       id: convId,
@@ -3092,7 +3190,7 @@ function App() {
                               <div className="messaging-conv-bottom">
                                 <span className="messaging-conv-preview">
                                   {lastMsg?.text
-                                    ? (lastMsg.sender === (loggedInUser || 'user') ? 'You: ' : '') + lastMsg.text
+                                    ? (lastMsg.sender?.trim().toLowerCase() === (loggedInUser || 'user').trim().toLowerCase() ? 'You: ' : '') + lastMsg.text
                                     : 'No messages yet'}
                                 </span>
                                 {conv.unread > 0 && !isSelected && (
@@ -3197,7 +3295,10 @@ function App() {
                           </div>
                         ) : (
                           activeChatMessages.map((msg) => {
-                            const isMe = msg.sender === 'me' || msg.senderUsername === (loggedInUser || 'user');
+                            const isMe =
+                              msg.sender === 'me' ||
+                              (msg.senderUsername &&
+                                msg.senderUsername.trim().toLowerCase() === (loggedInUser || 'user').trim().toLowerCase());
                             return (
                               <div
                                 key={msg.id}
