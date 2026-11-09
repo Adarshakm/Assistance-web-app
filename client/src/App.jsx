@@ -2640,7 +2640,226 @@ function App() {
             </div>
           ) : currentView === 'messages' ? (
             <div className="messages-space" id="messages-space">
-              {/* Messages space without any content */}
+              <div className="messages-layout-container" id="messages-layout-container">
+                {/* Left Conversations Sidebar */}
+                <div className="chat-conversations-sidebar">
+                  <div className="chat-conversations-header">
+                    <h2 className="chat-conversations-title">Messages</h2>
+                    <button
+                      type="button"
+                      className="chat-back-to-contacts-btn"
+                      onClick={() => navigateTo('contacts')}
+                      title="View all contacts"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                      </svg>
+                      Contacts
+                    </button>
+                  </div>
+
+                  <div className="chat-contacts-list">
+                    {registeredContacts.length === 0 ? (
+                      <div className="chat-empty-sidebar">
+                        <p>No contacts synced yet.</p>
+                        <button
+                          type="button"
+                          className="chat-sync-prompt-btn"
+                          onClick={() => navigateTo('contacts')}
+                        >
+                          Sync Contacts
+                        </button>
+                      </div>
+                    ) : (
+                      registeredContacts.map((c) => {
+                        const isSelected = selectedChatContact?.username === c.username;
+                        const thread = chatConversations[c.username] || [];
+                        const lastMsg = thread[thread.length - 1];
+
+                        return (
+                          <div
+                            key={c.username}
+                            className={`chat-conversation-item ${isSelected ? 'active' : ''}`}
+                            onClick={() => setSelectedChatContact(c)}
+                          >
+                            <div
+                              className="chat-item-avatar"
+                              style={{
+                                backgroundColor: c.avatar ? 'transparent' : getAvatarColor(c.phoneBookName || c.username),
+                              }}
+                            >
+                              {c.avatar ? (
+                                <img src={c.avatar} alt={c.phoneBookName} className="chat-item-avatar-img" />
+                              ) : (
+                                <span>{getInitials(c.phoneBookName || c.username)}</span>
+                              )}
+                              <span className="chat-item-online-dot"></span>
+                            </div>
+
+                            <div className="chat-item-info">
+                              <div className="chat-item-top">
+                                <span className="chat-item-name">{c.phoneBookName}</span>
+                                {lastMsg && <span className="chat-item-time">{lastMsg.timestamp}</span>}
+                              </div>
+                              <div className="chat-item-bottom">
+                                <span className="chat-item-last-msg">
+                                  {lastMsg
+                                    ? (lastMsg.sender === 'me' ? 'You: ' : '') + lastMsg.text
+                                    : c.status || `@${c.username}`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Chat Main Window */}
+                <div className="chat-main-window">
+                  {selectedChatContact ? (
+                    <>
+                      {/* Active Chat Header */}
+                      <div className="chat-window-header">
+                        <div className="chat-header-user">
+                          <div
+                            className="chat-header-avatar"
+                            style={{
+                              backgroundColor: selectedChatContact.avatar
+                                ? 'transparent'
+                                : getAvatarColor(selectedChatContact.phoneBookName || selectedChatContact.username),
+                            }}
+                          >
+                            {selectedChatContact.avatar ? (
+                              <img src={selectedChatContact.avatar} alt={selectedChatContact.phoneBookName} className="chat-header-avatar-img" />
+                            ) : (
+                              <span>{getInitials(selectedChatContact.phoneBookName || selectedChatContact.username)}</span>
+                            )}
+                            <span className="chat-header-online-dot"></span>
+                          </div>
+
+                          <div className="chat-header-details">
+                            <div className="chat-header-name-row">
+                              <span className="chat-header-name">{selectedChatContact.phoneBookName}</span>
+                              <span className="chat-header-username">@{selectedChatContact.username}</span>
+                            </div>
+                            <span className="chat-header-status">
+                              {selectedChatContact.status || 'Active on Assistance'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="chat-header-actions">
+                          <button
+                            type="button"
+                            className="chat-header-btn"
+                            onClick={() => navigateTo('voice-and-video-call')}
+                            title={`Call ${selectedChatContact.phoneBookName}`}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Messages Scroll Area */}
+                      <div className="chat-window-messages">
+                        <div className="chat-date-separator">
+                          <span>Today</span>
+                        </div>
+
+                        <div className="chat-start-notice">
+                          <div className="chat-start-badge">
+                            Direct message with {selectedChatContact.phoneBookName} (@{selectedChatContact.username})
+                          </div>
+                          <div className="chat-suggestion-chips">
+                            {['👋 Say Hello', 'Hey! Great to see you on Assistance', 'Are you free for a call?'].map((prompt, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                className="chat-chip-btn"
+                                onClick={() => {
+                                  setChatInputText(prompt);
+                                }}
+                              >
+                                {prompt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {(chatConversations[selectedChatContact.username] || []).map((msg) => {
+                          const isMe = msg.sender === 'me';
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`chat-bubble ${isMe ? 'sent' : 'received'}`}
+                            >
+                              <div className="chat-bubble-text">{msg.text}</div>
+                              <div className="chat-bubble-time">
+                                <span>{msg.timestamp}</span>
+                                {isMe && (
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div ref={chatMessagesEndRef} />
+                      </div>
+
+                      {/* Chat Input Bar */}
+                      <form className="chat-input-bar" onSubmit={handleSendMessage}>
+                        <input
+                          type="text"
+                          className="chat-input-field"
+                          placeholder={`Type a message to ${selectedChatContact.phoneBookName}...`}
+                          value={chatInputText}
+                          onChange={(e) => setChatInputText(e.target.value)}
+                        />
+                        <button
+                          type="submit"
+                          className="chat-send-btn"
+                          disabled={!chatInputText.trim()}
+                          title="Send message"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                          </svg>
+                        </button>
+                      </form>
+                    </>
+                  ) : (
+                    /* Empty Placeholder when no contact is selected */
+                    <div className="chat-no-selection">
+                      <div className="chat-no-selection-icon">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                      </div>
+                      <h3 className="chat-no-selection-title">Select a Contact to Message</h3>
+                      <p className="chat-no-selection-desc">
+                        Choose any registered contact from the list on the left, or visit My Contacts to sync your phonebook and start a direct conversation.
+                      </p>
+                      <button
+                        type="button"
+                        className="chat-goto-contacts-btn"
+                        onClick={() => navigateTo('contacts')}
+                      >
+                        Browse My Contacts
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           ) : currentView === 'whats-happening' ? (
             <div className="whats-happening-space" id="whats-happening-space">
