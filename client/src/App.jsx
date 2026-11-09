@@ -1297,6 +1297,7 @@ function App() {
   const [chatAttachment, setChatAttachment] = useState(null);
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [messageInputText, setMessageInputText] = useState('');
+  const [mobileChatViewActive, setMobileChatViewActive] = useState(false);
 
   const messagesScrollRef = useRef(null);
   const chatFileInputRef = useRef(null);
@@ -1311,6 +1312,15 @@ function App() {
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  const handleSelectConversation = (conv) => {
+    setActiveChatId(conv.id || conv.conversationId);
+    setMobileChatViewActive(true);
+  };
+
+  const handleBackToConversations = () => {
+    setMobileChatViewActive(false);
+  };
 
   const filteredConversations = conversations.filter((c) => {
     if (!messageSearchQuery.trim()) return true;
@@ -1597,6 +1607,7 @@ function App() {
           return [data.conversation, ...prev];
         });
         setActiveChatId(data.conversation.id);
+        setMobileChatViewActive(true);
       }
     } catch {
       const convId = [currentUser, targetUsername].sort().join(':');
@@ -1612,6 +1623,7 @@ function App() {
       };
       setConversations((prev) => [fallback, ...prev.filter((c) => c.username !== targetUsername)]);
       setActiveChatId(convId);
+      setMobileChatViewActive(true);
     }
 
     navigateTo('messages');
@@ -2184,7 +2196,10 @@ function App() {
 
           <div className="notification-bar" id="notification-bar" aria-label="Notification Bar"></div>
 
-          <main className="workspace-main" id="workspace-main">
+          <main
+            className={`workspace-main ${currentView === 'messages' ? 'workspace-main-messages' : ''}`}
+            id="workspace-main"
+          >
           {currentView === 'account' ? (
             <div className="account-space" id="account-space">
               <div className="account-wrapper">
@@ -2935,7 +2950,10 @@ function App() {
             </div>
           ) : currentView === 'messages' ? (
             <div className="messages-space" id="messages-space">
-              <div className="messaging-system-container" id="messaging-system-container">
+              <div
+                className={`messaging-system-container ${mobileChatViewActive && activeChat ? 'mobile-chat-open' : 'mobile-list-open'}`}
+                id="messaging-system-container"
+              >
                 {/* Conversations Sidebar */}
                 <div className="messaging-sidebar">
                   <div className="messaging-sidebar-header">
@@ -2988,7 +3006,7 @@ function App() {
                           <div
                             key={conv.id || conv.conversationId || conv.username}
                             className={`messaging-conv-item ${isSelected ? 'active' : ''}`}
-                            onClick={() => setActiveChatId(conv.id || conv.conversationId)}
+                            onClick={() => handleSelectConversation(conv)}
                           >
                             <div
                               className="messaging-conv-avatar"
@@ -3035,6 +3053,17 @@ function App() {
                     <>
                       <div className="messaging-chat-header">
                         <div className="messaging-chat-user-info">
+                          <button
+                            type="button"
+                            className="messaging-chat-back-btn"
+                            onClick={handleBackToConversations}
+                            title="Back to chats"
+                            aria-label="Back to chats"
+                          >
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="15 18 9 12 15 6" />
+                            </svg>
+                          </button>
                           <div
                             className="messaging-chat-avatar"
                             style={{ backgroundColor: activeChat.avatar ? 'transparent' : getAvatarColor(activeChat.name) }}

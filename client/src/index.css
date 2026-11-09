@@ -674,7 +674,6 @@ body,
 .profile-space,
 .social-space,
 .privacy-space,
-.messages-space,
 .whats-happening-space,
 .photo-sharing-space,
 .video-sharing-space,
@@ -2163,21 +2162,30 @@ body,
 /* ==========================================================================
    Message System Frontend
    ========================================================================== */
+.workspace-main.workspace-main-messages {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages-space {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: stretch;
-  padding: 1.25rem;
+  padding: 1rem 1.25rem;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - 65px);
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .messaging-system-container {
   width: 100%;
-  max-width: 1080px;
-  height: calc(100vh - 95px);
-  min-height: 560px;
+  max-width: 1180px;
+  height: 100%;
+  min-height: 0;
   background: #ffffff;
   border-radius: 16px;
   border: 1px solid #e5e7eb;
@@ -2194,6 +2202,8 @@ body,
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .messaging-sidebar-header {
@@ -2375,6 +2385,8 @@ body,
   flex-direction: column;
   background: #f8fafc;
   min-width: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .messaging-chat-header {
@@ -2391,7 +2403,29 @@ body,
 .messaging-chat-user-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.messaging-chat-back-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  margin-right: 0.15rem;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.messaging-chat-back-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .messaging-chat-avatar {
@@ -2848,7 +2882,6 @@ body,
   .profile-space,
   .social-space,
   .privacy-space,
-  .messages-space,
   .whats-happening-space,
   .photo-sharing-space,
   .video-sharing-space,
@@ -2898,6 +2931,114 @@ body,
   .uploaded-story-preview-card {
     padding: 1rem;
     border-radius: 10px;
+  }
+
+  /* ==========================================================================
+     Mobile Messaging System View (Full-height & Mobile-optimized)
+     ========================================================================== */
+  .workspace-main.workspace-main-messages {
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .messages-space {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden;
+    border-radius: 0 !important;
+  }
+
+  .messaging-system-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* When viewing chats list on mobile */
+  .messaging-system-container.mobile-list-open .messaging-sidebar {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    border-right: none !important;
+    height: 100% !important;
+  }
+
+  .messaging-system-container.mobile-list-open .messaging-main {
+    display: none !important;
+  }
+
+  /* When viewing active chat on mobile */
+  .messaging-system-container.mobile-chat-open .messaging-sidebar {
+    display: none !important;
+  }
+
+  .messaging-system-container.mobile-chat-open .messaging-main {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+  }
+
+  .messaging-chat-back-btn {
+    display: flex !important;
+  }
+
+  .messaging-chat-header {
+    height: 56px;
+    padding: 0 0.75rem;
+  }
+
+  .messaging-chat-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 0.9rem;
+  }
+
+  .messaging-chat-user-name {
+    font-size: 0.925rem;
+  }
+
+  .messaging-messages-area {
+    padding: 0.75rem 0.625rem;
+    gap: 0.65rem;
+  }
+
+  .messaging-bubble {
+    max-width: 86%;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.875rem;
+  }
+
+  .messaging-input-area {
+    padding: 0.5rem 0.625rem;
+    gap: 0.5rem;
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+    position: relative;
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .messaging-send-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .messaging-attach-btn {
+    padding: 0.35rem;
+  }
+
+  .messaging-input-field {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.875rem;
   }
 }
 
