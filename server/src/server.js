@@ -11,6 +11,7 @@ import chatRoutes from './routes/chatRoutes.js';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 

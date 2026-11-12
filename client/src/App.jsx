@@ -1351,9 +1351,11 @@ function App() {
 
   // Fetch conversations from backend
   const fetchConversations = async () => {
-    const userToQuery = loggedInUser || 'user';
+    const userToQuery = (loggedInUser || 'user').trim().toLowerCase();
     try {
-      const res = await fetch(`/api/chat/conversations?username=${encodeURIComponent(userToQuery)}`);
+      const res = await fetch(`/api/chat/conversations?username=${encodeURIComponent(userToQuery)}`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (res.ok && data.success && Array.isArray(data.conversations)) {
         setConversations(data.conversations);
@@ -1378,7 +1380,7 @@ function App() {
         : undefined;
 
     const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: socketUrl ? ['websocket', 'polling'] : ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -1531,11 +1533,14 @@ function App() {
     };
   }, [loggedInUser]);
 
-  // Load conversations when view changes to messages or loggedInUser updates
+  // Load & sync conversations every 3 seconds when viewing messages
   useEffect(() => {
-    if (currentView === 'messages') {
+    if (currentView !== 'messages') return;
+    fetchConversations();
+    const convInterval = setInterval(() => {
       fetchConversations();
-    }
+    }, 3000);
+    return () => clearInterval(convInterval);
   }, [currentView, loggedInUser]);
 
   // Load messages whenever activeChat changes
@@ -1545,17 +1550,23 @@ function App() {
       return;
     }
 
-    const currentUser = loggedInUser || 'user';
+    const currentUser = (loggedInUser || 'user').trim().toLowerCase();
     setIsLoadingMessages(true);
     setIsPeerTyping(false);
 
-    fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`)
+    fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`, {
+      cache: 'no-store',
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.messages)) {
           setActiveChatMessages(data.messages);
           setConversations((prev) =>
-            prev.map((c) => (c.username === activeChat.username ? { ...c, unread: 0 } : c))
+            prev.map((c) =>
+              c.username && c.username.trim().toLowerCase() === activeChat.username.trim().toLowerCase()
+                ? { ...c, unread: 0 }
+                : c
+            )
           );
         }
       })
@@ -1569,14 +1580,21 @@ function App() {
 
     const interval = setInterval(() => {
       const currentUser = (loggedInUser || 'user').trim().toLowerCase();
-      fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`)
+      fetch(`/api/chat/messages/${encodeURIComponent(activeChat.username)}?username=${encodeURIComponent(currentUser)}`, {
+        cache: 'no-store',
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.success && Array.isArray(data.messages)) {
             setActiveChatMessages((prev) => {
+              const hasTemp = prev.some((m) => m.id && String(m.id).startsWith('temp_'));
               if (
+                hasTemp ||
                 data.messages.length !== prev.length ||
-                (data.messages.length > 0 && prev.length > 0 && data.messages[data.messages.length - 1].id !== prev[prev.length - 1].id)
+                (data.messages.length > 0 &&
+                  prev.length > 0 &&
+                  (data.messages[data.messages.length - 1].id !== prev[prev.length - 1].id ||
+                    data.messages[data.messages.length - 1].read !== prev[prev.length - 1].read))
               ) {
                 return data.messages;
               }

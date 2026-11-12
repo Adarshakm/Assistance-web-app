@@ -46,6 +46,7 @@ const getUserProfile = async (username) => {
 // GET /api/chat/conversations?username=:username
 // Returns all conversations for the given user
 router.get('/conversations', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const rawUser = req.query.username;
     if (!rawUser) {
@@ -113,6 +114,7 @@ router.get('/conversations', async (req, res) => {
 // GET /api/chat/messages/:otherUser?username=:username
 // Returns message history between username and otherUser, and marks unread as read
 router.get('/messages/:otherUser', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const rawUser = req.query.username;
     const rawOther = req.params.otherUser;
