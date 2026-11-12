@@ -1184,6 +1184,16 @@ body,
   color: #111827;
 }
 
+.contact-action-btn.icon-only.danger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.contact-action-btn.icon-only.danger:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .contact-invite-btn {
   padding: 0.45rem 0.875rem;
   font-size: 0.8125rem;
@@ -3104,20 +3114,22 @@ body,
     padding-top: 0.625rem;
     border-top: 1px solid #f3f4f6;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
   .contact-action-btn.primary,
   .contact-invite-btn {
-    flex: 1;
+    flex: 1 1 110px;
     justify-content: center;
     min-height: 40px;
   }
 
   .contact-action-btn.icon-only {
-    min-width: 44px;
+    min-width: 40px;
     min-height: 40px;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   .contacts-modal {

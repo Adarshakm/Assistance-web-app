@@ -1287,6 +1287,63 @@ function App() {
     syncPhoneContacts(updated);
   };
 
+  const handleDeleteContact = (contact) => {
+    const targetKey = normalizePhoneKey(contact.phone || '');
+    const matchesTarget = (c) =>
+      (contact.phone &&
+        (c.phone === contact.phone || (targetKey && normalizePhoneKey(c.phone) === targetKey))) ||
+      (contact.username && c.username === contact.username);
+
+    const updated = phoneContacts.filter((c) => !matchesTarget(c));
+    setPhoneContacts(updated);
+    try {
+      localStorage.setItem('assistance_phone_contacts', JSON.stringify(updated));
+    } catch {}
+
+    setRegisteredContacts((prev) => prev.filter((c) => !matchesTarget(c)));
+    setNonRegisteredContacts((prev) => prev.filter((c) => !matchesTarget(c)));
+
+    if (updated.length > 0) {
+      syncPhoneContacts(updated);
+    }
+  };
+
+  const renderContactEditDeleteButtons = (contact) => (
+    <>
+      <button
+        type="button"
+        className="contact-action-btn icon-only"
+        onClick={(e) => {
+          e.stopPropagation();
+          openEditContactModal(contact);
+        }}
+        title={`Edit ${contact.phoneBookName}`}
+        aria-label={`Edit ${contact.phoneBookName}`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        className="contact-action-btn icon-only danger"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDeleteContact(contact);
+        }}
+        title={`Delete ${contact.phoneBookName}`}
+        aria-label={`Delete ${contact.phoneBookName}`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+      </button>
+    </>
+  );
+
   const getAvatarColor = (name = '') => {
     const colors = ['#25D366', '#128C7E', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4'];
     let hash = 0;
@@ -2811,21 +2868,7 @@ function App() {
                               <span>Message</span>
                             </button>
 
-                            <button
-                              type="button"
-                              className="contact-action-btn icon-only"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditContactModal(contact);
-                              }}
-                              title={`Edit ${contact.phoneBookName}`}
-                              aria-label={`Edit ${contact.phoneBookName}`}
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
+                            {renderContactEditDeleteButtons(contact)}
 
                             <button
                               type="button"
@@ -2875,21 +2918,7 @@ function App() {
                             </div>
                           </div>
                           <div className="contact-card-actions">
-                            <button
-                              type="button"
-                              className="contact-action-btn icon-only"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditContactModal(contact);
-                              }}
-                              title={`Edit ${contact.phoneBookName}`}
-                              aria-label={`Edit ${contact.phoneBookName}`}
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
+                            {renderContactEditDeleteButtons(contact)}
 
                             <button
                               type="button"
