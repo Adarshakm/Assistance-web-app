@@ -1346,6 +1346,52 @@ body,
   background: #059669;
 }
 
+.contact-avatar-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.contact-avatar-picker-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1.5px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #4b5563;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.contact-avatar-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.contacts-modal-remove-btn {
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #dc2626;
+  background: #fef2f2;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.contacts-modal-remove-btn:hover {
+  background: #fee2e2;
+}
+
 /* Spin animation for sync button */
 @keyframes spin {
   from {

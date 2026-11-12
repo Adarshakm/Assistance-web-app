@@ -1125,6 +1125,8 @@ function App() {
   const [editingContactOriginal, setEditingContactOriginal] = useState(null);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactAvatar, setNewContactAvatar] = useState('');
+  const contactAvatarInputRef = useRef(null);
 
   const syncPhoneContacts = async (contactsList = null) => {
     setIsSyncingContacts(true);
@@ -1152,7 +1154,19 @@ function App() {
         const fallbackRes = await fetch('/api/users/registered-contacts');
         const fallbackData = await fallbackRes.json();
         if (fallbackRes.ok && fallbackData.contacts) {
-          setRegisteredContacts(fallbackData.contacts);
+          const mergedFallback = fallbackData.contacts.map((fc) => {
+            const localMatch = listToSync.find(
+              (lc) => lc.phone && fc.phone && normalizePhoneKey(lc.phone) === normalizePhoneKey(fc.phone)
+            );
+            return localMatch
+              ? {
+                  ...fc,
+                  phoneBookName: localMatch.name || fc.phoneBookName,
+                  avatar: localMatch.avatar || fc.avatar || null,
+                }
+              : fc;
+          });
+          setRegisteredContacts(mergedFallback);
           setSyncFeedback({
             type: 'success',
             text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
@@ -1216,6 +1230,7 @@ function App() {
     setEditingContactOriginal(null);
     setNewContactName('');
     setNewContactPhone('');
+    setNewContactAvatar('');
     setShowAddContactModal(true);
   };
 
@@ -1225,6 +1240,7 @@ function App() {
     setEditingContactOriginal({ name, phone: phoneNum });
     setNewContactName(name);
     setNewContactPhone(phoneNum);
+    setNewContactAvatar(contact.avatar || '');
     setShowAddContactModal(true);
   };
 
@@ -1233,12 +1249,54 @@ function App() {
     setEditingContactOriginal(null);
     setNewContactName('');
     setNewContactPhone('');
+    setNewContactAvatar('');
+  };
+
+  const handleContactAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result;
+      if (typeof dataUrl !== 'string') return;
+
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 256;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          setNewContactAvatar(canvas.toDataURL('image/jpeg', 0.82));
+        } else {
+          setNewContactAvatar(dataUrl);
+        }
+      };
+      img.onerror = () => setNewContactAvatar(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSaveContact = (e) => {
     e.preventDefault();
     const trimmedName = newContactName.trim();
     const trimmedPhone = newContactPhone.trim();
+    const avatarValue = newContactAvatar || null;
     if (!trimmedName || !trimmedPhone) return;
 
     let updated;
@@ -1250,13 +1308,13 @@ function App() {
       updated = phoneContacts.map((c, idx) => {
         if (replacedIndex === -1 && (c.phone === editingContactOriginal.phone || (origKey && normalizePhoneKey(c.phone) === origKey))) {
           replacedIndex = idx;
-          return { ...c, name: trimmedName, phone: trimmedPhone };
+          return { ...c, name: trimmedName, phone: trimmedPhone, avatar: avatarValue };
         }
         return c;
       });
 
       if (replacedIndex === -1) {
-        updated = [{ name: trimmedName, phone: trimmedPhone }, ...updated];
+        updated = [{ name: trimmedName, phone: trimmedPhone, avatar: avatarValue }, ...updated];
         replacedIndex = 0;
       }
 
@@ -1266,16 +1324,20 @@ function App() {
 
       setRegisteredContacts((prev) =>
         prev.map((c) =>
-          c.phone === editingContactOriginal.phone ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone } : c
+          c.phone === editingContactOriginal.phone
+            ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone, avatar: avatarValue }
+            : c
         )
       );
       setNonRegisteredContacts((prev) =>
         prev.map((c) =>
-          c.phone === editingContactOriginal.phone ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone } : c
+          c.phone === editingContactOriginal.phone
+            ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone, avatar: avatarValue }
+            : c
         )
       );
     } else {
-      const newEntry = { name: trimmedName, phone: trimmedPhone };
+      const newEntry = { name: trimmedName, phone: trimmedPhone, avatar: avatarValue };
       updated = [newEntry, ...phoneContacts.filter((c) => c.phone !== newEntry.phone)];
     }
 
@@ -2977,9 +3039,13 @@ function App() {
                           <div className="contact-card-left">
                             <div
                               className="contact-avatar invite"
-                              style={{ backgroundColor: '#9ca3af' }}
+                              style={{ backgroundColor: contact.avatar ? 'transparent' : '#9ca3af' }}
                             >
-                              <span>{getInitials(contact.phoneBookName)}</span>
+                              {contact.avatar ? (
+                                <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
+                              ) : (
+                                <span>{getInitials(contact.phoneBookName)}</span>
+                              )}
                             </div>
                             <div className="contact-info">
                               <span className="contact-name">{contact.phoneBookName}</span>
@@ -3036,6 +3102,49 @@ function App() {
                           : 'Add a contact from your phonebook. If they are already registered on Assistance, they will immediately appear in your registered contacts list!'}
                       </p>
                       <form onSubmit={handleSaveContact} className="contacts-modal-form">
+                        <div className="form-group">
+                          <label className="input-label">Contact Profile Picture</label>
+                          <div className="contact-avatar-picker-row">
+                            <div
+                              className="contact-avatar-picker-preview"
+                              onClick={() => contactAvatarInputRef.current?.click()}
+                              title="Contact Profile Picture"
+                            >
+                              {newContactAvatar ? (
+                                <img src={newContactAvatar} alt="Contact profile" className="contact-avatar-img" />
+                              ) : (
+                                <span>{newContactName ? getInitials(newContactName) : '?'}</span>
+                              )}
+                            </div>
+                            <input
+                              ref={contactAvatarInputRef}
+                              type="file"
+                              id="new-contact-avatar"
+                              accept="image/*"
+                              className="hidden-file-input"
+                              onChange={handleContactAvatarChange}
+                            />
+                            <div className="contact-avatar-picker-actions">
+                              <button
+                                type="button"
+                                className="contacts-modal-cancel-btn"
+                                onClick={() => contactAvatarInputRef.current?.click()}
+                              >
+                                {newContactAvatar ? 'Change Photo' : 'Upload Photo'}
+                              </button>
+                              {newContactAvatar && (
+                                <button
+                                  type="button"
+                                  className="contacts-modal-remove-btn"
+                                  onClick={() => setNewContactAvatar('')}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="form-group">
                           <label className="input-label" htmlFor="new-contact-name">Contact Name</label>
                           <input

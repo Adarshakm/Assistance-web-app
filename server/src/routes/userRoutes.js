@@ -331,7 +331,7 @@ router.post('/sync-contacts', async (req, res) => {
           phone: matchedUser.phone || contactPhone,
           email: matchedUser.email,
           status: matchedUser.status || 'Hey there! I am using Assistance',
-          avatar: matchedUser.avatar || null,
+          avatar: contact.avatar || matchedUser.avatar || null,
           registered: true,
           registeredAt: matchedUser.createdAt,
         });
@@ -339,6 +339,7 @@ router.post('/sync-contacts', async (req, res) => {
         nonRegisteredContacts.push({
           phoneBookName: contact.name || 'Unknown Contact',
           phone: contactPhone,
+          avatar: contact.avatar || null,
           registered: false,
         });
       }
