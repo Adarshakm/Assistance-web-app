@@ -1122,6 +1122,7 @@ function App() {
   const [contactsFilterTab, setContactsFilterTab] = useState('registered');
   const [syncFeedback, setSyncFeedback] = useState(null);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [editingContactOriginal, setEditingContactOriginal] = useState(null);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
 
@@ -1206,18 +1207,83 @@ function App() {
     syncPhoneContacts();
   };
 
-  const handleAddNewContact = (e) => {
+  const normalizePhoneKey = (phone = '') => {
+    const digits = String(phone).replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
+  };
+
+  const openAddContactModal = () => {
+    setEditingContactOriginal(null);
+    setNewContactName('');
+    setNewContactPhone('');
+    setShowAddContactModal(true);
+  };
+
+  const openEditContactModal = (contact) => {
+    const name = contact.phoneBookName || contact.name || '';
+    const phoneNum = contact.phone || '';
+    setEditingContactOriginal({ name, phone: phoneNum });
+    setNewContactName(name);
+    setNewContactPhone(phoneNum);
+    setShowAddContactModal(true);
+  };
+
+  const closeContactModal = () => {
+    setShowAddContactModal(false);
+    setEditingContactOriginal(null);
+    setNewContactName('');
+    setNewContactPhone('');
+  };
+
+  const handleSaveContact = (e) => {
     e.preventDefault();
-    if (!newContactName.trim() || !newContactPhone.trim()) return;
-    const newEntry = { name: newContactName.trim(), phone: newContactPhone.trim() };
-    const updated = [newEntry, ...phoneContacts.filter((c) => c.phone !== newEntry.phone)];
+    const trimmedName = newContactName.trim();
+    const trimmedPhone = newContactPhone.trim();
+    if (!trimmedName || !trimmedPhone) return;
+
+    let updated;
+    if (editingContactOriginal) {
+      const origKey = normalizePhoneKey(editingContactOriginal.phone);
+      const newKey = normalizePhoneKey(trimmedPhone);
+      let replacedIndex = -1;
+
+      updated = phoneContacts.map((c, idx) => {
+        if (replacedIndex === -1 && (c.phone === editingContactOriginal.phone || (origKey && normalizePhoneKey(c.phone) === origKey))) {
+          replacedIndex = idx;
+          return { ...c, name: trimmedName, phone: trimmedPhone };
+        }
+        return c;
+      });
+
+      if (replacedIndex === -1) {
+        updated = [{ name: trimmedName, phone: trimmedPhone }, ...updated];
+        replacedIndex = 0;
+      }
+
+      if (newKey) {
+        updated = updated.filter((c, idx) => idx === replacedIndex || normalizePhoneKey(c.phone) !== newKey);
+      }
+
+      setRegisteredContacts((prev) =>
+        prev.map((c) =>
+          c.phone === editingContactOriginal.phone ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone } : c
+        )
+      );
+      setNonRegisteredContacts((prev) =>
+        prev.map((c) =>
+          c.phone === editingContactOriginal.phone ? { ...c, phoneBookName: trimmedName, phone: trimmedPhone } : c
+        )
+      );
+    } else {
+      const newEntry = { name: trimmedName, phone: trimmedPhone };
+      updated = [newEntry, ...phoneContacts.filter((c) => c.phone !== newEntry.phone)];
+    }
+
     setPhoneContacts(updated);
     try {
       localStorage.setItem('assistance_phone_contacts', JSON.stringify(updated));
     } catch {}
-    setNewContactName('');
-    setNewContactPhone('');
-    setShowAddContactModal(false);
+    closeContactModal();
     syncPhoneContacts(updated);
   };
 
@@ -2552,7 +2618,7 @@ function App() {
                       type="button"
                       className="contacts-add-btn"
                       id="add-phone-contact-btn"
-                      onClick={() => setShowAddContactModal(true)}
+                      onClick={openAddContactModal}
                       title="Add a phone contact to sync"
                     >
                       <svg
@@ -2750,6 +2816,22 @@ function App() {
                               className="contact-action-btn icon-only"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                openEditContactModal(contact);
+                              }}
+                              title={`Edit ${contact.phoneBookName}`}
+                              aria-label={`Edit ${contact.phoneBookName}`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="contact-action-btn icon-only"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 navigateTo('voice-and-video-call');
                               }}
                               title={`Call ${contact.phoneBookName}`}
@@ -2795,6 +2877,22 @@ function App() {
                           <div className="contact-card-actions">
                             <button
                               type="button"
+                              className="contact-action-btn icon-only"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditContactModal(contact);
+                              }}
+                              title={`Edit ${contact.phoneBookName}`}
+                              aria-label={`Edit ${contact.phoneBookName}`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+
+                            <button
+                              type="button"
                               className="contact-invite-btn"
                               onClick={() => {
                                 navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
@@ -2813,24 +2911,28 @@ function App() {
                   </div>
                 )}
 
-                {/* Add Phone Contact Modal */}
+                {/* Add / Edit Phone Contact Modal */}
                 {showAddContactModal && (
-                  <div className="contacts-modal-backdrop" onClick={() => setShowAddContactModal(false)}>
+                  <div className="contacts-modal-backdrop" onClick={closeContactModal}>
                     <div className="contacts-modal" onClick={(e) => e.stopPropagation()}>
                       <div className="contacts-modal-header">
-                        <h3 className="contacts-modal-title">Add Phone Contact to Sync</h3>
+                        <h3 className="contacts-modal-title">
+                          {editingContactOriginal ? 'Edit Contact' : 'Add Phone Contact to Sync'}
+                        </h3>
                         <button
                           type="button"
                           className="contacts-modal-close-btn"
-                          onClick={() => setShowAddContactModal(false)}
+                          onClick={closeContactModal}
                         >
                           ×
                         </button>
                       </div>
                       <p className="contacts-modal-desc">
-                        Add a contact from your phonebook. If they are already registered on Assistance, they will immediately appear in your registered contacts list!
+                        {editingContactOriginal
+                          ? 'Update the contact name or phone number and re-sync.'
+                          : 'Add a contact from your phonebook. If they are already registered on Assistance, they will immediately appear in your registered contacts list!'}
                       </p>
-                      <form onSubmit={handleAddNewContact} className="contacts-modal-form">
+                      <form onSubmit={handleSaveContact} className="contacts-modal-form">
                         <div className="form-group">
                           <label className="input-label" htmlFor="new-contact-name">Contact Name</label>
                           <input
@@ -2859,12 +2961,12 @@ function App() {
                           <button
                             type="button"
                             className="contacts-modal-cancel-btn"
-                            onClick={() => setShowAddContactModal(false)}
+                            onClick={closeContactModal}
                           >
                             Cancel
                           </button>
                           <button type="submit" className="contacts-modal-submit-btn">
-                            Save & Sync
+                            {editingContactOriginal ? 'Save Changes' : 'Save & Sync'}
                           </button>
                         </div>
                       </form>
