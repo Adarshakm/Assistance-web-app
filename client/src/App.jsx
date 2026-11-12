@@ -1308,6 +1308,56 @@ function App() {
     }
   };
 
+  const handleExportContacts = () => {
+    const seen = new Set();
+    const listToExport = [];
+
+    const addEntry = (name, phoneNum, usernameVal = '') => {
+      const key = normalizePhoneKey(phoneNum) || usernameVal || name;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      listToExport.push({
+        name: name || usernameVal || 'Contact',
+        phone: phoneNum || '',
+        username: usernameVal,
+      });
+    };
+
+    registeredContacts.forEach((c) => addEntry(c.phoneBookName, c.phone, c.username));
+    nonRegisteredContacts.forEach((c) => addEntry(c.phoneBookName, c.phone));
+    phoneContacts.forEach((c) => addEntry(c.name, c.phone));
+
+    if (listToExport.length === 0) {
+      setSyncFeedback({ type: 'error', text: 'No contacts available to export.' });
+      return;
+    }
+
+    const vcfContent = listToExport
+      .map((c) => {
+        const lines = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${c.name}`];
+        if (c.phone) lines.push(`TEL;TYPE=CELL:${c.phone}`);
+        if (c.username) lines.push(`NOTE:@${c.username}`);
+        lines.push('END:VCARD');
+        return lines.join('\r\n');
+      })
+      .join('\r\n');
+
+    const blob = new Blob([vcfContent], { type: 'text/vcard;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'contacts.vcf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setSyncFeedback({
+      type: 'success',
+      text: `Exported ${listToExport.length} contact${listToExport.length === 1 ? '' : 's'}.`,
+    });
+  };
+
   const renderContactEditDeleteButtons = (contact) => (
     <>
       <button
@@ -2694,6 +2744,30 @@ function App() {
                         <line x1="23" y1="11" x2="17" y2="11" />
                       </svg>
                       Add Contact
+                    </button>
+
+                    <button
+                      type="button"
+                      className="contacts-add-btn"
+                      id="export-contacts-btn"
+                      onClick={handleExportContacts}
+                      title="Export Contacts"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Export Contacts
                     </button>
                   </div>
                 </div>
