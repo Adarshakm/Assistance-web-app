@@ -439,4 +439,40 @@ router.get('/registered-contacts', async (req, res) => {
   }
 });
 
+// GET /api/users/all
+// Returns all registered users for Search and Discovery
+router.get('/all', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  try {
+    let users = [];
+    if (mongoose.connection.readyState === 1) {
+      users = await User.find({}, 'username displayName email phone avatar status createdAt')
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    const formatted = users
+      .filter((u) => Boolean(u.username))
+      .map((u) => ({
+        id: (u._id && u._id.toString()) || u.username,
+        username: u.username,
+        displayName: u.displayName || u.username,
+        email: u.email || '',
+        phone: u.phone || '',
+        avatar: u.avatar || null,
+        status: u.status || '',
+        createdAt: u.createdAt,
+      }));
+
+    return res.status(200).json({
+      success: true,
+      count: formatted.length,
+      users: formatted,
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    return res.status(500).json({ success: false, message: 'Server error fetching users', error: error.message });
+  }
+});
+
 export default router;

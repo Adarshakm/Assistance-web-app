@@ -1511,6 +1511,41 @@ function App() {
     </>
   );
 
+  const [discoveryUsers, setDiscoveryUsers] = useState([]);
+  const [isLoadingDiscoveryUsers, setIsLoadingDiscoveryUsers] = useState(false);
+  const [discoverySearchQuery, setDiscoverySearchQuery] = useState('');
+
+  useEffect(() => {
+    if (currentView !== 'search-and-discovery') return;
+    let isMounted = true;
+    setIsLoadingDiscoveryUsers(true);
+    fetch('/api/users/all', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && data.success && Array.isArray(data.users)) {
+          setDiscoveryUsers(data.users);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsLoadingDiscoveryUsers(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [currentView]);
+
+  const filteredDiscoveryUsers = discoveryUsers.filter((u) => {
+    if (!discoverySearchQuery.trim()) return true;
+    const q = discoverySearchQuery.trim().toLowerCase();
+    return (
+      (u.displayName && u.displayName.toLowerCase().includes(q)) ||
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.toLowerCase().includes(q))
+    );
+  });
+
   const getAvatarColor = (name = '') => {
     const colors = ['#25D366', '#128C7E', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4'];
     let hash = 0;
@@ -3456,6 +3491,112 @@ function App() {
                   Search
                 </button>
               </form>
+            </div>
+          ) : currentView === 'search-and-discovery' ? (
+            <div className="contacts-space" id="search-and-discovery-space">
+              <div className="contacts-container" id="search-and-discovery-container">
+                <div className="contacts-header-wrapper">
+                  <div className="contacts-title-col">
+                    <h1 className="heading contacts-heading" id="search-discovery-heading">
+                      Search and Discovery
+                    </h1>
+                  </div>
+                </div>
+
+                <div className="contacts-search-box">
+                  <svg
+                    className="contacts-search-icon"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    type="text"
+                    id="discovery-search-input"
+                    className="contacts-search-input"
+                    placeholder="Search registered users..."
+                    value={discoverySearchQuery}
+                    onChange={(e) => setDiscoverySearchQuery(e.target.value)}
+                    aria-label="Search registered users"
+                  />
+                  {discoverySearchQuery && (
+                    <button
+                      type="button"
+                      className="contacts-search-clear"
+                      onClick={() => setDiscoverySearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div className="contacts-list" id="discovery-users-list">
+                  {isLoadingDiscoveryUsers && discoveryUsers.length === 0 ? (
+                    <div className="contacts-empty-state">
+                      <p className="contacts-empty-text">Loading registered users...</p>
+                    </div>
+                  ) : filteredDiscoveryUsers.length === 0 ? (
+                    <div className="contacts-empty-state">
+                      <p className="contacts-empty-text">No registered users found.</p>
+                    </div>
+                  ) : (
+                    filteredDiscoveryUsers.map((user) => (
+                      <div
+                        key={user.id || user.username}
+                        className="contact-card"
+                        onClick={() =>
+                          handleStartChatWithContact({
+                            username: user.username,
+                            phoneBookName: user.displayName || user.username,
+                            avatar: user.avatar || null,
+                            status: user.status || '',
+                            phone: user.phone || '',
+                          })
+                        }
+                      >
+                        <div className="contact-card-left">
+                          <div
+                            className="contact-avatar"
+                            style={{
+                              backgroundColor: user.avatar
+                                ? 'transparent'
+                                : getAvatarColor(user.displayName || user.username),
+                            }}
+                          >
+                            {user.avatar ? (
+                              <img
+                                src={user.avatar}
+                                alt={user.displayName || user.username}
+                                className="contact-avatar-img"
+                              />
+                            ) : (
+                              <span>{getInitials(user.displayName || user.username)}</span>
+                            )}
+                          </div>
+
+                          <div className="contact-info">
+                            <div className="contact-name-row">
+                              <span className="contact-name">
+                                {user.displayName || user.username}
+                              </span>
+                              <span className="contact-username">@{user.username}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           ) : currentView === 'privacy' ? (
             <div className="privacy-space" id="privacy-space">
