@@ -136,7 +136,12 @@ router.post('/login', async (req, res) => {
 
       return res.status(200).json({
         message: 'Logged in successfully!',
-        user: { id: existingUser._id, username: existingUser.username, email: existingUser.email },
+        user: {
+          id: existingUser._id,
+          username: existingUser.username,
+          email: existingUser.email,
+          avatar: existingUser.avatar || null,
+        },
       });
     } else {
       // Offline fallback simulation
@@ -283,6 +288,47 @@ router.post('/update-username', async (req, res) => {
   } catch (error) {
     console.error('Update username error:', error);
     res.status(500).json({ message: 'Server error updating username', error: error.message });
+  }
+});
+
+// GET /api/users/profile/:username
+router.get('/profile/:username', async (req, res) => {
+  try {
+    const cleanUsername = String(req.params.username || '').trim().toLowerCase();
+    if (!cleanUsername) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status').lean();
+      if (user) {
+        return res.status(200).json({ success: true, user });
+      }
+    }
+    return res.status(200).json({ success: true, user: { username: cleanUsername, avatar: null } });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching profile' });
+  }
+});
+
+// POST /api/users/update-avatar
+router.post('/update-avatar', async (req, res) => {
+  try {
+    const { username, avatar } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    const cleanUsername = username.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUsername },
+        { $set: { avatar: avatar || null } }
+      );
+    }
+    return res.status(200).json({ success: true, avatar: avatar || null });
+  } catch (error) {
+    console.error('Update avatar error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating avatar' });
   }
 });
 

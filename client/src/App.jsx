@@ -758,6 +758,10 @@ function App() {
         setLoggedInUser(activeUser);
         try {
           localStorage.setItem('assistance_user', activeUser);
+          if (data.user?.avatar) {
+            setProfilePicture(data.user.avatar);
+            localStorage.setItem('assistance_profile_picture', data.user.avatar);
+          }
         } catch {}
         setLoginFeedback({ type: 'success', text: data.message || 'Logged in successfully!' });
         navigateTo('blank');
@@ -914,41 +918,92 @@ function App() {
     }
   };
 
-  const handleCoverPhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // Shared helper to compress uploaded images so localStorage and API sync stay fast and under quota
+  const compressImageFile = (file, maxDim = 400, quality = 0.85) =>
+    new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const result = event.target?.result;
-        if (result) {
-          setCoverPhoto(result);
-          try {
-            localStorage.setItem('assistance_cover_photo', result);
-          } catch {
-            // Ignore quota exceeded
-          }
+        const dataUrl = event.target?.result;
+        if (typeof dataUrl !== 'string') {
+          resolve(null);
+          return;
         }
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
       };
+      reader.onerror = () => resolve(null);
       reader.readAsDataURL(file);
+    });
+
+  // Restore saved user avatar from backend if missing locally
+  useEffect(() => {
+    if (!loggedInUser) return;
+    fetch(`/api/users/profile/${encodeURIComponent(loggedInUser)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.user?.avatar) {
+          setProfilePicture((prev) => prev || data.user.avatar);
+          try {
+            if (!localStorage.getItem('assistance_profile_picture')) {
+              localStorage.setItem('assistance_profile_picture', data.user.avatar);
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [loggedInUser]);
+
+  const handleCoverPhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImageFile(file, 1200, 0.82);
+    if (compressed) {
+      setCoverPhoto(compressed);
+      try {
+        localStorage.setItem('assistance_cover_photo', compressed);
+      } catch {}
     }
   };
 
-  const handleProfilePictureChange = (e) => {
+  const handleProfilePictureChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result;
-        if (result) {
-          setProfilePicture(result);
-          try {
-            localStorage.setItem('assistance_profile_picture', result);
-          } catch {
-            // Ignore quota exceeded
-          }
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    const compressed = await compressImageFile(file, 400, 0.85);
+    if (compressed) {
+      setProfilePicture(compressed);
+      try {
+        localStorage.setItem('assistance_profile_picture', compressed);
+      } catch {}
+      if (loggedInUser) {
+        fetch('/api/users/update-avatar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: loggedInUser, avatar: compressed }),
+        }).catch(() => {});
+      }
     }
   };
 
@@ -1128,6 +1183,28 @@ function App() {
   const [newContactAvatar, setNewContactAvatar] = useState('');
   const contactAvatarInputRef = useRef(null);
 
+  const normalizePhoneKey = (phone = '') => {
+    const digits = String(phone).replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
+  };
+
+  const mergeLocalContactFields = (remoteContacts = [], localList = []) =>
+    remoteContacts.map((rc) => {
+      const rcKey = normalizePhoneKey(rc.phone);
+      const localMatch = localList.find(
+        (lc) =>
+          (lc.phone && rc.phone && normalizePhoneKey(lc.phone) === rcKey) ||
+          (lc.username && rc.username && lc.username.toLowerCase() === rc.username.toLowerCase())
+      );
+      return localMatch
+        ? {
+            ...rc,
+            phoneBookName: localMatch.name || rc.phoneBookName,
+            avatar: localMatch.avatar || rc.avatar || null,
+          }
+        : rc;
+    });
+
   const syncPhoneContacts = async (contactsList = null) => {
     setIsSyncingContacts(true);
     const listToSync = contactsList || phoneContacts;
@@ -1139,8 +1216,8 @@ function App() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setRegisteredContacts(data.registeredContacts || []);
-        setNonRegisteredContacts(data.nonRegisteredContacts || []);
+        setRegisteredContacts(mergeLocalContactFields(data.registeredContacts || [], listToSync));
+        setNonRegisteredContacts(mergeLocalContactFields(data.nonRegisteredContacts || [], listToSync));
         setSyncFeedback({
           type: 'success',
           text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Assistance!`,
@@ -1154,19 +1231,7 @@ function App() {
         const fallbackRes = await fetch('/api/users/registered-contacts');
         const fallbackData = await fallbackRes.json();
         if (fallbackRes.ok && fallbackData.contacts) {
-          const mergedFallback = fallbackData.contacts.map((fc) => {
-            const localMatch = listToSync.find(
-              (lc) => lc.phone && fc.phone && normalizePhoneKey(lc.phone) === normalizePhoneKey(fc.phone)
-            );
-            return localMatch
-              ? {
-                  ...fc,
-                  phoneBookName: localMatch.name || fc.phoneBookName,
-                  avatar: localMatch.avatar || fc.avatar || null,
-                }
-              : fc;
-          });
-          setRegisteredContacts(mergedFallback);
+          setRegisteredContacts(mergeLocalContactFields(fallbackData.contacts, listToSync));
           setSyncFeedback({
             type: 'success',
             text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
@@ -1181,10 +1246,16 @@ function App() {
   };
 
   useEffect(() => {
-    if (currentView === 'contacts' && registeredContacts.length === 0 && !isSyncingContacts && phoneContacts.length > 0) {
+    if (
+      currentView === 'contacts' &&
+      registeredContacts.length === 0 &&
+      nonRegisteredContacts.length === 0 &&
+      !isSyncingContacts &&
+      phoneContacts.length > 0
+    ) {
       syncPhoneContacts();
     }
-  }, [currentView, phoneContacts]);
+  }, [currentView]);
 
   const handleDeviceContactSync = async () => {
     if ('contacts' in navigator && 'ContactsManager' in window) {
@@ -1221,11 +1292,6 @@ function App() {
     syncPhoneContacts();
   };
 
-  const normalizePhoneKey = (phone = '') => {
-    const digits = String(phone).replace(/\D/g, '');
-    return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
-  };
-
   const openAddContactModal = () => {
     setEditingContactOriginal(null);
     setNewContactName('');
@@ -1237,7 +1303,7 @@ function App() {
   const openEditContactModal = (contact) => {
     const name = contact.phoneBookName || contact.name || '';
     const phoneNum = contact.phone || '';
-    setEditingContactOriginal({ name, phone: phoneNum });
+    setEditingContactOriginal({ name, phone: phoneNum, username: contact.username || '' });
     setNewContactName(name);
     setNewContactPhone(phoneNum);
     setNewContactAvatar(contact.avatar || '');
@@ -1252,44 +1318,14 @@ function App() {
     setNewContactAvatar('');
   };
 
-  const handleContactAvatarChange = (e) => {
+  const handleContactAvatarChange = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result;
-      if (typeof dataUrl !== 'string') return;
-
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 256;
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          setNewContactAvatar(canvas.toDataURL('image/jpeg', 0.82));
-        } else {
-          setNewContactAvatar(dataUrl);
-        }
-      };
-      img.onerror = () => setNewContactAvatar(dataUrl);
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
     e.target.value = '';
+    if (!file) return;
+    const compressed = await compressImageFile(file, 256, 0.82);
+    if (compressed) {
+      setNewContactAvatar(compressed);
+    }
   };
 
   const handleSaveContact = (e) => {
@@ -1306,15 +1342,34 @@ function App() {
       let replacedIndex = -1;
 
       updated = phoneContacts.map((c, idx) => {
-        if (replacedIndex === -1 && (c.phone === editingContactOriginal.phone || (origKey && normalizePhoneKey(c.phone) === origKey))) {
+        if (
+          replacedIndex === -1 &&
+          (c.phone === editingContactOriginal.phone ||
+            (origKey && normalizePhoneKey(c.phone) === origKey) ||
+            (editingContactOriginal.username && c.username === editingContactOriginal.username))
+        ) {
           replacedIndex = idx;
-          return { ...c, name: trimmedName, phone: trimmedPhone, avatar: avatarValue };
+          return {
+            ...c,
+            name: trimmedName,
+            phone: trimmedPhone,
+            avatar: avatarValue,
+            username: editingContactOriginal.username || c.username,
+          };
         }
         return c;
       });
 
       if (replacedIndex === -1) {
-        updated = [{ name: trimmedName, phone: trimmedPhone, avatar: avatarValue }, ...updated];
+        updated = [
+          {
+            name: trimmedName,
+            phone: trimmedPhone,
+            avatar: avatarValue,
+            username: editingContactOriginal.username || '',
+          },
+          ...updated,
+        ];
         replacedIndex = 0;
       }
 
