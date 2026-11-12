@@ -4,6 +4,8 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Fallback list of taken usernames for demonstration when MongoDB is not connected
 const simulatedTakenUsernames = new Set(['admin', 'root', 'testuser', 'adarsh', 'johndoe']);
 
@@ -31,7 +33,7 @@ router.get('/check-username', async (req, res) => {
     // Check against MongoDB if connected
     if (mongoose.connection.readyState === 1) {
       const existingUser = await User.findOne({
-        username: { $regex: new RegExp(`^${cleanedUsername}$`, 'i') },
+        username: { $regex: new RegExp(`^${escapeRegex(cleanedUsername)}$`, 'i') },
       });
 
       if (existingUser) {
@@ -73,19 +75,37 @@ router.post('/register', async (req, res) => {
     }
 
     const cleanedUsername = username.trim().toLowerCase();
+    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedPhone = phone.trim();
+
+    if (cleanedUsername.length < 3) {
+      return res.status(400).json({ message: 'Username must be at least 3 characters' });
+    }
+    if (cleanedUsername.length > 30) {
+      return res.status(400).json({ message: 'Username must be at most 30 characters' });
+    }
 
     if (mongoose.connection.readyState === 1) {
-      const existingUser = await User.findOne({
-        username: { $regex: new RegExp(`^${cleanedUsername}$`, 'i') },
+      const existingByUsername = await User.findOne({
+        username: { $regex: new RegExp(`^${escapeRegex(cleanedUsername)}$`, 'i') },
       });
-
-      if (existingUser) {
+      if (existingByUsername) {
         return res.status(400).json({ message: 'Username is already taken' });
       }
 
+      const existingByEmail = await User.findOne({ email: cleanedEmail });
+      if (existingByEmail) {
+        return res.status(400).json({ message: 'Email address is already registered' });
+      }
+
+      const existingByPhone = await User.findOne({ phone: cleanedPhone });
+      if (existingByPhone) {
+        return res.status(400).json({ message: 'Phone number is already registered' });
+      }
+
       const newUser = new User({
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
+        email: cleanedEmail,
+        phone: cleanedPhone,
         username: cleanedUsername,
       });
       await newUser.save();
@@ -99,11 +119,25 @@ router.post('/register', async (req, res) => {
       simulatedTakenUsernames.add(cleanedUsername);
       return res.status(201).json({
         message: 'Account registered successfully!',
-        user: { username: cleanedUsername, email },
+        user: { username: cleanedUsername, email: cleanedEmail },
       });
     }
   } catch (error) {
     console.error('Registration error:', error);
+    if (error?.code === 11000) {
+      const dupField = Object.keys(error.keyPattern || error.keyValue || {})[0];
+      const dupMessage =
+        dupField === 'email'
+          ? 'Email address is already registered'
+          : dupField === 'phone'
+          ? 'Phone number is already registered'
+          : 'Username is already taken';
+      return res.status(400).json({ message: dupMessage });
+    }
+    if (error?.name === 'ValidationError') {
+      const firstErr = Object.values(error.errors || {})[0]?.message;
+      return res.status(400).json({ message: firstErr || 'Invalid registration data' });
+    }
     res.status(500).json({ message: 'Server error during registration', error: error.message });
   }
 });

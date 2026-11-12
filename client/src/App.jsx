@@ -962,9 +962,9 @@ function App() {
   useEffect(() => {
     if (!loggedInUser) return;
     fetch(`/api/users/profile/${encodeURIComponent(loggedInUser)}`)
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data.success && data.user?.avatar) {
+        if (data && data.success && data.user?.avatar) {
           setProfilePicture((prev) => prev || data.user.avatar);
           try {
             if (!localStorage.getItem('assistance_profile_picture')) {
