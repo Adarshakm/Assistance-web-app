@@ -3648,7 +3648,13 @@ function App() {
   return (
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      <main className="container">
+      <main
+        className={`container ${
+          currentView === 'register' || (currentView !== 'reset-password' && currentView !== 'forgot-password')
+            ? 'auth-dark-container'
+            : ''
+        }`}
+      >
       {currentView === 'reset-password' ? (
         <div className="registration-wrapper">
           <form className="form-container" onSubmit={handleNewPasswordSubmit}>

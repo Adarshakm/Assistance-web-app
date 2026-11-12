@@ -290,6 +290,68 @@ body,
   animation: fadeIn 0.2s ease;
 }
 
+.container.auth-dark-container {
+  background-color: #000000;
+  padding-bottom: 2.5rem;
+}
+
+.container.auth-dark-container .heading {
+  color: #ffffff;
+}
+
+.container.auth-dark-container .input-label {
+  color: #ffffff;
+}
+
+.container.auth-dark-container .input-field {
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #ffffff;
+}
+
+.container.auth-dark-container .register-btn {
+  border-color: #ffffff;
+}
+
+.container.auth-dark-container .register-btn:hover:not(:disabled) {
+  border-color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.container.auth-dark-container .login-prompt {
+  color: #d1d5db;
+}
+
+.container.auth-dark-container .login-link {
+  color: #ffffff;
+}
+
+.container.auth-dark-container .login-link:hover {
+  color: #93c5fd;
+}
+
+.container.auth-dark-container .forgot-password-link {
+  color: #d1d5db;
+}
+
+.container.auth-dark-container .forgot-password-link:hover {
+  color: #ffffff;
+}
+
+.container.auth-dark-container .status-checking {
+  color: #a5b4fc;
+}
+
+.container.auth-dark-container .status-available {
+  color: #34d399;
+}
+
+.container.auth-dark-container .status-taken,
+.container.auth-dark-container .status-too-short,
+.container.auth-dark-container .status-error {
+  color: #f87171;
+}
+
 /* Sidebar and Workspace Layout */
 .workspace-layout {
   display: flex;
