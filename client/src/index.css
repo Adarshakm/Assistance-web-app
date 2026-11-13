@@ -1474,6 +1474,10 @@ body,
   gap: 0.75rem;
 }
 
+.contacts-container .search-friends-form {
+  max-width: 100%;
+}
+
 .search-friends-input-wrapper {
   position: relative;
   flex: 1;

@@ -695,6 +695,7 @@ function App() {
 
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
+  const [activeSocialFollowTab, setActiveSocialFollowTab] = useState('all'); // 'all', 'followers', 'following'
 
   // Privacy & Account Security state
   const [accountPrivacy, setAccountPrivacy] = useState(() => {
@@ -1971,6 +1972,16 @@ function App() {
     const nameMatch = (contact.phoneBookName || '').toLowerCase().includes(query);
     const phoneMatch = (contact.phone || '').includes(query);
     return nameMatch || phoneMatch;
+  });
+
+  const socialFilteredFollowers = followersList.filter((u) => {
+    if (!searchFriendsQuery.trim()) return true;
+    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
+  });
+
+  const socialFilteredFollowing = followingList.filter((u) => {
+    if (!searchFriendsQuery.trim()) return true;
+    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
   });
 
   if (
@@ -3936,44 +3947,254 @@ function App() {
             </div>
           ) : currentView === 'social' ? (
             <div className="social-space" id="social-space">
-              <form
-                className="search-friends-form"
-                id="search-friends-form"
-                onSubmit={handleSearchFriends}
-              >
-                <div className="search-friends-input-wrapper">
-                  <svg
-                    className="search-icon"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                  <input
-                    type="text"
-                    id="search-friends-input"
-                    className="search-friends-input"
-                    placeholder="Search Friends"
-                    value={searchFriendsQuery}
-                    onChange={(e) => setSearchFriendsQuery(e.target.value)}
-                    aria-label="Search Friends"
-                  />
+              <div className="contacts-container" id="social-connections-container">
+                <div className="contacts-header-wrapper">
+                  <div className="contacts-title-col">
+                    <h1 className="heading contacts-heading" id="social-connections-heading">
+                      Social Connections
+                    </h1>
+                  </div>
                 </div>
-                <button
-                  type="submit"
-                  id="search-friends-btn"
-                  className="search-friends-btn"
+
+                <form
+                  className="search-friends-form"
+                  id="search-friends-form"
+                  onSubmit={handleSearchFriends}
                 >
-                  Search
-                </button>
-              </form>
+                  <div className="search-friends-input-wrapper">
+                    <svg
+                      className="search-icon"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input
+                      type="text"
+                      id="search-friends-input"
+                      className="search-friends-input"
+                      placeholder="Search followers and following..."
+                      value={searchFriendsQuery}
+                      onChange={(e) => setSearchFriendsQuery(e.target.value)}
+                      aria-label="Search followers and following"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    id="search-friends-btn"
+                    className="search-friends-btn"
+                  >
+                    Search
+                  </button>
+                </form>
+
+                {followError && (
+                  <p className="status-message status-taken" style={{ color: '#ff6b6b', margin: '0.25rem 0' }} role="alert">
+                    ✕ {followError}
+                  </p>
+                )}
+
+                {/* Followers and Following Toggle Tabs */}
+                <div className="profile-follow-summary-row" id="social-follow-summary-row">
+                  <button
+                    type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'followers' ? 'active' : ''}`}
+                    id="social-tab-followers-btn"
+                    onClick={() => setActiveSocialFollowTab('followers')}
+                  >
+                    <span className="profile-follow-count">{followersList.length}</span>
+                    <span className="profile-follow-label">Followers</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'following' ? 'active' : ''}`}
+                    id="social-tab-following-btn"
+                    onClick={() => setActiveSocialFollowTab('following')}
+                  >
+                    <span className="profile-follow-count">{followingList.length}</span>
+                    <span className="profile-follow-label">Following</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'all' ? 'active' : ''}`}
+                    id="social-tab-all-btn"
+                    onClick={() => setActiveSocialFollowTab('all')}
+                  >
+                    <span className="profile-follow-label">View Both</span>
+                  </button>
+                </div>
+
+                {/* Display Followers */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'followers') && (
+                  <div className="profile-about-section" id="social-followers-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Followers ({followersList.length})</h3>
+                      <button
+                        type="button"
+                        className="edit-username-btn"
+                        id="social-add-follower-btn"
+                        title="Add follower"
+                        onClick={() => {
+                          setFollowError('');
+                          setIsAddingFollower((prev) => !prev);
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>{isAddingFollower ? 'Close' : 'Add'}</span>
+                      </button>
+                    </div>
+
+                    {isAddingFollower && (
+                      <form className="profile-follow-add-form" id="social-add-follower-form" onSubmit={handleAddFollower}>
+                        <input
+                          type="text"
+                          className="input-field edit-info-input"
+                          id="social-add-follower-input"
+                          style={{ paddingLeft: '0.875rem' }}
+                          placeholder="Enter username to add follower..."
+                          value={addFollowerInput}
+                          onChange={(e) => setAddFollowerInput(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="social-confirm-add-follower-btn">
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            onClick={() => {
+                              setIsAddingFollower(false);
+                              setFollowError('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="profile-follow-list" id="social-followers-list">
+                      {socialFilteredFollowers.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-followers-text">
+                          {searchFriendsQuery ? 'No followers match your search' : 'No followers yet'}
+                        </p>
+                      ) : (
+                        socialFilteredFollowers.map((follower) => (
+                          <div className="profile-follow-item" key={`social-follower-${follower}`}>
+                            <div className="profile-follow-user-info">
+                              <div className="profile-follow-avatar-circle">
+                                {follower.slice(0, 1).toUpperCase()}
+                              </div>
+                              <span className="profile-follow-username">{follower}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="profile-follow-btn-action"
+                              title={`Remove ${follower}`}
+                              onClick={() => handleRemoveFollower(follower)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Display Following */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'following') && (
+                  <div className="profile-about-section" id="social-following-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Following ({followingList.length})</h3>
+                      <button
+                        type="button"
+                        className="edit-username-btn"
+                        id="social-add-following-btn"
+                        title="Follow user"
+                        onClick={() => {
+                          setFollowError('');
+                          setIsAddingFollowing((prev) => !prev);
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>{isAddingFollowing ? 'Close' : 'Follow'}</span>
+                      </button>
+                    </div>
+
+                    {isAddingFollowing && (
+                      <form className="profile-follow-add-form" id="social-add-following-form" onSubmit={handleFollowUser}>
+                        <input
+                          type="text"
+                          className="input-field edit-info-input"
+                          id="social-add-following-input"
+                          style={{ paddingLeft: '0.875rem' }}
+                          placeholder="Enter username to follow..."
+                          value={addFollowingInput}
+                          onChange={(e) => setAddFollowingInput(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="social-confirm-follow-btn">
+                            Follow
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            onClick={() => {
+                              setIsAddingFollowing(false);
+                              setFollowError('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="profile-follow-list" id="social-following-list">
+                      {socialFilteredFollowing.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-following-text">
+                          {searchFriendsQuery ? 'No followed users match your search' : 'Not following anyone yet'}
+                        </p>
+                      ) : (
+                        socialFilteredFollowing.map((target) => (
+                          <div className="profile-follow-item" key={`social-following-${target}`}>
+                            <div className="profile-follow-user-info">
+                              <div className="profile-follow-avatar-circle">
+                                {target.slice(0, 1).toUpperCase()}
+                              </div>
+                              <span className="profile-follow-username">{target}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="profile-follow-btn-action"
+                              title={`Unfollow ${target}`}
+                              onClick={() => handleUnfollowUser(target)}
+                            >
+                              Unfollow
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : currentView === 'search-and-discovery' ? (
             <div className="contacts-space" id="search-and-discovery-space">
