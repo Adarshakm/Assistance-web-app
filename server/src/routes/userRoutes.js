@@ -493,19 +493,6 @@ router.post('/remove-follower', async (req, res) => {
   }
 });
 
-    if (mongoose.connection.readyState === 1) {
-      await User.findOneAndUpdate(
-        { username: cleanUsername },
-        { $set: updateFields }
-      );
-    }
-    return res.status(200).json({ success: true, ...updateFields });
-  } catch (error) {
-    console.error('Update profile info error:', error);
-    res.status(500).json({ success: false, message: 'Server error updating profile info' });
-  }
-});
-
 // POST /api/users/update-about
 router.post('/update-about', async (req, res) => {
   try {
