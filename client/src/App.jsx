@@ -695,7 +695,19 @@ function App() {
 
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
-  const [activeSocialFollowTab, setActiveSocialFollowTab] = useState('all'); // 'all', 'followers', 'following'
+  const [activeSocialFollowTab, setActiveSocialFollowTab] = useState('all'); // 'all', 'followers', 'following', 'follow-unfollow', 'friend-requests'
+
+  // Friend requests state
+  const [sentFriendRequests, setSentFriendRequests] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_sent_friend_requests');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [sendRequestInput, setSendRequestInput] = useState('');
+  const [sendRequestFeedback, setSendRequestFeedback] = useState(null);
 
   // Privacy & Account Security state
   const [accountPrivacy, setAccountPrivacy] = useState(() => {
@@ -1155,6 +1167,12 @@ function App() {
               localStorage.setItem('assistance_following', JSON.stringify(data.user.following));
             } catch {}
           }
+          if (Array.isArray(data.user.friendRequestsSent)) {
+            setSentFriendRequests(data.user.friendRequestsSent);
+            try {
+              localStorage.setItem('assistance_sent_friend_requests', JSON.stringify(data.user.friendRequestsSent));
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1452,6 +1470,57 @@ function App() {
     } catch {}
     if (loggedInUser) {
       fetch('/api/users/unfollow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSendFriendRequest = async (targetParam, e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (targetParam && targetParam.preventDefault) {
+      targetParam.preventDefault();
+      targetParam = undefined;
+    }
+    const target = (typeof targetParam === 'string' && targetParam.trim())
+      ? targetParam.trim().toLowerCase()
+      : sendRequestInput.trim().toLowerCase();
+    if (!target) return;
+    if (target === (loggedInUser || '').toLowerCase()) {
+      setSendRequestFeedback({ type: 'error', text: 'Cannot send a friend request to yourself' });
+      return;
+    }
+    if (sentFriendRequests.some((u) => u.toLowerCase() === target)) {
+      setSendRequestFeedback({ type: 'error', text: `Friend request already sent to ${target}` });
+      return;
+    }
+    const updated = [...sentFriendRequests, target];
+    setSentFriendRequests(updated);
+    setSendRequestInput('');
+    setSendRequestFeedback({ type: 'success', text: `Friend request sent to ${target}` });
+    try {
+      localStorage.setItem('assistance_sent_friend_requests', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/send-friend-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: target }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleCancelFriendRequest = async (target) => {
+    const cleanTarget = String(target).trim().toLowerCase();
+    const updated = sentFriendRequests.filter((u) => u.toLowerCase() !== cleanTarget);
+    setSentFriendRequests(updated);
+    setSendRequestFeedback({ type: 'success', text: `Friend request to ${cleanTarget} cancelled` });
+    try {
+      localStorage.setItem('assistance_sent_friend_requests', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/cancel-friend-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
@@ -4050,6 +4119,14 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'friend-requests' ? 'active' : ''}`}
+                    id="social-tab-friend-requests-btn"
+                    onClick={() => setActiveSocialFollowTab('friend-requests')}
+                  >
+                    <span className="profile-follow-label">Send friend requests</span>
+                  </button>
+                  <button
+                    type="button"
                     className={`profile-follow-pill ${activeSocialFollowTab === 'all' ? 'active' : ''}`}
                     id="social-tab-all-btn"
                     onClick={() => setActiveSocialFollowTab('all')}
@@ -4272,6 +4349,112 @@ function App() {
                                   onClick={() => handleFollowUser(u.username)}
                                 >
                                   Follow
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Send friend requests */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'friend-requests') && (
+                  <div className="profile-about-section" id="social-friend-requests-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Send friend requests</h3>
+                    </div>
+
+                    {/* Direct send request input form */}
+                    <form
+                      className="profile-follow-add-form"
+                      id="send-friend-request-form"
+                      onSubmit={(e) => handleSendFriendRequest(null, e)}
+                    >
+                      <div className="profile-input-with-icon">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="8.5" cy="7" r="4"></circle>
+                          <line x1="20" y1="8" x2="20" y2="14"></line>
+                          <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                        <input
+                          type="text"
+                          className="input-field edit-info-input"
+                          id="send-friend-request-input"
+                          placeholder="Enter username to send friend request..."
+                          value={sendRequestInput}
+                          onChange={(e) => {
+                            setSendRequestInput(e.target.value);
+                            setSendRequestFeedback(null);
+                          }}
+                        />
+                      </div>
+                      <div className="edit-about-actions">
+                        <button type="submit" className="btn-save-username" id="send-request-submit-btn">
+                          Send Request
+                        </button>
+                      </div>
+                    </form>
+
+                    {sendRequestFeedback && (
+                      <p
+                        className="status-message"
+                        style={{
+                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          margin: '0.25rem 0 0.5rem 0',
+                        }}
+                        role="alert"
+                      >
+                        {sendRequestFeedback.type === 'error' ? '✕ ' : '✓ '}
+                        {sendRequestFeedback.text}
+                      </p>
+                    )}
+
+                    <div className="profile-follow-list" id="social-friend-requests-list">
+                      {isLoadingDiscoveryUsers ? (
+                        <p className="profile-follow-empty" id="social-friend-requests-loading-text">Loading users...</p>
+                      ) : filteredSocialUsers.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-friend-requests-text">
+                          {searchFriendsQuery ? 'No users match your search' : 'No users available'}
+                        </p>
+                      ) : (
+                        filteredSocialUsers.map((u) => {
+                          const isRequestSent = sentFriendRequests.some(
+                            (target) => target.toLowerCase() === u.username.toLowerCase()
+                          );
+                          return (
+                            <div className="profile-follow-item" key={`friend-request-user-${u.username}`}>
+                              <div className="profile-follow-user-info">
+                                <div className="profile-follow-avatar-circle">
+                                  {u.username.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span className="profile-follow-username">{u.displayName || u.username}</span>
+                                  {u.displayName && u.displayName !== u.username && (
+                                    <span style={{ fontSize: '0.8rem', color: '#888888' }}>@{u.username}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {isRequestSent ? (
+                                <button
+                                  type="button"
+                                  className="profile-follow-btn-action"
+                                  title={`Cancel friend request to ${u.username}`}
+                                  onClick={() => handleCancelFriendRequest(u.username)}
+                                >
+                                  Request Sent (Cancel)
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="profile-follow-btn-action"
+                                  style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                                  title={`Send friend request to ${u.username}`}
+                                  onClick={() => handleSendFriendRequest(u.username)}
+                                >
+                                  Send Request
                                 </button>
                               )}
                             </div>

@@ -333,16 +333,18 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following').lean();
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived').lean();
       if (user) {
         user.followers = Array.isArray(user.followers) ? user.followers : [];
         user.following = Array.isArray(user.following) ? user.following : [];
+        user.friendRequestsSent = Array.isArray(user.friendRequestsSent) ? user.friendRequestsSent : [];
+        user.friendRequestsReceived = Array.isArray(user.friendRequestsReceived) ? user.friendRequestsReceived : [];
         return res.status(200).json({ success: true, user });
       }
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [] },
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [], friendRequestsSent: [], friendRequestsReceived: [] },
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -490,6 +492,61 @@ router.post('/remove-follower', async (req, res) => {
   } catch (error) {
     console.error('Remove follower error:', error);
     res.status(500).json({ success: false, message: 'Server error removing follower' });
+  }
+});
+
+// POST /api/users/send-friend-request
+router.post('/send-friend-request', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (cleanUser === cleanTarget) {
+      return res.status(400).json({ success: false, message: 'Cannot send friend request to yourself' });
+    }
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $addToSet: { friendRequestsSent: cleanTarget } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanTarget },
+        { $addToSet: { friendRequestsReceived: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, target: cleanTarget });
+  } catch (error) {
+    console.error('Send friend request error:', error);
+    res.status(500).json({ success: false, message: 'Server error sending friend request' });
+  }
+});
+
+// POST /api/users/cancel-friend-request
+router.post('/cancel-friend-request', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $pull: { friendRequestsSent: cleanTarget } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanTarget },
+        { $pull: { friendRequestsReceived: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, target: cleanTarget });
+  } catch (error) {
+    console.error('Cancel friend request error:', error);
+    res.status(500).json({ success: false, message: 'Server error canceling friend request' });
   }
 });
 
