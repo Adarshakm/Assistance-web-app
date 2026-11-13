@@ -706,8 +706,17 @@ function App() {
       return [];
     }
   });
+  const [receivedFriendRequests, setReceivedFriendRequests] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_received_friend_requests');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [sendRequestInput, setSendRequestInput] = useState('');
   const [sendRequestFeedback, setSendRequestFeedback] = useState(null);
+  const [friendRequestActionFeedback, setFriendRequestActionFeedback] = useState(null);
 
   // Privacy & Account Security state
   const [accountPrivacy, setAccountPrivacy] = useState(() => {
@@ -1173,6 +1182,12 @@ function App() {
               localStorage.setItem('assistance_sent_friend_requests', JSON.stringify(data.user.friendRequestsSent));
             } catch {}
           }
+          if (Array.isArray(data.user.friendRequestsReceived)) {
+            setReceivedFriendRequests(data.user.friendRequestsReceived);
+            try {
+              localStorage.setItem('assistance_received_friend_requests', JSON.stringify(data.user.friendRequestsReceived));
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1524,6 +1539,54 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleAcceptFriendRequest = async (sender) => {
+    const cleanSender = String(sender).trim().toLowerCase();
+    const updatedRequests = receivedFriendRequests.filter((u) => u.toLowerCase() !== cleanSender);
+    setReceivedFriendRequests(updatedRequests);
+    if (!followersList.some((u) => u.toLowerCase() === cleanSender)) {
+      const updatedFollowers = [...followersList, cleanSender];
+      setFollowersList(updatedFollowers);
+      try {
+        localStorage.setItem('assistance_followers', JSON.stringify(updatedFollowers));
+      } catch {}
+    }
+    if (!followingList.some((u) => u.toLowerCase() === cleanSender)) {
+      const updatedFollowing = [...followingList, cleanSender];
+      setFollowingList(updatedFollowing);
+      try {
+        localStorage.setItem('assistance_following', JSON.stringify(updatedFollowing));
+      } catch {}
+    }
+    setFriendRequestActionFeedback({ type: 'success', text: `Accepted friend request from ${cleanSender}` });
+    try {
+      localStorage.setItem('assistance_received_friend_requests', JSON.stringify(updatedRequests));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/accept-friend-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, senderUsername: cleanSender }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleRejectFriendRequest = async (sender) => {
+    const cleanSender = String(sender).trim().toLowerCase();
+    const updatedRequests = receivedFriendRequests.filter((u) => u.toLowerCase() !== cleanSender);
+    setReceivedFriendRequests(updatedRequests);
+    setFriendRequestActionFeedback({ type: 'info', text: `Rejected friend request from ${cleanSender}` });
+    try {
+      localStorage.setItem('assistance_received_friend_requests', JSON.stringify(updatedRequests));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/reject-friend-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, senderUsername: cleanSender }),
       }).catch(() => {});
     }
   };
@@ -2070,6 +2133,11 @@ function App() {
       (u.username && u.username.toLowerCase().includes(q)) ||
       (u.displayName && u.displayName.toLowerCase().includes(q))
     );
+  });
+
+  const socialFilteredReceivedRequests = receivedFriendRequests.filter((u) => {
+    if (!searchFriendsQuery.trim()) return true;
+    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
   });
 
   if (
@@ -4127,6 +4195,17 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'accept-reject' ? 'active' : ''}`}
+                    id="social-tab-accept-reject-btn"
+                    onClick={() => setActiveSocialFollowTab('accept-reject')}
+                  >
+                    {receivedFriendRequests.length > 0 && (
+                      <span className="profile-follow-count">{receivedFriendRequests.length}</span>
+                    )}
+                    <span className="profile-follow-label">Accept and reject requests</span>
+                  </button>
+                  <button
+                    type="button"
                     className={`profile-follow-pill ${activeSocialFollowTab === 'all' ? 'active' : ''}`}
                     id="social-tab-all-btn"
                     onClick={() => setActiveSocialFollowTab('all')}
@@ -4460,6 +4539,68 @@ function App() {
                             </div>
                           );
                         })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Accept and reject requests */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'accept-reject') && (
+                  <div className="profile-about-section" id="social-accept-reject-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">
+                        Accept and reject requests ({receivedFriendRequests.length})
+                      </h3>
+                    </div>
+
+                    {friendRequestActionFeedback && (
+                      <p
+                        className="status-message"
+                        style={{
+                          color: friendRequestActionFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          margin: '0.25rem 0 0.5rem 0',
+                        }}
+                        role="alert"
+                      >
+                        ✓ {friendRequestActionFeedback.text}
+                      </p>
+                    )}
+
+                    <div className="profile-follow-list" id="social-received-requests-list">
+                      {socialFilteredReceivedRequests.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-incoming-requests-text">
+                          {searchFriendsQuery ? 'No requests match your search' : 'No pending friend requests'}
+                        </p>
+                      ) : (
+                        socialFilteredReceivedRequests.map((sender) => (
+                          <div className="profile-follow-item" key={`received-request-${sender}`}>
+                            <div className="profile-follow-user-info">
+                              <div className="profile-follow-avatar-circle">
+                                {sender.slice(0, 1).toUpperCase()}
+                              </div>
+                              <span className="profile-follow-username">{sender}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <button
+                                type="button"
+                                className="profile-follow-btn-action"
+                                style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: '600' }}
+                                title={`Accept ${sender}`}
+                                onClick={() => handleAcceptFriendRequest(sender)}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                type="button"
+                                className="profile-follow-btn-action"
+                                title={`Reject ${sender}`}
+                                onClick={() => handleRejectFriendRequest(sender)}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>

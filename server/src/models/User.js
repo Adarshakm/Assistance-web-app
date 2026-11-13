@@ -91,6 +91,13 @@ const userSchema = new mongoose.Schema(
         lowercase: true,
       },
     ],
+    friends: [
+      {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+    ],
     password: {
       type: String,
     },

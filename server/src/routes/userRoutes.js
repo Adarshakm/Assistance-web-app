@@ -333,18 +333,19 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived').lean();
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived friends').lean();
       if (user) {
         user.followers = Array.isArray(user.followers) ? user.followers : [];
         user.following = Array.isArray(user.following) ? user.following : [];
         user.friendRequestsSent = Array.isArray(user.friendRequestsSent) ? user.friendRequestsSent : [];
         user.friendRequestsReceived = Array.isArray(user.friendRequestsReceived) ? user.friendRequestsReceived : [];
+        user.friends = Array.isArray(user.friends) ? user.friends : [];
         return res.status(200).json({ success: true, user });
       }
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [], friendRequestsSent: [], friendRequestsReceived: [] },
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [], friendRequestsSent: [], friendRequestsReceived: [], friends: [] },
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -547,6 +548,64 @@ router.post('/cancel-friend-request', async (req, res) => {
   } catch (error) {
     console.error('Cancel friend request error:', error);
     res.status(500).json({ success: false, message: 'Server error canceling friend request' });
+  }
+});
+
+// POST /api/users/accept-friend-request
+router.post('/accept-friend-request', async (req, res) => {
+  try {
+    const { username, senderUsername } = req.body;
+    if (!username || !senderUsername) {
+      return res.status(400).json({ success: false, message: 'Username and senderUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanSender = senderUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        {
+          $pull: { friendRequestsReceived: cleanSender },
+          $addToSet: { friends: cleanSender, followers: cleanSender, following: cleanSender },
+        }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanSender },
+        {
+          $pull: { friendRequestsSent: cleanUser },
+          $addToSet: { friends: cleanUser, followers: cleanUser, following: cleanUser },
+        }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, sender: cleanSender });
+  } catch (error) {
+    console.error('Accept friend request error:', error);
+    res.status(500).json({ success: false, message: 'Server error accepting friend request' });
+  }
+});
+
+// POST /api/users/reject-friend-request
+router.post('/reject-friend-request', async (req, res) => {
+  try {
+    const { username, senderUsername } = req.body;
+    if (!username || !senderUsername) {
+      return res.status(400).json({ success: false, message: 'Username and senderUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanSender = senderUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $pull: { friendRequestsReceived: cleanSender } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanSender },
+        { $pull: { friendRequestsSent: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, sender: cleanSender });
+  } catch (error) {
+    console.error('Reject friend request error:', error);
+    res.status(500).json({ success: false, message: 'Server error rejecting friend request' });
   }
 });
 
