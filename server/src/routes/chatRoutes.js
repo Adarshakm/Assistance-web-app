@@ -129,20 +129,32 @@ router.get('/messages/:otherUser', async (req, res) => {
 
     if (mongoose.connection.readyState === 1) {
       // Fetch messages
-      const messages = await Message.find({ conversationId: convId })
+      const messages = await Message.find({
+        $or: [
+          { conversationId: convId },
+          { sender: username, receiver: otherUser },
+          { sender: otherUser, receiver: username },
+        ],
+      })
         .sort({ createdAt: 1 })
         .lean();
 
       // Mark unread messages sent by otherUser as read
       const unreadCount = await Message.countDocuments({
-        conversationId: convId,
-        receiver: username,
-        read: false,
+        $or: [
+          { conversationId: convId, receiver: username, read: false },
+          { sender: otherUser, receiver: username, read: false },
+        ],
       });
 
       if (unreadCount > 0) {
         await Message.updateMany(
-          { conversationId: convId, receiver: username, read: false },
+          {
+            $or: [
+              { conversationId: convId, receiver: username, read: false },
+              { sender: otherUser, receiver: username, read: false },
+            ],
+          },
           { $set: { read: true, readAt: new Date() } }
         );
 
@@ -155,11 +167,13 @@ router.get('/messages/:otherUser', async (req, res) => {
 
         const io = req.app.get('io');
         if (io) {
+          const cleanOtherUser = otherUser;
           const readTargets = new Set([
-            otherUser,
-            cleanOther,
-            cleanOther.replace(/\s+/g, ''),
-            cleanOther.split(' ')[0],
+            cleanOtherUser,
+            cleanOtherUser.replace(/\s+/g, ''),
+            cleanOtherUser.split(' ')[0],
+            String(rawOther).trim(),
+            convId,
           ]);
           for (const t of readTargets) {
             if (t) io.to(t).emit('chat:read', { conversationId: convId, reader: username });
@@ -168,14 +182,14 @@ router.get('/messages/:otherUser', async (req, res) => {
       }
 
       const formatted = messages.map((m) => ({
-        id: m._id.toString(),
-        sender: m.sender === username ? 'me' : 'them',
+        id: m._id ? m._id.toString() : m.id,
+        sender: (m.sender || '').trim().toLowerCase() === username ? 'me' : 'them',
         senderUsername: m.sender,
         receiverUsername: m.receiver,
         text: m.text,
         attachment: m.attachment || null,
-        read: m.read,
-        time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        read: (m.receiver || '').trim().toLowerCase() === username ? true : Boolean(m.read),
+        time: new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         createdAt: m.createdAt,
       }));
 
@@ -260,9 +274,9 @@ router.post('/send', async (req, res) => {
         {
           $setOnInsert: {
             conversationId: convId,
-            participants: [cleanSender, cleanReceiver],
           },
           $set: {
+            participants: [cleanSender, cleanReceiver],
             lastMessage: {
               text: cleanText,
               sender: cleanSender,
@@ -312,6 +326,7 @@ router.post('/send', async (req, res) => {
           unreadCounts: {},
         };
       }
+      conv.participants = [cleanSender, cleanReceiver];
       conv.lastMessage = {
         text: cleanText,
         sender: cleanSender,
@@ -336,6 +351,7 @@ router.post('/send', async (req, res) => {
         cleanSender.split(' ')[0],
         String(receiver).trim(),
         String(sender).trim(),
+        convId,
       ]);
 
       for (const target of targets) {

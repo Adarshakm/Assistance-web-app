@@ -1719,12 +1719,18 @@ function App() {
     });
 
     const myUser = (loggedInUser || 'user').trim();
+    const joinUser = () => {
+      socket.emit('join', myUser);
+      if (activeChatRef.current) {
+        const convId = (activeChatRef.current.conversationId || activeChatRef.current.id || '').trim().toLowerCase();
+        if (convId) socket.emit('join:chat', convId);
+      }
+    };
     if (socket.connected) {
-      socket.emit('join', myUser);
+      joinUser();
     }
-    socket.on('connect', () => {
-      socket.emit('join', myUser);
-    });
+    socket.on('connect', joinUser);
+    socket.on('reconnect', joinUser);
 
     socket.on('chat:message', (newMsg) => {
       if (!newMsg) return;
@@ -1873,6 +1879,13 @@ function App() {
     if (!activeChat || !activeChat.username) {
       setActiveChatMessages([]);
       return;
+    }
+
+    if (socketRef.current) {
+      const convId = (activeChat.conversationId || activeChat.id || '').trim().toLowerCase();
+      if (convId) {
+        socketRef.current.emit('join:chat', convId);
+      }
     }
 
     const currentUser = (loggedInUser || 'user').trim().toLowerCase();

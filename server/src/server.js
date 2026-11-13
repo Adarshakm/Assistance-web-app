@@ -74,6 +74,13 @@ io.on('connection', (socket) => {
     io.emit('user:status', { username: cleanUser, status: 'Online' });
   });
 
+  socket.on('join:chat', (convId) => {
+    if (convId) {
+      const cleanConv = String(convId).trim().toLowerCase();
+      socket.join(cleanConv);
+    }
+  });
+
   socket.on('typing', ({ receiver, isTyping }) => {
     if (receiver && currentUser) {
       const cleanReceiver = String(receiver).trim().toLowerCase();
