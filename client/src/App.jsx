@@ -625,6 +625,28 @@ function App() {
   const [isEditingWebsite, setIsEditingWebsite] = useState(false);
   const [editWebsiteInput, setEditWebsiteInput] = useState('');
 
+  // Education state
+  const [educationText, setEducationText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_education') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingEducation, setIsEditingEducation] = useState(false);
+  const [editEducationInput, setEditEducationInput] = useState('');
+
+  // Employment state
+  const [employmentText, setEmploymentText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_employment') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingEmployment, setIsEditingEmployment] = useState(false);
+  const [editEmploymentInput, setEditEmploymentInput] = useState('');
+
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
 
@@ -1042,6 +1064,22 @@ function App() {
               }
             } catch {}
           }
+          if (data.user.education !== undefined) {
+            setEducationText((prev) => prev || data.user.education || '');
+            try {
+              if (data.user.education && !localStorage.getItem('assistance_education')) {
+                localStorage.setItem('assistance_education', data.user.education);
+              }
+            } catch {}
+          }
+          if (data.user.employment !== undefined) {
+            setEmploymentText((prev) => prev || data.user.employment || '');
+            try {
+              if (data.user.employment && !localStorage.getItem('assistance_employment')) {
+                localStorage.setItem('assistance_employment', data.user.employment);
+              }
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1178,6 +1216,40 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, website: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveEducation = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editEducationInput.trim();
+    setEducationText(cleaned);
+    setIsEditingEducation(false);
+    try {
+      localStorage.setItem('assistance_education', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, education: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveEmployment = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editEmploymentInput.trim();
+    setEmploymentText(cleaned);
+    setIsEditingEmployment(false);
+    try {
+      localStorage.setItem('assistance_employment', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, employment: cleaned }),
       }).catch(() => {});
     }
   };
@@ -3210,6 +3282,138 @@ function App() {
                             No website set
                           </span>
                         )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-education-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Education</h3>
+                      {!isEditingEducation && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-education-btn"
+                          title="Edit Education"
+                          aria-label="Edit Education"
+                          onClick={() => {
+                            setEditEducationInput(educationText);
+                            setIsEditingEducation(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingEducation ? (
+                      <form className="edit-about-form" id="edit-education-form" onSubmit={handleSaveEducation}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-education-input"
+                            value={editEducationInput}
+                            onChange={(e) => setEditEducationInput(e.target.value)}
+                            placeholder="Enter your education (e.g. University / Degree)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-education-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-education-btn"
+                            onClick={() => setIsEditingEducation(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-education-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                          <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                        </svg>
+                        <span className="profile-info-text" id="profile-education-text">
+                          {educationText || 'No education details set'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-employment-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Employment</h3>
+                      {!isEditingEmployment && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-employment-btn"
+                          title="Edit Employment"
+                          aria-label="Edit Employment"
+                          onClick={() => {
+                            setEditEmploymentInput(employmentText);
+                            setIsEditingEmployment(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingEmployment ? (
+                      <form className="edit-about-form" id="edit-employment-form" onSubmit={handleSaveEmployment}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-employment-input"
+                            value={editEmploymentInput}
+                            onChange={(e) => setEditEmploymentInput(e.target.value)}
+                            placeholder="Enter your employment (e.g. Job Title / Company)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-employment-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-employment-btn"
+                            onClick={() => setIsEditingEmployment(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-employment-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                        <span className="profile-info-text" id="profile-employment-text">
+                          {employmentText || 'No employment details set'}
+                        </span>
                       </div>
                     )}
                   </div>

@@ -333,14 +333,14 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website').lean();
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment').lean();
       if (user) {
         return res.status(200).json({ success: true, user });
       }
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '' },
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '' },
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -351,7 +351,7 @@ router.get('/profile/:username', async (req, res) => {
 // POST /api/users/update-profile-info
 router.post('/update-profile-info', async (req, res) => {
   try {
-    const { username, location, website } = req.body;
+    const { username, location, website, education, employment } = req.body;
     if (!username || !username.trim()) {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
@@ -359,6 +359,8 @@ router.post('/update-profile-info', async (req, res) => {
     const updateFields = {};
     if (location !== undefined) updateFields.location = String(location).trim();
     if (website !== undefined) updateFields.website = String(website).trim();
+    if (education !== undefined) updateFields.education = String(education).trim();
+    if (employment !== undefined) updateFields.employment = String(employment).trim();
 
     if (mongoose.connection.readyState === 1) {
       await User.findOneAndUpdate(

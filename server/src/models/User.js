@@ -43,6 +43,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    education: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    employment: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     password: {
       type: String,
     },
