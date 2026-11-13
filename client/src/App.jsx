@@ -1408,15 +1408,21 @@ function App() {
     }
   };
 
-  const handleFollowUser = async (e) => {
-    if (e) e.preventDefault();
-    const target = addFollowingInput.trim().toLowerCase();
+  const handleFollowUser = async (targetParam, e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (targetParam && targetParam.preventDefault) {
+      targetParam.preventDefault();
+      targetParam = undefined;
+    }
+    const target = (typeof targetParam === 'string' && targetParam.trim())
+      ? targetParam.trim().toLowerCase()
+      : addFollowingInput.trim().toLowerCase();
     if (!target) return;
     if (target === (loggedInUser || '').toLowerCase()) {
       setFollowError('Cannot follow yourself');
       return;
     }
-    if (followingList.includes(target)) {
+    if (followingList.some((u) => u.toLowerCase() === target)) {
       setFollowError('You are already following this user');
       return;
     }
@@ -1910,7 +1916,7 @@ function App() {
   const [discoverySearchQuery, setDiscoverySearchQuery] = useState('');
 
   useEffect(() => {
-    if (currentView !== 'search-and-discovery') return;
+    if (currentView !== 'search-and-discovery' && currentView !== 'social') return;
     let isMounted = true;
     setIsLoadingDiscoveryUsers(true);
     fetch('/api/users/all', { cache: 'no-store' })
@@ -1982,6 +1988,19 @@ function App() {
   const socialFilteredFollowing = followingList.filter((u) => {
     if (!searchFriendsQuery.trim()) return true;
     return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
+  });
+
+  const allSocialUsers = discoveryUsers.filter(
+    (u) => u.username && u.username.toLowerCase() !== (loggedInUser || '').toLowerCase()
+  );
+
+  const filteredSocialUsers = allSocialUsers.filter((u) => {
+    if (!searchFriendsQuery.trim()) return true;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return (
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.displayName && u.displayName.toLowerCase().includes(q))
+    );
   });
 
   if (
@@ -4023,11 +4042,19 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'follow-unfollow' ? 'active' : ''}`}
+                    id="social-tab-follow-unfollow-btn"
+                    onClick={() => setActiveSocialFollowTab('follow-unfollow')}
+                  >
+                    <span className="profile-follow-label">Follow and unfollow users</span>
+                  </button>
+                  <button
+                    type="button"
                     className={`profile-follow-pill ${activeSocialFollowTab === 'all' ? 'active' : ''}`}
                     id="social-tab-all-btn"
                     onClick={() => setActiveSocialFollowTab('all')}
                   >
-                    <span className="profile-follow-label">View Both</span>
+                    <span className="profile-follow-label">View All</span>
                   </button>
                 </div>
 
@@ -4190,6 +4217,66 @@ function App() {
                             </button>
                           </div>
                         ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Follow and unfollow users */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'follow-unfollow') && (
+                  <div className="profile-about-section" id="social-follow-unfollow-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Follow and unfollow users</h3>
+                    </div>
+
+                    <div className="profile-follow-list" id="social-all-users-list">
+                      {isLoadingDiscoveryUsers ? (
+                        <p className="profile-follow-empty" id="social-users-loading-text">Loading users...</p>
+                      ) : filteredSocialUsers.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-users-text">
+                          {searchFriendsQuery ? 'No users match your search' : 'No users available'}
+                        </p>
+                      ) : (
+                        filteredSocialUsers.map((u) => {
+                          const isFollowing = followingList.some(
+                            (target) => target.toLowerCase() === u.username.toLowerCase()
+                          );
+                          return (
+                            <div className="profile-follow-item" key={`social-user-${u.username}`}>
+                              <div className="profile-follow-user-info">
+                                <div className="profile-follow-avatar-circle">
+                                  {u.username.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span className="profile-follow-username">{u.displayName || u.username}</span>
+                                  {u.displayName && u.displayName !== u.username && (
+                                    <span style={{ fontSize: '0.8rem', color: '#888888' }}>@{u.username}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {isFollowing ? (
+                                <button
+                                  type="button"
+                                  className="profile-follow-btn-action"
+                                  title={`Unfollow ${u.username}`}
+                                  onClick={() => handleUnfollowUser(u.username)}
+                                >
+                                  Unfollow
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="profile-follow-btn-action"
+                                  style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                                  title={`Follow ${u.username}`}
+                                  onClick={() => handleFollowUser(u.username)}
+                                >
+                                  Follow
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
