@@ -1924,6 +1924,73 @@ body,
   color: #ffffff;
 }
 
+/* Profile About Section */
+.profile-about-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #262626;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.profile-about-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-about-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.profile-about-text {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #ffffff;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.edit-about-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.edit-about-textarea {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border: 1.5px solid #ffffff;
+  border-radius: 6px;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  box-sizing: border-box;
+  line-height: 1.45;
+}
+
+.edit-about-textarea:focus {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.edit-about-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .account-wrapper {
   display: flex;
   flex-direction: column;

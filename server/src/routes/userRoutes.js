@@ -338,10 +338,35 @@ router.get('/profile/:username', async (req, res) => {
         return res.status(200).json({ success: true, user });
       }
     }
-    return res.status(200).json({ success: true, user: { username: cleanUsername, avatar: null } });
+    return res.status(200).json({
+      success: true,
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance' },
+    });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching profile' });
+  }
+});
+
+// POST /api/users/update-about
+router.post('/update-about', async (req, res) => {
+  try {
+    const { username, about } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanAbout = typeof about === 'string' ? about.trim() : '';
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUsername },
+        { $set: { status: cleanAbout } }
+      );
+    }
+    return res.status(200).json({ success: true, about: cleanAbout });
+  } catch (error) {
+    console.error('Update about error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating about' });
   }
 });
 

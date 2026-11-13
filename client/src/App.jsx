@@ -592,6 +592,17 @@ function App() {
   const [isSavingUsername, setIsSavingUsername] = useState(false);
   const [usernameEditFeedback, setUsernameEditFeedback] = useState(null);
 
+  // About section state
+  const [aboutText, setAboutText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_about') || 'Hey there! I am using Assistance';
+    } catch {
+      return 'Hey there! I am using Assistance';
+    }
+  });
+  const [isEditingAbout, setIsEditingAbout] = useState(false);
+  const [editAboutInput, setEditAboutInput] = useState('');
+
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
 
@@ -967,19 +978,32 @@ function App() {
       reader.readAsDataURL(file);
     });
 
-  // Restore saved user avatar from backend if missing locally
+  // Restore saved user avatar and about from backend if missing locally
   useEffect(() => {
     if (!loggedInUser) return;
     fetch(`/api/users/profile/${encodeURIComponent(loggedInUser)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && data.success && data.user?.avatar) {
-          setProfilePicture((prev) => prev || data.user.avatar);
-          try {
-            if (!localStorage.getItem('assistance_profile_picture')) {
-              localStorage.setItem('assistance_profile_picture', data.user.avatar);
-            }
-          } catch {}
+        if (data && data.success && data.user) {
+          if (data.user.avatar) {
+            setProfilePicture((prev) => prev || data.user.avatar);
+            try {
+              if (!localStorage.getItem('assistance_profile_picture')) {
+                localStorage.setItem('assistance_profile_picture', data.user.avatar);
+              }
+            } catch {}
+          }
+          if (data.user.status) {
+            setAboutText((prev) => {
+              if (prev && prev !== 'Hey there! I am using Assistance') return prev;
+              return data.user.status;
+            });
+            try {
+              if (!localStorage.getItem('assistance_about')) {
+                localStorage.setItem('assistance_about', data.user.status);
+              }
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1065,6 +1089,24 @@ function App() {
       setUsernameEditFeedback(null);
     } finally {
       setIsSavingUsername(false);
+    }
+  };
+
+  const handleSaveAbout = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editAboutInput.trim();
+    const finalAbout = cleaned || 'Hey there! I am using Assistance';
+    setAboutText(finalAbout);
+    setIsEditingAbout(false);
+    try {
+      localStorage.setItem('assistance_about', finalAbout);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-about', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, about: finalAbout }),
+      }).catch(() => {});
     }
   };
 
@@ -2899,6 +2941,60 @@ function App() {
                       </button>
                     </div>
                   )}
+
+                  <div className="profile-about-section" id="profile-about-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">About</h3>
+                      {!isEditingAbout && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-about-btn"
+                          title="Edit About"
+                          aria-label="Edit About"
+                          onClick={() => {
+                            setEditAboutInput(aboutText);
+                            setIsEditingAbout(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingAbout ? (
+                      <form className="edit-about-form" id="edit-about-form" onSubmit={handleSaveAbout}>
+                        <textarea
+                          className="input-field edit-about-textarea"
+                          id="edit-about-input"
+                          value={editAboutInput}
+                          onChange={(e) => setEditAboutInput(e.target.value)}
+                          placeholder="Write something about yourself..."
+                          rows="3"
+                          autoFocus
+                        />
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-about-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-about-btn"
+                            onClick={() => setIsEditingAbout(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <p className="profile-about-text" id="profile-about-text">
+                        {aboutText}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
