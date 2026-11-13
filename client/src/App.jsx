@@ -603,6 +603,28 @@ function App() {
   const [isEditingAbout, setIsEditingAbout] = useState(false);
   const [editAboutInput, setEditAboutInput] = useState('');
 
+  // Location state
+  const [locationText, setLocationText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_location') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [editLocationInput, setEditLocationInput] = useState('');
+
+  // Website information state
+  const [websiteText, setWebsiteText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_website') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingWebsite, setIsEditingWebsite] = useState(false);
+  const [editWebsiteInput, setEditWebsiteInput] = useState('');
+
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
 
@@ -1004,6 +1026,22 @@ function App() {
               }
             } catch {}
           }
+          if (data.user.location !== undefined) {
+            setLocationText((prev) => prev || data.user.location || '');
+            try {
+              if (data.user.location && !localStorage.getItem('assistance_location')) {
+                localStorage.setItem('assistance_location', data.user.location);
+              }
+            } catch {}
+          }
+          if (data.user.website !== undefined) {
+            setWebsiteText((prev) => prev || data.user.website || '');
+            try {
+              if (data.user.website && !localStorage.getItem('assistance_website')) {
+                localStorage.setItem('assistance_website', data.user.website);
+              }
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1106,6 +1144,40 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, about: finalAbout }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveLocation = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editLocationInput.trim();
+    setLocationText(cleaned);
+    setIsEditingLocation(false);
+    try {
+      localStorage.setItem('assistance_location', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, location: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveWebsite = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editWebsiteInput.trim();
+    setWebsiteText(cleaned);
+    setIsEditingWebsite(false);
+    try {
+      localStorage.setItem('assistance_website', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, website: cleaned }),
       }).catch(() => {});
     }
   };
@@ -2993,6 +3065,152 @@ function App() {
                       <p className="profile-about-text" id="profile-about-text">
                         {aboutText}
                       </p>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-location-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Location</h3>
+                      {!isEditingLocation && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-location-btn"
+                          title="Edit Location"
+                          aria-label="Edit Location"
+                          onClick={() => {
+                            setEditLocationInput(locationText);
+                            setIsEditingLocation(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingLocation ? (
+                      <form className="edit-about-form" id="edit-location-form" onSubmit={handleSaveLocation}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-location-input"
+                            value={editLocationInput}
+                            onChange={(e) => setEditLocationInput(e.target.value)}
+                            placeholder="Enter your location (e.g. New York, USA)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-location-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-location-btn"
+                            onClick={() => setIsEditingLocation(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-location-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                          <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        <span className="profile-info-text" id="profile-location-text">
+                          {locationText || 'No location set'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-website-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Website Information</h3>
+                      {!isEditingWebsite && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-website-btn"
+                          title="Edit Website Information"
+                          aria-label="Edit Website Information"
+                          onClick={() => {
+                            setEditWebsiteInput(websiteText);
+                            setIsEditingWebsite(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingWebsite ? (
+                      <form className="edit-about-form" id="edit-website-form" onSubmit={handleSaveWebsite}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-website-input"
+                            value={editWebsiteInput}
+                            onChange={(e) => setEditWebsiteInput(e.target.value)}
+                            placeholder="Enter your website (e.g. https://yourwebsite.com)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-website-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-website-btn"
+                            onClick={() => setIsEditingWebsite(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-website-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="2" y1="12" x2="22" y2="12"></line>
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                        {websiteText ? (
+                          <a
+                            href={websiteText.startsWith('http://') || websiteText.startsWith('https://') ? websiteText : `https://${websiteText}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="profile-website-link"
+                            id="profile-website-link"
+                          >
+                            {websiteText}
+                          </a>
+                        ) : (
+                          <span className="profile-info-text" id="profile-website-text">
+                            No website set
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

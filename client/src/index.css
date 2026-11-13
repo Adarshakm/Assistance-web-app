@@ -2002,6 +2002,72 @@ body,
   gap: 0.5rem;
 }
 
+.profile-info-display {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: #ffffff;
+}
+
+.profile-field-icon {
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.profile-info-text {
+  font-size: 0.9375rem;
+  color: #ffffff;
+  margin: 0;
+  word-break: break-word;
+}
+
+.profile-website-link {
+  font-size: 0.9375rem;
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+  transition: opacity 0.15s ease;
+}
+
+.profile-website-link:hover {
+  opacity: 0.8;
+}
+
+.profile-input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.profile-input-with-icon .profile-field-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: #ffffff;
+  pointer-events: none;
+}
+
+.edit-info-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem 0.625rem 2.5rem;
+  font-size: 0.9375rem;
+  background-color: #000000;
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  border-radius: 6px;
+  outline: none;
+}
+
+.edit-info-input::placeholder {
+  color: #888888;
+}
+
+.edit-info-input:focus {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
 .account-wrapper {
   display: flex;
   flex-direction: column;

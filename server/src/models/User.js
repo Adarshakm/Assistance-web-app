@@ -33,6 +33,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: 'Hey there! I am using Assistance',
     },
+    location: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    website: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     password: {
       type: String,
     },

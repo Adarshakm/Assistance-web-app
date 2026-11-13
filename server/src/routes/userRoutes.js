@@ -333,18 +333,43 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status').lean();
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website').lean();
       if (user) {
         return res.status(200).json({ success: true, user });
       }
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance' },
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '' },
     });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching profile' });
+  }
+});
+
+// POST /api/users/update-profile-info
+router.post('/update-profile-info', async (req, res) => {
+  try {
+    const { username, location, website } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    const cleanUsername = username.trim().toLowerCase();
+    const updateFields = {};
+    if (location !== undefined) updateFields.location = String(location).trim();
+    if (website !== undefined) updateFields.website = String(website).trim();
+
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUsername },
+        { $set: updateFields }
+      );
+    }
+    return res.status(200).json({ success: true, ...updateFields });
+  } catch (error) {
+    console.error('Update profile info error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating profile info' });
   }
 });
 
