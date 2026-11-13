@@ -3,6 +3,14 @@ import SplashScreen from './components/SplashScreen.jsx';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
+    if (
+      window.location.pathname === '/messages' ||
+      window.location.hash === '#messages' ||
+      window.location.pathname === '/chat' ||
+      window.location.hash === '#chat'
+    ) {
+      return 'messages';
+    }
     if (window.location.pathname === '/login' || window.location.hash === '#login') {
       return 'login';
     }
@@ -230,7 +238,9 @@ function App() {
   const navigateTo = (view) => {
     setCurrentView(view);
     const path =
-      view === 'login'
+      view === 'messages'
+        ? '/messages'
+        : view === 'login'
         ? '/login'
         : view === 'forgot-password'
         ? '/forgot-password'
@@ -296,7 +306,14 @@ function App() {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.pathname === '/login' || window.location.hash === '#login') {
+      if (
+        window.location.pathname === '/messages' ||
+        window.location.hash === '#messages' ||
+        window.location.pathname === '/chat' ||
+        window.location.hash === '#chat'
+      ) {
+        setCurrentView('messages');
+      } else if (window.location.pathname === '/login' || window.location.hash === '#login') {
         setCurrentView('login');
       } else if (
         window.location.pathname === '/forgot-password' ||
@@ -1573,6 +1590,7 @@ function App() {
   });
 
   if (
+    currentView === 'messages' ||
     currentView === 'blank' ||
     currentView === 'account' ||
     currentView === 'contacts' ||
@@ -2089,6 +2107,22 @@ function App() {
         <div className="workspace-area">
           <nav className="workspace-navbar" id="navbar" aria-label="Main Navigation">
             <div className="navbar-links">
+              <button
+                type="button"
+                className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
+                id="messages-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'messages' ? 'blank' : 'messages')
+                }
+                title="Messages"
+                aria-label="Messages"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Messages</span>
+              </button>
+
               <button
                 type="button"
                 className={`navbar-item ${currentView === 'whats-happening' ? 'active' : ''}`}
@@ -3285,6 +3319,22 @@ function App() {
           <div className="navbar-links">
             <button
               type="button"
+              className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
+              id="bottom-messages-btn"
+              onClick={() =>
+                navigateTo(currentView === 'messages' ? 'blank' : 'messages')
+              }
+              title="Messages"
+              aria-label="Messages"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Messages</span>
+            </button>
+
+            <button
+              type="button"
               className={`navbar-item ${currentView === 'whats-happening' ? 'active' : ''}`}
               id="bottom-whats-happening-btn"
               onClick={() =>
@@ -3334,13 +3384,7 @@ function App() {
   return (
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      <main
-        className={`container ${
-          currentView === 'register' || (currentView !== 'reset-password' && currentView !== 'forgot-password')
-            ? 'auth-dark-container'
-            : ''
-        }`}
-      >
+      <main className="container auth-dark-container">
       {currentView === 'reset-password' ? (
         <div className="registration-wrapper">
           <form className="form-container" onSubmit={handleNewPasswordSubmit}>
