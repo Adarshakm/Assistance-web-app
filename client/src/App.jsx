@@ -4177,6 +4177,65 @@ function App() {
             </div>
           )}
         </main>
+
+        <nav className="workspace-bottom-navbar" id="bottom-navbar" aria-label="Bottom Navigation">
+          <div className="navbar-links">
+            <button
+              type="button"
+              className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
+              id="bottom-messages-btn"
+              onClick={() => navigateTo(currentView === 'messages' ? 'blank' : 'messages')}
+              title="Messages"
+              aria-label="Messages"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Messages</span>
+            </button>
+
+            <button
+              type="button"
+              className={`navbar-item ${currentView === 'whats-happening' ? 'active' : ''}`}
+              id="bottom-whats-happening-btn"
+              onClick={() =>
+                navigateTo(currentView === 'whats-happening' ? 'blank' : 'whats-happening')
+              }
+              title="What's Happening Around You"
+              aria-label="What's Happening Around You"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+              </svg>
+              <span>What's Happening Around You</span>
+            </button>
+
+            <button
+              type="button"
+              className={`navbar-item ${currentView === 'voice-and-video-call' ? 'active' : ''}`}
+              id="bottom-voice-and-video-call-btn"
+              onClick={() =>
+                navigateTo(currentView === 'voice-and-video-call' ? 'blank' : 'voice-and-video-call')
+              }
+              title="Voice and Video Call"
+              aria-label="Voice and Video Call"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+              <span>Voice and Video Call</span>
+            </button>
+          </div>
+
+          <div className="navbar-user" id="bottom-navbar-user" title={loggedInUser || 'User'}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span className="navbar-username-text">{loggedInUser || 'User'}</span>
+          </div>
+        </nav>
       </div>
     </div>
     </>
