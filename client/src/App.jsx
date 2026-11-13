@@ -2547,8 +2547,6 @@ function App() {
                           <div className="contact-card-actions">
                             {renderContactEditDeleteButtons(contact)}
 
-                            {renderContactEditDeleteButtons(contact)}
-
                             <button
                               type="button"
                               className="contact-action-btn icon-only"
