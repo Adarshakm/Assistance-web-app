@@ -2140,6 +2140,11 @@ function App() {
     return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
   });
 
+  const socialFilteredSentRequests = sentFriendRequests.filter((u) => {
+    if (!searchFriendsQuery.trim()) return true;
+    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
+  });
+
   if (
     currentView === 'messages' ||
     currentView === 'blank' ||
@@ -4206,6 +4211,17 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`profile-follow-pill ${activeSocialFollowTab === 'cancel-pending' ? 'active' : ''}`}
+                    id="social-tab-cancel-pending-btn"
+                    onClick={() => setActiveSocialFollowTab('cancel-pending')}
+                  >
+                    {sentFriendRequests.length > 0 && (
+                      <span className="profile-follow-count">{sentFriendRequests.length}</span>
+                    )}
+                    <span className="profile-follow-label">Cancel pending requests</span>
+                  </button>
+                  <button
+                    type="button"
                     className={`profile-follow-pill ${activeSocialFollowTab === 'all' ? 'active' : ''}`}
                     id="social-tab-all-btn"
                     onClick={() => setActiveSocialFollowTab('all')}
@@ -4599,6 +4615,58 @@ function App() {
                                 Reject
                               </button>
                             </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cancel pending requests */}
+                {(activeSocialFollowTab === 'all' || activeSocialFollowTab === 'cancel-pending') && (
+                  <div className="profile-about-section" id="social-cancel-pending-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">
+                        Cancel pending requests ({sentFriendRequests.length})
+                      </h3>
+                    </div>
+
+                    {sendRequestFeedback && (
+                      <p
+                        className="status-message"
+                        style={{
+                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          margin: '0.25rem 0 0.5rem 0',
+                        }}
+                        role="alert"
+                      >
+                        {sendRequestFeedback.type === 'error' ? '✕ ' : '✓ '}
+                        {sendRequestFeedback.text}
+                      </p>
+                    )}
+
+                    <div className="profile-follow-list" id="social-sent-requests-list">
+                      {socialFilteredSentRequests.length === 0 ? (
+                        <p className="profile-follow-empty" id="social-no-pending-sent-text">
+                          {searchFriendsQuery ? 'No pending requests match your search' : 'No pending sent requests'}
+                        </p>
+                      ) : (
+                        socialFilteredSentRequests.map((target) => (
+                          <div className="profile-follow-item" key={`sent-request-${target}`}>
+                            <div className="profile-follow-user-info">
+                              <div className="profile-follow-avatar-circle">
+                                {target.slice(0, 1).toUpperCase()}
+                              </div>
+                              <span className="profile-follow-username">{target}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="profile-follow-btn-action"
+                              title={`Cancel request to ${target}`}
+                              onClick={() => handleCancelFriendRequest(target)}
+                            >
+                              Cancel Request
+                            </button>
                           </div>
                         ))
                       )}
