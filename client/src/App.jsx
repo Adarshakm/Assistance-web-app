@@ -647,6 +647,28 @@ function App() {
   const [isEditingEmployment, setIsEditingEmployment] = useState(false);
   const [editEmploymentInput, setEditEmploymentInput] = useState('');
 
+  // Skills state
+  const [skillsText, setSkillsText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_skills') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingSkills, setIsEditingSkills] = useState(false);
+  const [editSkillsInput, setEditSkillsInput] = useState('');
+
+  // Interests state
+  const [interestsText, setInterestsText] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_interests') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isEditingInterests, setIsEditingInterests] = useState(false);
+  const [editInterestsInput, setEditInterestsInput] = useState('');
+
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
 
@@ -1080,6 +1102,22 @@ function App() {
               }
             } catch {}
           }
+          if (data.user.skills !== undefined) {
+            setSkillsText((prev) => prev || data.user.skills || '');
+            try {
+              if (data.user.skills && !localStorage.getItem('assistance_skills')) {
+                localStorage.setItem('assistance_skills', data.user.skills);
+              }
+            } catch {}
+          }
+          if (data.user.interests !== undefined) {
+            setInterestsText((prev) => prev || data.user.interests || '');
+            try {
+              if (data.user.interests && !localStorage.getItem('assistance_interests')) {
+                localStorage.setItem('assistance_interests', data.user.interests);
+              }
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1250,6 +1288,40 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, employment: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveSkills = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editSkillsInput.trim();
+    setSkillsText(cleaned);
+    setIsEditingSkills(false);
+    try {
+      localStorage.setItem('assistance_skills', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, skills: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleSaveInterests = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = editInterestsInput.trim();
+    setInterestsText(cleaned);
+    setIsEditingInterests(false);
+    try {
+      localStorage.setItem('assistance_interests', cleaned);
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, interests: cleaned }),
       }).catch(() => {});
     }
   };
@@ -3413,6 +3485,134 @@ function App() {
                         </svg>
                         <span className="profile-info-text" id="profile-employment-text">
                           {employmentText || 'No employment details set'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-skills-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Skills</h3>
+                      {!isEditingSkills && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-skills-btn"
+                          title="Edit Skills"
+                          aria-label="Edit Skills"
+                          onClick={() => {
+                            setEditSkillsInput(skillsText);
+                            setIsEditingSkills(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingSkills ? (
+                      <form className="edit-about-form" id="edit-skills-form" onSubmit={handleSaveSkills}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-skills-input"
+                            value={editSkillsInput}
+                            onChange={(e) => setEditSkillsInput(e.target.value)}
+                            placeholder="Enter your skills (e.g. JavaScript, Python, Design)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-skills-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-skills-btn"
+                            onClick={() => setIsEditingSkills(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-skills-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        <span className="profile-info-text" id="profile-skills-text">
+                          {skillsText || 'No skills set'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-about-section" id="profile-interests-section">
+                    <div className="profile-about-header">
+                      <h3 className="profile-about-title">Interests</h3>
+                      {!isEditingInterests && (
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="edit-interests-btn"
+                          title="Edit Interests"
+                          aria-label="Edit Interests"
+                          onClick={() => {
+                            setEditInterestsInput(interestsText);
+                            setIsEditingInterests(true);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isEditingInterests ? (
+                      <form className="edit-about-form" id="edit-interests-form" onSubmit={handleSaveInterests}>
+                        <div className="profile-input-with-icon">
+                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                          </svg>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="edit-interests-input"
+                            value={editInterestsInput}
+                            onChange={(e) => setEditInterestsInput(e.target.value)}
+                            placeholder="Enter your interests (e.g. Photography, Music, Reading)"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="edit-about-actions">
+                          <button type="submit" className="btn-save-username" id="save-interests-btn">
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-cancel-username"
+                            id="cancel-interests-btn"
+                            onClick={() => setIsEditingInterests(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="profile-info-display" id="profile-interests-display">
+                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        <span className="profile-info-text" id="profile-interests-text">
+                          {interestsText || 'No interests set'}
                         </span>
                       </div>
                     )}

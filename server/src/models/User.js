@@ -53,6 +53,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    skills: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    interests: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     password: {
       type: String,
     },
