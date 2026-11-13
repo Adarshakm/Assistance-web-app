@@ -333,14 +333,16 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests').lean();
+      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following').lean();
       if (user) {
+        user.followers = Array.isArray(user.followers) ? user.followers : [];
+        user.following = Array.isArray(user.following) ? user.following : [];
         return res.status(200).json({ success: true, user });
       }
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '' },
+      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [] },
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -351,7 +353,7 @@ router.get('/profile/:username', async (req, res) => {
 // POST /api/users/update-profile-info
 router.post('/update-profile-info', async (req, res) => {
   try {
-    const { username, location, website, education, employment, skills, interests } = req.body;
+    const { username, location, website, education, employment, skills, interests, followers, following } = req.body;
     if (!username || !username.trim()) {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
@@ -363,6 +365,133 @@ router.post('/update-profile-info', async (req, res) => {
     if (employment !== undefined) updateFields.employment = String(employment).trim();
     if (skills !== undefined) updateFields.skills = String(skills).trim();
     if (interests !== undefined) updateFields.interests = String(interests).trim();
+    if (Array.isArray(followers)) updateFields.followers = followers;
+    if (Array.isArray(following)) updateFields.following = following;
+
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUsername },
+        { $set: updateFields }
+      );
+    }
+    return res.status(200).json({ success: true, ...updateFields });
+  } catch (error) {
+    console.error('Update profile info error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating profile info' });
+  }
+});
+
+// POST /api/users/follow
+router.post('/follow', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (cleanUser === cleanTarget) {
+      return res.status(400).json({ success: false, message: 'Cannot follow yourself' });
+    }
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $addToSet: { following: cleanTarget } },
+        { upsert: false }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanTarget },
+        { $addToSet: { followers: cleanUser } },
+        { upsert: false }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, target: cleanTarget });
+  } catch (error) {
+    console.error('Follow error:', error);
+    res.status(500).json({ success: false, message: 'Server error following user' });
+  }
+});
+
+// POST /api/users/unfollow
+router.post('/unfollow', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $pull: { following: cleanTarget } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanTarget },
+        { $pull: { followers: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, target: cleanTarget });
+  } catch (error) {
+    console.error('Unfollow error:', error);
+    res.status(500).json({ success: false, message: 'Server error unfollowing user' });
+  }
+});
+
+// POST /api/users/add-follower
+router.post('/add-follower', async (req, res) => {
+  try {
+    const { username, followerUsername } = req.body;
+    if (!username || !followerUsername) {
+      return res.status(400).json({ success: false, message: 'Username and followerUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanFollower = followerUsername.trim().toLowerCase();
+    if (cleanUser === cleanFollower) {
+      return res.status(400).json({ success: false, message: 'Cannot add yourself as follower' });
+    }
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $addToSet: { followers: cleanFollower } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanFollower },
+        { $addToSet: { following: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, follower: cleanFollower });
+  } catch (error) {
+    console.error('Add follower error:', error);
+    res.status(500).json({ success: false, message: 'Server error adding follower' });
+  }
+});
+
+// POST /api/users/remove-follower
+router.post('/remove-follower', async (req, res) => {
+  try {
+    const { username, followerUsername } = req.body;
+    if (!username || !followerUsername) {
+      return res.status(400).json({ success: false, message: 'Username and followerUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanFollower = followerUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $pull: { followers: cleanFollower } }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanFollower },
+        { $pull: { following: cleanUser } }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, follower: cleanFollower });
+  } catch (error) {
+    console.error('Remove follower error:', error);
+    res.status(500).json({ success: false, message: 'Server error removing follower' });
+  }
+});
 
     if (mongoose.connection.readyState === 1) {
       await User.findOneAndUpdate(

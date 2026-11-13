@@ -669,6 +669,30 @@ function App() {
   const [isEditingInterests, setIsEditingInterests] = useState(false);
   const [editInterestsInput, setEditInterestsInput] = useState('');
 
+  // Followers & Following lists state
+  const [followersList, setFollowersList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_followers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [followingList, setFollowingList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_following');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeFollowView, setActiveFollowView] = useState('all'); // 'all', 'followers', 'following'
+  const [isAddingFollower, setIsAddingFollower] = useState(false);
+  const [addFollowerInput, setAddFollowerInput] = useState('');
+  const [isAddingFollowing, setIsAddingFollowing] = useState(false);
+  const [addFollowingInput, setAddFollowingInput] = useState('');
+  const [followError, setFollowError] = useState('');
+
   // Social connections search state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
 
@@ -1118,6 +1142,18 @@ function App() {
               }
             } catch {}
           }
+          if (Array.isArray(data.user.followers)) {
+            setFollowersList(data.user.followers);
+            try {
+              localStorage.setItem('assistance_followers', JSON.stringify(data.user.followers));
+            } catch {}
+          }
+          if (Array.isArray(data.user.following)) {
+            setFollowingList(data.user.following);
+            try {
+              localStorage.setItem('assistance_following', JSON.stringify(data.user.following));
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1322,6 +1358,96 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: loggedInUser, interests: cleaned }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleAddFollower = async (e) => {
+    if (e) e.preventDefault();
+    const target = addFollowerInput.trim().toLowerCase();
+    if (!target) return;
+    if (target === (loggedInUser || '').toLowerCase()) {
+      setFollowError('Cannot add yourself as a follower');
+      return;
+    }
+    if (followersList.includes(target)) {
+      setFollowError('User is already in your followers list');
+      return;
+    }
+    setFollowError('');
+    const updated = [...followersList, target];
+    setFollowersList(updated);
+    setAddFollowerInput('');
+    setIsAddingFollower(false);
+    try {
+      localStorage.setItem('assistance_followers', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/add-follower', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, followerUsername: target }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleRemoveFollower = async (target) => {
+    const cleanTarget = String(target).trim().toLowerCase();
+    const updated = followersList.filter((u) => u.toLowerCase() !== cleanTarget);
+    setFollowersList(updated);
+    try {
+      localStorage.setItem('assistance_followers', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/remove-follower', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, followerUsername: cleanTarget }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleFollowUser = async (e) => {
+    if (e) e.preventDefault();
+    const target = addFollowingInput.trim().toLowerCase();
+    if (!target) return;
+    if (target === (loggedInUser || '').toLowerCase()) {
+      setFollowError('Cannot follow yourself');
+      return;
+    }
+    if (followingList.includes(target)) {
+      setFollowError('You are already following this user');
+      return;
+    }
+    setFollowError('');
+    const updated = [...followingList, target];
+    setFollowingList(updated);
+    setAddFollowingInput('');
+    setIsAddingFollowing(false);
+    try {
+      localStorage.setItem('assistance_following', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/follow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: target }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleUnfollowUser = async (target) => {
+    const cleanTarget = String(target).trim().toLowerCase();
+    const updated = followingList.filter((u) => u.toLowerCase() !== cleanTarget);
+    setFollowingList(updated);
+    try {
+      localStorage.setItem('assistance_following', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/unfollow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
       }).catch(() => {});
     }
   };
@@ -3155,6 +3281,194 @@ function App() {
                         </svg>
                         <span>Edit</span>
                       </button>
+                    </div>
+                  )}
+
+                  {/* Followers and Following lists */}
+                  <div className="profile-follow-summary-row" id="profile-follow-summary-row">
+                    <button
+                      type="button"
+                      className={`profile-follow-pill ${activeFollowView === 'followers' ? 'active' : ''}`}
+                      id="pill-followers-btn"
+                      onClick={() => setActiveFollowView(activeFollowView === 'followers' ? 'all' : 'followers')}
+                    >
+                      <span className="profile-follow-count">{followersList.length}</span>
+                      <span className="profile-follow-label">Followers</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`profile-follow-pill ${activeFollowView === 'following' ? 'active' : ''}`}
+                      id="pill-following-btn"
+                      onClick={() => setActiveFollowView(activeFollowView === 'following' ? 'all' : 'following')}
+                    >
+                      <span className="profile-follow-count">{followingList.length}</span>
+                      <span className="profile-follow-label">Following</span>
+                    </button>
+                  </div>
+
+                  {followError && (
+                    <p className="status-message status-taken" style={{ color: '#ff6b6b', margin: '0.25rem 0' }} role="alert">
+                      ✕ {followError}
+                    </p>
+                  )}
+
+                  {/* Followers List Section */}
+                  {(activeFollowView === 'all' || activeFollowView === 'followers') && (
+                    <div className="profile-about-section" id="profile-followers-section">
+                      <div className="profile-about-header">
+                        <h3 className="profile-about-title">Followers ({followersList.length})</h3>
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="add-follower-toggle-btn"
+                          title="Add follower"
+                          onClick={() => {
+                            setFollowError('');
+                            setIsAddingFollower((prev) => !prev);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>{isAddingFollower ? 'Close' : 'Add'}</span>
+                        </button>
+                      </div>
+
+                      {isAddingFollower && (
+                        <form className="profile-follow-add-form" id="add-follower-form" onSubmit={handleAddFollower}>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="add-follower-input"
+                            style={{ paddingLeft: '0.875rem' }}
+                            placeholder="Enter username to add follower..."
+                            value={addFollowerInput}
+                            onChange={(e) => setAddFollowerInput(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="edit-about-actions">
+                            <button type="submit" className="btn-save-username" id="confirm-add-follower-btn">
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-cancel-username"
+                              onClick={() => {
+                                setIsAddingFollower(false);
+                                setFollowError('');
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      <div className="profile-follow-list" id="profile-followers-list">
+                        {followersList.length === 0 ? (
+                          <p className="profile-follow-empty" id="no-followers-text">No followers yet</p>
+                        ) : (
+                          followersList.map((follower) => (
+                            <div className="profile-follow-item" key={`follower-${follower}`}>
+                              <div className="profile-follow-user-info">
+                                <div className="profile-follow-avatar-circle">
+                                  {follower.slice(0, 1).toUpperCase()}
+                                </div>
+                                <span className="profile-follow-username">{follower}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="profile-follow-btn-action"
+                                title={`Remove ${follower}`}
+                                onClick={() => handleRemoveFollower(follower)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Following List Section */}
+                  {(activeFollowView === 'all' || activeFollowView === 'following') && (
+                    <div className="profile-about-section" id="profile-following-section">
+                      <div className="profile-about-header">
+                        <h3 className="profile-about-title">Following ({followingList.length})</h3>
+                        <button
+                          type="button"
+                          className="edit-username-btn"
+                          id="add-following-toggle-btn"
+                          title="Follow user"
+                          onClick={() => {
+                            setFollowError('');
+                            setIsAddingFollowing((prev) => !prev);
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>{isAddingFollowing ? 'Close' : 'Follow'}</span>
+                        </button>
+                      </div>
+
+                      {isAddingFollowing && (
+                        <form className="profile-follow-add-form" id="add-following-form" onSubmit={handleFollowUser}>
+                          <input
+                            type="text"
+                            className="input-field edit-info-input"
+                            id="add-following-input"
+                            style={{ paddingLeft: '0.875rem' }}
+                            placeholder="Enter username to follow..."
+                            value={addFollowingInput}
+                            onChange={(e) => setAddFollowingInput(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="edit-about-actions">
+                            <button type="submit" className="btn-save-username" id="confirm-follow-btn">
+                              Follow
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-cancel-username"
+                              onClick={() => {
+                                setIsAddingFollowing(false);
+                                setFollowError('');
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      <div className="profile-follow-list" id="profile-following-list">
+                        {followingList.length === 0 ? (
+                          <p className="profile-follow-empty" id="no-following-text">Not following anyone yet</p>
+                        ) : (
+                          followingList.map((target) => (
+                            <div className="profile-follow-item" key={`following-${target}`}>
+                              <div className="profile-follow-user-info">
+                                <div className="profile-follow-avatar-circle">
+                                  {target.slice(0, 1).toUpperCase()}
+                                </div>
+                                <span className="profile-follow-username">{target}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="profile-follow-btn-action"
+                                title={`Unfollow ${target}`}
+                                onClick={() => handleUnfollowUser(target)}
+                              >
+                                Unfollow
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
 

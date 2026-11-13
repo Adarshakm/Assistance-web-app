@@ -2068,6 +2068,127 @@ body,
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
 }
 
+.profile-follow-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.625rem 0 1rem 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.profile-follow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.profile-follow-pill:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.profile-follow-pill.active {
+  font-weight: 600;
+  border-bottom: 2px solid #ffffff;
+}
+
+.profile-follow-count {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.profile-follow-label {
+  color: #cccccc;
+}
+
+.profile-follow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+.profile-follow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.profile-follow-item:hover {
+  border-color: #ffffff;
+}
+
+.profile-follow-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-follow-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #000000;
+  border: 1.5px solid #ffffff;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.profile-follow-username {
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+.profile-follow-btn-action {
+  background: transparent;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.profile-follow-btn-action:hover {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.profile-follow-empty {
+  color: #888888;
+  font-size: 0.9375rem;
+  margin: 0.35rem 0;
+  font-style: italic;
+}
+
+.profile-follow-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .account-wrapper {
   display: flex;
   flex-direction: column;

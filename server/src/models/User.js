@@ -63,6 +63,20 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    followers: [
+      {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+    ],
+    following: [
+      {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+    ],
     password: {
       type: String,
     },
