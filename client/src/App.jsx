@@ -2258,6 +2258,22 @@ function App() {
 
               <button
                 type="button"
+                className={`sidebar-nav-item ${currentView === 'voice-and-video-call' ? 'active' : ''}`}
+                id="voice-and-video-call-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'voice-and-video-call' ? 'blank' : 'voice-and-video-call')
+                }
+                title="Voice and Video Call"
+                aria-label="Voice and Video Call"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                {!isSidebarCollapsed && <span>Voice and Video Call</span>}
+              </button>
+
+              <button
+                type="button"
                 className={`sidebar-nav-item ${currentView === 'social' ? 'active' : ''}`}
                 id="social-connections-btn"
                 onClick={() => navigateTo(currentView === 'social' ? 'blank' : 'social')}
@@ -2692,22 +2708,6 @@ function App() {
                   <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                 </svg>
                 <span>What's Happening Around You</span>
-              </button>
-
-              <button
-                type="button"
-                className={`navbar-item ${currentView === 'voice-and-video-call' ? 'active' : ''}`}
-                id="voice-and-video-call-btn"
-                onClick={() =>
-                  navigateTo(currentView === 'voice-and-video-call' ? 'blank' : 'voice-and-video-call')
-                }
-                title="Voice and Video Call"
-                aria-label="Voice and Video Call"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                </svg>
-                <span>Voice and Video Call</span>
               </button>
             </div>
 
