@@ -237,6 +237,7 @@ function App() {
 
   const navigateTo = (view) => {
     setCurrentView(view);
+    setIsSidebarVisible(false); // fully hide left sidebar when clicking messages, whats happening around you, etc.
     const path =
       view === 'messages'
         ? '/messages'
@@ -556,6 +557,22 @@ function App() {
       return true;
     }
     return false;
+  });
+
+  const [isSidebarVisible, setIsSidebarVisible] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (
+        path === '/messages' ||
+        path === '/whats-happening' ||
+        path === '/contacts' ||
+        path === '/social-connections'
+      ) {
+        return false;
+      }
+      return window.innerWidth > 768;
+    }
+    return true;
   });
 
   // Change password state
@@ -2284,7 +2301,15 @@ function App() {
       <>
         {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
         <div className="workspace-layout">
-        <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`} id="left-sidebar">
+          {isSidebarVisible && (
+            <div
+              className="sidebar-backdrop"
+              id="sidebar-backdrop"
+              onClick={() => setIsSidebarVisible(false)}
+              aria-hidden="true"
+            />
+          )}
+          <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${!isSidebarVisible ? 'hidden' : ''}`} id="left-sidebar">
           <div className="sidebar-header">
             <div className="sidebar-brand">
               <div className="brand-icon">
@@ -2296,21 +2321,36 @@ function App() {
               </div>
               {!isSidebarCollapsed && <span className="brand-title">Planet</span>}
             </div>
-            <button
-              type="button"
-              className="sidebar-collapse-btn"
-              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={isSidebarCollapsed ? 'Expand' : 'Collapse'}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                {isSidebarCollapsed ? (
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                ) : (
-                  <polyline points="15 18 9 12 15 6"></polyline>
-                )}
-              </svg>
-            </button>
+            <div className="sidebar-header-actions">
+              <button
+                type="button"
+                className="sidebar-collapse-btn"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={isSidebarCollapsed ? 'Expand' : 'Collapse'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {isSidebarCollapsed ? (
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  ) : (
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  )}
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="sidebar-close-btn"
+                id="sidebar-close-btn"
+                onClick={() => setIsSidebarVisible(false)}
+                aria-label="Hide sidebar"
+                title="Hide sidebar"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="sidebar-body">
@@ -2798,6 +2838,22 @@ function App() {
 
         <div className="workspace-area">
           <nav className="workspace-navbar" id="navbar" aria-label="Main Navigation">
+            <button
+              type="button"
+              className="navbar-menu-btn"
+              id="navbar-sidebar-menu-btn"
+              onClick={() => setIsSidebarVisible((prev) => !prev)}
+              aria-label={isSidebarVisible ? 'Hide sidebar' : 'Open menu bar'}
+              title={isSidebarVisible ? 'Hide Menu' : 'Open Menu'}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+              <span className="navbar-menu-text">Menu</span>
+            </button>
+
             <div className="navbar-links">
               <button
                 type="button"
@@ -4949,6 +5005,22 @@ function App() {
 
         <nav className="workspace-bottom-navbar" id="bottom-navbar" aria-label="Bottom Navigation">
           <div className="navbar-links">
+            <button
+              type="button"
+              className={`navbar-item ${isSidebarVisible ? 'active' : ''}`}
+              id="bottom-menu-btn"
+              onClick={() => setIsSidebarVisible((prev) => !prev)}
+              title="Menu"
+              aria-label="Toggle Menu"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+              <span>Menu</span>
+            </button>
+
             <button
               type="button"
               className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
