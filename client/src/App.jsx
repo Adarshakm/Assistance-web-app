@@ -1761,10 +1761,18 @@ function App() {
       return {};
     }
   });
+  const [recentConversations, setRecentConversations] = useState([]);
+  const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
+  const [inboxSearchQuery, setInboxSearchQuery] = useState('');
   const [messageInputText, setMessageInputText] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSimulatingReply, setIsSimulatingReply] = useState(false);
   const messagesEndRef = useRef(null);
+
+  const normalizePhoneKey = (phone = '') => {
+    const digits = String(phone).replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
+  };
 
   const getActiveChatKey = (contact) => {
     if (!contact) return '';
@@ -1773,12 +1781,26 @@ function App() {
 
   const handleOpenChatWithContact = (contact) => {
     if (!contact) return;
+
+    let resolvedUsername = contact.username || '';
+    if (!resolvedUsername && contact.phone) {
+      const norm = normalizePhoneKey(contact.phone);
+      const matched =
+        (Array.isArray(discoveryUsers) &&
+          discoveryUsers.find((u) => u.phone && normalizePhoneKey(u.phone) === norm)) ||
+        (Array.isArray(registeredContacts) &&
+          registeredContacts.find((u) => u.phone && normalizePhoneKey(u.phone) === norm));
+      if (matched && matched.username) {
+        resolvedUsername = matched.username;
+      }
+    }
+
     const chatTarget = {
       name: contact.phoneBookName || contact.displayName || contact.name || contact.username || 'Contact',
-      username: contact.username || '',
+      username: resolvedUsername,
       phone: contact.phone || '',
       avatar: contact.avatar || '',
-      status: contact.status || (contact.username ? 'Active on Assistance' : 'Phone contact'),
+      status: contact.status || (resolvedUsername ? 'Active on Assistance' : 'Phone contact'),
     };
     setActiveChatContact(chatTarget);
     try {
@@ -1786,6 +1808,31 @@ function App() {
     } catch {}
     navigateTo('messages');
   };
+
+  // Fetch recent conversations for inbox and unread badges
+  const fetchRecentConversations = async () => {
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    try {
+      const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.conversations)) {
+          setRecentConversations(data.conversations);
+          setTotalUnreadMessages(data.totalUnread || 0);
+        }
+      }
+    } catch {
+      // Ignore background poll errors
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentConversations();
+    const interval = setInterval(fetchRecentConversations, 3000);
+    return () => clearInterval(interval);
+  }, [loggedInUser, currentView]);
 
   // Fetch messages from backend for active contact
   const fetchActiveConversation = async (contact) => {
@@ -1819,6 +1866,8 @@ function App() {
             } catch {}
             return updated;
           });
+          // Update recent conversations unread counts
+          fetchRecentConversations();
         }
       }
     } catch {
@@ -1900,6 +1949,7 @@ function App() {
             ...data.message,
             isSent: true,
           };
+          const resolvedRecipient = (data.message.recipient || '').toLowerCase();
           setChatMessages((prev) => {
             const existing = prev[contactKey] || [];
             const replaced = existing.map((m) => (m.id === localId ? serverMsg : m));
@@ -1907,11 +1957,27 @@ function App() {
               ...prev,
               [contactKey]: replaced,
             };
+            if (resolvedRecipient && resolvedRecipient !== contactKey) {
+              updated[resolvedRecipient] = replaced;
+            }
             try {
               localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
             } catch {}
             return updated;
           });
+
+          if (data.message.recipient && !activeChatContact.username) {
+            setActiveChatContact((prevContact) => {
+              if (!prevContact) return prevContact;
+              const next = { ...prevContact, username: data.message.recipient };
+              try {
+                localStorage.setItem('assistance_active_chat_contact', JSON.stringify(next));
+              } catch {}
+              return next;
+            });
+          }
+
+          fetchRecentConversations();
         }
       }
     } catch (err) {
@@ -2007,11 +2073,6 @@ function App() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages, activeChatContact, currentView]);
-
-  const normalizePhoneKey = (phone = '') => {
-    const digits = String(phone).replace(/\D/g, '');
-    return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
-  };
 
   const mergeLocalContactFields = (remoteContacts = [], localList = []) =>
     remoteContacts.map((rc) => {
@@ -2602,10 +2663,20 @@ function App() {
                 title="Messages"
                 aria-label="Messages"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                {!isSidebarCollapsed && <span>Messages</span>}
+                <div className="sidebar-nav-icon-wrapper">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  {totalUnreadMessages > 0 && <span className="sidebar-unread-dot"></span>}
+                </div>
+                {!isSidebarCollapsed && (
+                  <span className="sidebar-nav-label-row">
+                    <span>Messages</span>
+                    {totalUnreadMessages > 0 && (
+                      <span className="sidebar-unread-pill">{totalUnreadMessages}</span>
+                    )}
+                  </span>
+                )}
               </button>
 
               <button
@@ -3084,6 +3155,25 @@ function App() {
                   <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                 </svg>
                 <span>What's Happening Around You</span>
+              </button>
+
+              <button
+                type="button"
+                className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
+                id="navbar-messages-btn"
+                onClick={() => navigateTo(currentView === 'messages' ? 'blank' : 'messages')}
+                title="Messages"
+                aria-label="Messages"
+              >
+                <div className="navbar-messages-icon-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  {totalUnreadMessages > 0 && (
+                    <span className="navbar-messages-badge">{totalUnreadMessages}</span>
+                  )}
+                </div>
+                <span>Messages</span>
               </button>
             </div>
 
@@ -5041,8 +5131,13 @@ function App() {
                           type="button"
                           className="chat-back-btn"
                           id="chat-back-to-contacts-btn"
-                          onClick={() => navigateTo('contacts')}
-                          title="Back to My Contacts"
+                          onClick={() => {
+                            setActiveChatContact(null);
+                            try {
+                              localStorage.removeItem('assistance_active_chat_contact');
+                            } catch {}
+                          }}
+                          title="Back to All Messages"
                         >
                           <svg
                             width="18"
@@ -5057,7 +5152,7 @@ function App() {
                             <line x1="19" y1="12" x2="5" y2="12"></line>
                             <polyline points="12 19 5 12 12 5"></polyline>
                           </svg>
-                          <span>Contacts</span>
+                          <span>Messages</span>
                         </button>
 
                         <div className="chat-header-user">
@@ -5248,30 +5343,154 @@ function App() {
                     </form>
                   </>
                 ) : (
-                  <div className="chat-box-empty-fallback">
-                    <div className="chat-fallback-icon">
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      >
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                      </svg>
+                  <div className="chat-inbox-container" id="chat-inbox-container">
+                    <div className="chat-inbox-header">
+                      <div className="chat-inbox-title-row">
+                        <h2 className="chat-inbox-title">Messages</h2>
+                        {totalUnreadMessages > 0 && (
+                          <span className="chat-inbox-unread-count">{totalUnreadMessages} unread</span>
+                        )}
+                      </div>
+                      <div className="chat-inbox-search-box">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                          type="text"
+                          className="chat-inbox-search-input"
+                          placeholder="Search conversations..."
+                          value={inboxSearchQuery}
+                          onChange={(e) => setInboxSearchQuery(e.target.value)}
+                        />
+                        {inboxSearchQuery && (
+                          <button
+                            type="button"
+                            className="chat-inbox-search-clear"
+                            onClick={() => setInboxSearchQuery('')}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <h3 className="chat-fallback-title">No conversation selected</h3>
-                    <p className="chat-fallback-desc">
-                      Click on any contact in My Contacts to open a direct message box.
-                    </p>
-                    <button
-                      type="button"
-                      className="chat-fallback-btn"
-                      onClick={() => navigateTo('contacts')}
-                    >
-                      Go to My Contacts
-                    </button>
+
+                    <div className="chat-inbox-list">
+                      {recentConversations.filter((c) => {
+                        if (!inboxSearchQuery.trim()) return true;
+                        const q = inboxSearchQuery.trim().toLowerCase();
+                        return (
+                          (c.contactName && c.contactName.toLowerCase().includes(q)) ||
+                          (c.contact && c.contact.toLowerCase().includes(q)) ||
+                          (c.lastMessage && c.lastMessage.toLowerCase().includes(q))
+                        );
+                      }).length === 0 ? (
+                        <div className="chat-box-empty-fallback">
+                          <div className="chat-fallback-icon">
+                            <svg
+                              width="48"
+                              height="48"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                          </div>
+                          <h3 className="chat-fallback-title">No conversations yet</h3>
+                          <p className="chat-fallback-desc">
+                            Click on any contact in My Contacts or Social Connections to start chatting.
+                          </p>
+                          <div className="chat-fallback-actions">
+                            <button
+                              type="button"
+                              className="chat-fallback-btn"
+                              onClick={() => navigateTo('contacts')}
+                            >
+                              My Contacts
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-fallback-btn secondary"
+                              onClick={() => navigateTo('social')}
+                            >
+                              Social Connections
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        recentConversations.filter((c) => {
+                          if (!inboxSearchQuery.trim()) return true;
+                          const q = inboxSearchQuery.trim().toLowerCase();
+                          return (
+                            (c.contactName && c.contactName.toLowerCase().includes(q)) ||
+                            (c.contact && c.contact.toLowerCase().includes(q)) ||
+                            (c.lastMessage && c.lastMessage.toLowerCase().includes(q))
+                          );
+                        }).map((conv) => (
+                          <div
+                            key={conv.contact}
+                            className={`chat-inbox-item ${conv.unread > 0 ? 'unread' : ''}`}
+                            onClick={() => {
+                              handleOpenChatWithContact({
+                                name: conv.contactName || conv.contact,
+                                username: conv.username || conv.contact,
+                                phone: conv.phone || '',
+                                avatar: conv.avatar || '',
+                                status: conv.status || '',
+                              });
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleOpenChatWithContact({
+                                  name: conv.contactName || conv.contact,
+                                  username: conv.username || conv.contact,
+                                  phone: conv.phone || '',
+                                  avatar: conv.avatar || '',
+                                  status: conv.status || '',
+                                });
+                              }
+                            }}
+                          >
+                            <div
+                              className="chat-inbox-avatar"
+                              style={{
+                                backgroundColor: conv.avatar
+                                  ? 'transparent'
+                                  : getAvatarColor(conv.contactName || conv.contact),
+                              }}
+                            >
+                              {conv.avatar ? (
+                                <img src={conv.avatar} alt={conv.contactName} />
+                              ) : (
+                                <span>{getInitials(conv.contactName || conv.contact)}</span>
+                              )}
+                              <span className="chat-online-dot"></span>
+                            </div>
+
+                            <div className="chat-inbox-info">
+                              <div className="chat-inbox-top-row">
+                                <span className="chat-inbox-name">{conv.contactName || conv.contact}</span>
+                                <span className="chat-inbox-time">{conv.lastTime}</span>
+                              </div>
+                              <div className="chat-inbox-bottom-row">
+                                <p className="chat-inbox-snippet">
+                                  {conv.isSentByMe ? <span className="chat-snippet-you">You: </span> : null}
+                                  {conv.lastMessage}
+                                </p>
+                                {conv.unread > 0 && (
+                                  <span className="chat-inbox-badge">{conv.unread}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
