@@ -561,6 +561,9 @@ function App() {
 
   const [isSidebarVisible, setIsSidebarVisible] = useState(() => {
     if (typeof window !== 'undefined') {
+      if (window.innerWidth <= 768) {
+        return false;
+      }
       const path = window.location.pathname;
       if (
         path === '/messages' ||
@@ -570,10 +573,20 @@ function App() {
       ) {
         return false;
       }
-      return window.innerWidth > 768;
+      return true;
     }
-    return true;
+    return false;
   });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+        setIsSidebarVisible(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -2842,7 +2855,15 @@ function App() {
               type="button"
               className="navbar-menu-btn"
               id="navbar-sidebar-menu-btn"
-              onClick={() => setIsSidebarVisible((prev) => !prev)}
+              onClick={() => {
+                setIsSidebarVisible((prev) => {
+                  const next = !prev;
+                  if (next && typeof window !== 'undefined' && window.innerWidth <= 768) {
+                    setIsSidebarCollapsed(false);
+                  }
+                  return next;
+                });
+              }}
               aria-label={isSidebarVisible ? 'Hide sidebar' : 'Open menu bar'}
               title={isSidebarVisible ? 'Hide Menu' : 'Open Menu'}
             >
