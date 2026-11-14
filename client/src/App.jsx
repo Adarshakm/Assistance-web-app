@@ -4380,7 +4380,7 @@ function App() {
                                 <button
                                   type="button"
                                   className="profile-follow-btn-action"
-                                  style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                                  style={{ backgroundColor: '#000000', color: '#ffffff' }}
                                   title={`Follow ${u.username}`}
                                   onClick={() => handleFollowUser(u.username)}
                                 >
@@ -4438,7 +4438,7 @@ function App() {
                       <p
                         className="status-message"
                         style={{
-                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#000000',
                           margin: '0.25rem 0 0.5rem 0',
                         }}
                         role="alert"
@@ -4486,7 +4486,7 @@ function App() {
                                 <button
                                   type="button"
                                   className="profile-follow-btn-action"
-                                  style={{ backgroundColor: '#ffffff', color: '#000000' }}
+                                  style={{ backgroundColor: '#000000', color: '#ffffff' }}
                                   title={`Send friend request to ${u.username}`}
                                   onClick={() => handleSendFriendRequest(u.username)}
                                 >
@@ -4514,7 +4514,7 @@ function App() {
                       <p
                         className="status-message"
                         style={{
-                          color: friendRequestActionFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          color: friendRequestActionFeedback.type === 'error' ? '#ff6b6b' : '#000000',
                           margin: '0.25rem 0 0.5rem 0',
                         }}
                         role="alert"
@@ -4541,7 +4541,7 @@ function App() {
                               <button
                                 type="button"
                                 className="profile-follow-btn-action"
-                                style={{ backgroundColor: '#ffffff', color: '#000000', fontWeight: '600' }}
+                                style={{ backgroundColor: '#000000', color: '#ffffff', fontWeight: '600' }}
                                 title={`Accept ${sender}`}
                                 onClick={() => handleAcceptFriendRequest(sender)}
                               >
@@ -4576,7 +4576,7 @@ function App() {
                       <p
                         className="status-message"
                         style={{
-                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#ffffff',
+                          color: sendRequestFeedback.type === 'error' ? '#ff6b6b' : '#000000',
                           margin: '0.25rem 0 0.5rem 0',
                         }}
                         role="alert"
