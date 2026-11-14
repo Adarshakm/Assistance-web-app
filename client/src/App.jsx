@@ -2077,7 +2077,14 @@ function App() {
     });
   };
 
-  const [discoveryUsers, setDiscoveryUsers] = useState([]);
+  const [discoveryUsers, setDiscoveryUsers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('assistance_cached_users');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoadingDiscoveryUsers, setIsLoadingDiscoveryUsers] = useState(false);
   const [discoverySearchQuery, setDiscoverySearchQuery] = useState('');
 
@@ -2085,17 +2092,71 @@ function App() {
     if (currentView !== 'search-and-discovery' && currentView !== 'social') return;
     let isMounted = true;
     setIsLoadingDiscoveryUsers(true);
-    fetch('/api/users/all', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (isMounted && data.success && Array.isArray(data.users)) {
-          setDiscoveryUsers(data.users);
+
+    const loadUsers = async () => {
+      try {
+        const res = await fetch('/api/users/all', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success && Array.isArray(data.users) && data.users.length > 0) {
+            setDiscoveryUsers(data.users);
+            try {
+              localStorage.setItem('assistance_cached_users', JSON.stringify(data.users));
+            } catch {}
+            return;
+          }
         }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (isMounted) setIsLoadingDiscoveryUsers(false);
-      });
+      } catch (err) {
+        console.warn('Fetch /api/users/all failed, trying fallback:', err);
+      }
+
+      // Fallback 1: try /api/users/registered-contacts
+      try {
+        const fallbackRes = await fetch('/api/users/registered-contacts', { cache: 'no-store' });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          if (
+            isMounted &&
+            fallbackData.contacts &&
+            Array.isArray(fallbackData.contacts) &&
+            fallbackData.contacts.length > 0
+          ) {
+            const formatted = fallbackData.contacts.map((c) => ({
+              id: c.id || c.username,
+              username: c.username,
+              displayName: c.phoneBookName || c.displayName || c.username,
+              phone: c.phone || '',
+              email: c.email || '',
+              status: c.status || '',
+              avatar: c.avatar || null,
+            }));
+            setDiscoveryUsers(formatted);
+            try {
+              localStorage.setItem('assistance_cached_users', JSON.stringify(formatted));
+            } catch {}
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Fallback /api/users/registered-contacts failed:', err);
+      }
+
+      // Fallback 2: localStorage cache
+      try {
+        const cached = localStorage.getItem('assistance_cached_users');
+        if (cached && isMounted) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDiscoveryUsers(parsed);
+          }
+        }
+      } catch {}
+    };
+
+    loadUsers().finally(() => {
+      if (isMounted) setIsLoadingDiscoveryUsers(false);
+    });
+
     return () => {
       isMounted = false;
     };
