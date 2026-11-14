@@ -1715,6 +1715,76 @@ function App() {
   const [newContactAvatar, setNewContactAvatar] = useState('');
   const contactAvatarInputRef = useRef(null);
 
+  const [activeChatContact, setActiveChatContact] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_active_chat_contact');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [chatMessages, setChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_chat_history');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [messageInputText, setMessageInputText] = useState('');
+  const messagesEndRef = useRef(null);
+
+  const handleOpenChatWithContact = (contact) => {
+    if (!contact) return;
+    const chatTarget = {
+      name: contact.phoneBookName || contact.name || contact.username || 'Contact',
+      username: contact.username || '',
+      phone: contact.phone || '',
+      avatar: contact.avatar || '',
+      status: contact.status || (contact.username ? 'Active on Assistance' : 'Phone contact'),
+    };
+    setActiveChatContact(chatTarget);
+    try {
+      localStorage.setItem('assistance_active_chat_contact', JSON.stringify(chatTarget));
+    } catch {}
+    navigateTo('messages');
+  };
+
+  const handleSendChatMessage = (e) => {
+    e.preventDefault();
+    const text = messageInputText.trim();
+    if (!text || !activeChatContact) return;
+
+    const contactKey = activeChatContact.username || activeChatContact.phone || activeChatContact.name;
+    const newMsg = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      sender: 'me',
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now(),
+    };
+
+    setChatMessages((prev) => {
+      const existing = prev[contactKey] || [];
+      const updated = {
+        ...prev,
+        [contactKey]: [...existing, newMsg],
+      };
+      try {
+        localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setMessageInputText('');
+  };
+
+  useEffect(() => {
+    if (currentView === 'messages' && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, activeChatContact, currentView]);
+
   const normalizePhoneKey = (phone = '') => {
     const digits = String(phone).replace(/\D/g, '');
     return digits.length >= 10 ? digits.slice(-10) : digits || String(phone).trim();
@@ -3019,6 +3089,15 @@ function App() {
                         <div
                           key={contact.id || contact.username}
                           className="contact-card"
+                          onClick={() => handleOpenChatWithContact(contact)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenChatWithContact(contact);
+                            }
+                          }}
                         >
                           <div className="contact-card-left">
                             <div
@@ -3075,7 +3154,19 @@ function App() {
                       </div>
                     ) : (
                       filteredInviteContacts.map((contact, idx) => (
-                        <div key={contact.phone || idx} className="contact-card invite-card">
+                        <div
+                          key={contact.phone || idx}
+                          className="contact-card invite-card"
+                          onClick={() => handleOpenChatWithContact(contact)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenChatWithContact(contact);
+                            }
+                          }}
+                        >
                           <div className="contact-card-left">
                             <div
                               className="contact-avatar invite"
@@ -3101,7 +3192,8 @@ function App() {
                             <button
                               type="button"
                               className="contact-invite-btn"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
                                 setSyncFeedback({
                                   type: 'success',
@@ -4975,6 +5067,189 @@ function App() {
                         Upload Story Photo
                       </button>
                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : currentView === 'messages' ? (
+            <div className="chat-box-space" id="chat-box-space">
+              <div className="chat-box-container" id="chat-box-container">
+                {activeChatContact ? (
+                  <>
+                    <div className="chat-box-header">
+                      <div className="chat-header-left">
+                        <button
+                          type="button"
+                          className="chat-back-btn"
+                          id="chat-back-to-contacts-btn"
+                          onClick={() => navigateTo('contacts')}
+                          title="Back to My Contacts"
+                        >
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                          </svg>
+                          <span>Contacts</span>
+                        </button>
+
+                        <div className="chat-header-user">
+                          <div
+                            className="chat-header-avatar"
+                            style={{
+                              backgroundColor: activeChatContact.avatar
+                                ? 'transparent'
+                                : getAvatarColor(activeChatContact.name || activeChatContact.username),
+                            }}
+                          >
+                            {activeChatContact.avatar ? (
+                              <img
+                                src={activeChatContact.avatar}
+                                alt={activeChatContact.name}
+                                className="chat-avatar-img"
+                              />
+                            ) : (
+                              <span>
+                                {getInitials(activeChatContact.name || activeChatContact.username)}
+                              </span>
+                            )}
+                            <span className="chat-header-online-dot"></span>
+                          </div>
+                          <div className="chat-header-info">
+                            <div className="chat-header-name-row">
+                              <span className="chat-header-name">{activeChatContact.name}</span>
+                              {activeChatContact.username && (
+                                <span className="chat-header-username">
+                                  @{activeChatContact.username}
+                                </span>
+                              )}
+                            </div>
+                            <span className="chat-header-status">
+                              {activeChatContact.status || activeChatContact.phone || 'Active on Assistance'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="chat-box-messages-list" id="chat-messages-container">
+                      <div className="chat-box-start-notice">
+                        <div
+                          className="chat-start-avatar"
+                          style={{
+                            backgroundColor: activeChatContact.avatar
+                              ? 'transparent'
+                              : getAvatarColor(activeChatContact.name || activeChatContact.username),
+                          }}
+                        >
+                          {activeChatContact.avatar ? (
+                            <img
+                              src={activeChatContact.avatar}
+                              alt={activeChatContact.name}
+                              className="chat-avatar-img"
+                            />
+                          ) : (
+                            <span>
+                              {getInitials(activeChatContact.name || activeChatContact.username)}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="chat-start-title">{activeChatContact.name}</h3>
+                        <p className="chat-start-subtitle">
+                          {activeChatContact.username ? `@${activeChatContact.username} • ` : ''}
+                          {activeChatContact.phone || 'Assistance Contact'}
+                        </p>
+                        <span className="chat-start-badge">Direct Message Box</span>
+                      </div>
+
+                      {((activeChatContact &&
+                        chatMessages[
+                          activeChatContact.username ||
+                            activeChatContact.phone ||
+                            activeChatContact.name
+                        ]) ||
+                        []
+                      ).map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`chat-bubble-row ${msg.sender === 'me' ? 'sent' : 'received'}`}
+                        >
+                          <div
+                            className={`chat-bubble ${msg.sender === 'me' ? 'sent' : 'received'}`}
+                          >
+                            <p className="chat-bubble-text">{msg.text}</p>
+                            <span className="chat-bubble-time">{msg.time}</span>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    <form className="chat-box-input-form" onSubmit={handleSendChatMessage}>
+                      <input
+                        type="text"
+                        className="chat-box-input"
+                        placeholder={`Message ${activeChatContact.name}...`}
+                        value={messageInputText}
+                        onChange={(e) => setMessageInputText(e.target.value)}
+                        autoFocus
+                      />
+                      <button
+                        type="submit"
+                        className="chat-box-send-btn"
+                        disabled={!messageInputText.trim()}
+                        aria-label="Send message"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="22" y1="2" x2="11" y2="13"></line>
+                          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <span>Send</span>
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="chat-box-empty-fallback">
+                    <div className="chat-fallback-icon">
+                      <svg
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                      </svg>
+                    </div>
+                    <h3 className="chat-fallback-title">No conversation selected</h3>
+                    <p className="chat-fallback-desc">
+                      Click on any contact in My Contacts to open a direct message box.
+                    </p>
+                    <button
+                      type="button"
+                      className="chat-fallback-btn"
+                      onClick={() => navigateTo('contacts')}
+                    >
+                      Go to My Contacts
+                    </button>
                   </div>
                 )}
               </div>
