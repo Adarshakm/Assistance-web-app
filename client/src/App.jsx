@@ -1762,7 +1762,14 @@ function App() {
     }
   });
   const [messageInputText, setMessageInputText] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isSimulatingReply, setIsSimulatingReply] = useState(false);
   const messagesEndRef = useRef(null);
+
+  const getActiveChatKey = (contact) => {
+    if (!contact) return '';
+    return (contact.username || contact.phone || contact.name || '').trim().toLowerCase();
+  };
 
   const handleOpenChatWithContact = (contact) => {
     if (!contact) return;
@@ -1780,25 +1787,89 @@ function App() {
     navigateTo('messages');
   };
 
-  const handleSendChatMessage = (e) => {
+  // Fetch messages from backend for active contact
+  const fetchActiveConversation = async (contact) => {
+    if (!contact) return;
+    const contactKey = getActiveChatKey(contact);
+    if (!contactKey) return;
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+
+    try {
+      const res = await fetch(
+        `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages)) {
+          const normalized = data.messages.map((m) => ({
+            ...m,
+            isSent:
+              m.isSent === true ||
+              (m.sender || '').toLowerCase() === currentUser ||
+              m.sender === 'me',
+          }));
+          setChatMessages((prev) => {
+            const updated = {
+              ...prev,
+              [contactKey]: normalized,
+            };
+            try {
+              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+      }
+    } catch {
+      // Offline fallback: keep existing local messages
+    }
+  };
+
+  // Poll conversation when messages view is open
+  useEffect(() => {
+    if (currentView !== 'messages' || !activeChatContact) return;
+
+    fetchActiveConversation(activeChatContact);
+
+    const intervalId = setInterval(() => {
+      fetchActiveConversation(activeChatContact);
+    }, 2500);
+
+    return () => clearInterval(intervalId);
+  }, [currentView, activeChatContact, loggedInUser]);
+
+  const handleSendChatMessage = async (e) => {
     e.preventDefault();
     const text = messageInputText.trim();
-    if (!text || !activeChatContact) return;
+    if (!text || !activeChatContact || isSendingMessage) return;
 
-    const contactKey = activeChatContact.username || activeChatContact.phone || activeChatContact.name;
-    const newMsg = {
-      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      sender: 'me',
-      text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    const contactKey = getActiveChatKey(activeChatContact);
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentUserName = loggedInUser || 'Me';
+    const recipientName = activeChatContact.name || activeChatContact.username || activeChatContact.phone || 'Contact';
+
+    const localId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const optimisticMsg = {
+      id: localId,
+      sender: currentUser,
+      senderName: currentUserName,
+      recipient: contactKey,
+      recipientName: recipientName,
+      text: text,
+      time: formattedTime,
       timestamp: Date.now(),
+      createdAt: new Date().toISOString(),
+      isSent: true, // Sending messages are in right side
     };
 
     setChatMessages((prev) => {
       const existing = prev[contactKey] || [];
       const updated = {
         ...prev,
-        [contactKey]: [...existing, newMsg],
+        [contactKey]: [...existing, optimisticMsg],
       };
       try {
         localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
@@ -1807,6 +1878,128 @@ function App() {
     });
 
     setMessageInputText('');
+    setIsSendingMessage(true);
+
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: currentUser,
+          senderName: currentUserName,
+          recipient: contactKey,
+          recipientName: recipientName,
+          text: text,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.message) {
+          const serverMsg = {
+            ...data.message,
+            isSent: true,
+          };
+          setChatMessages((prev) => {
+            const existing = prev[contactKey] || [];
+            const replaced = existing.map((m) => (m.id === localId ? serverMsg : m));
+            const updated = {
+              ...prev,
+              [contactKey]: replaced,
+            };
+            try {
+              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Send Message Warning - Saved Locally]:', err);
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleSimulateReply = async () => {
+    if (!activeChatContact || isSimulatingReply) return;
+    const contactKey = getActiveChatKey(activeChatContact);
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const recipientName = activeChatContact.name || activeChatContact.username || activeChatContact.phone || 'Contact';
+
+    setIsSimulatingReply(true);
+
+    try {
+      const res = await fetch('/api/chat/simulate-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: contactKey,
+          senderName: recipientName,
+          recipient: currentUser,
+          recipientName: loggedInUser || 'Me',
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.message) {
+          const receivedMsg = {
+            ...data.message,
+            isSent: false, // Receiving messages are in left side
+          };
+          setChatMessages((prev) => {
+            const existing = prev[contactKey] || [];
+            const updated = {
+              ...prev,
+              [contactKey]: [...existing, receivedMsg],
+            };
+            try {
+              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Simulate Reply Error]:', err);
+    } finally {
+      setIsSimulatingReply(false);
+    }
+  };
+
+  const handleClearConversation = async () => {
+    if (!activeChatContact) return;
+    if (!window.confirm('Clear all messages with ' + (activeChatContact.name || 'this contact') + '?')) {
+      return;
+    }
+
+    const contactKey = getActiveChatKey(activeChatContact);
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+
+    setChatMessages((prev) => {
+      const updated = {
+        ...prev,
+        [contactKey]: [],
+      };
+      try {
+        localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      await fetch('/api/chat/conversation', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user1: currentUser,
+          user2: contactKey,
+        }),
+      });
+    } catch (err) {
+      console.error('[Clear Conversation Error]:', err);
+    }
   };
 
   useEffect(() => {
@@ -4904,6 +5097,36 @@ function App() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="chat-header-actions">
+                        <button
+                          type="button"
+                          className="chat-header-action-btn"
+                          id="chat-test-reply-btn"
+                          onClick={handleSimulateReply}
+                          disabled={isSimulatingReply}
+                          title="Simulate incoming reply message from this contact (appears on left side)"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 14 20 9 15 4"></polyline>
+                            <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
+                          </svg>
+                          <span>{isSimulatingReply ? 'Receiving...' : 'Test Reply'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-header-action-btn"
+                          id="chat-clear-btn"
+                          onClick={handleClearConversation}
+                          title="Clear chat history with this contact"
+                          aria-label="Clear chat history"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="chat-box-messages-list" id="chat-messages-container">
@@ -4937,25 +5160,58 @@ function App() {
                       </div>
 
                       {((activeChatContact &&
-                        chatMessages[
-                          activeChatContact.username ||
-                            activeChatContact.phone ||
-                            activeChatContact.name
-                        ]) ||
+                        chatMessages[getActiveChatKey(activeChatContact)]) ||
                         []
-                      ).map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`chat-bubble-row ${msg.sender === 'me' ? 'sent' : 'received'}`}
-                        >
+                      ).map((msg) => {
+                        const isSent =
+                          msg.isSent === true ||
+                          msg.sender === 'me' ||
+                          (msg.sender &&
+                            (loggedInUser || localStorage.getItem('assistance_user')) &&
+                            msg.sender.toLowerCase() ===
+                              (loggedInUser || localStorage.getItem('assistance_user') || '').toLowerCase());
+
+                        return (
                           <div
-                            className={`chat-bubble ${msg.sender === 'me' ? 'sent' : 'received'}`}
+                            key={msg.id || msg._id || msg.timestamp || Math.random()}
+                            className={`chat-bubble-row ${isSent ? 'sent' : 'received'}`}
                           >
-                            <p className="chat-bubble-text">{msg.text}</p>
-                            <span className="chat-bubble-time">{msg.time}</span>
+                            {!isSent && (
+                              <div
+                                className="chat-bubble-avatar"
+                                style={{
+                                  backgroundColor: activeChatContact.avatar
+                                    ? 'transparent'
+                                    : getAvatarColor(activeChatContact.name || activeChatContact.username),
+                                }}
+                                title={activeChatContact.name}
+                              >
+                                {activeChatContact.avatar ? (
+                                  <img
+                                    src={activeChatContact.avatar}
+                                    alt={activeChatContact.name}
+                                  />
+                                ) : (
+                                  <span>
+                                    {getInitials(activeChatContact.name || activeChatContact.username)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <div
+                              className={`chat-bubble ${isSent ? 'sent' : 'received'}`}
+                            >
+                              {!isSent && (
+                                <span className="chat-bubble-sender-name">
+                                  {msg.senderName || activeChatContact.name}
+                                </span>
+                              )}
+                              <p className="chat-bubble-text">{msg.text}</p>
+                              <span className="chat-bubble-time">{msg.time}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </div>
 
