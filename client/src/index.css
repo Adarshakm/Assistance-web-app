@@ -3320,17 +3320,155 @@ body,
     height: 16px;
   }
 
-  /* Notification Bar on Mobile */
-  .notification-bar,
-  #notification-bar {
+  /* Notification Bar on Mobile - collapses to 0 height when empty */
+  .notification-bar:empty,
+  #notification-bar:empty {
+    display: none !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+
+  .notification-bar:not(:empty),
+  #notification-bar:not(:empty) {
     min-height: 38px;
     padding: 0 0.875rem;
+  }
+
+  .workspace-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .workspace-main.chat-main-active {
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+
+  /* Chat Box on Mobile - Fits 100% between top and bottom navbar */
+  .chat-box-space {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    background-color: #ffffff !important;
+  }
+
+  .chat-box-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    flex: 1 1 0% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    background-color: #ffffff !important;
+  }
+
+  .chat-box-header {
+    flex-shrink: 0 !important;
+    padding: 0.625rem 0.875rem !important;
+    border-bottom: 1px solid #000000 !important;
+    background-color: #ffffff !important;
+  }
+
+  .chat-header-left {
+    gap: 0.625rem !important;
+  }
+
+  .chat-back-btn {
+    padding: 0.35rem 0.55rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .chat-back-btn span {
+    display: none !important;
+  }
+
+  .chat-header-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .chat-header-name {
+    font-size: 0.95rem !important;
+  }
+
+  .chat-header-username {
+    font-size: 0.75rem !important;
+  }
+
+  .chat-header-status {
+    font-size: 0.7rem !important;
+  }
+
+  .chat-box-messages-list {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 0.75rem !important;
+    gap: 0.625rem !important;
+    background-color: #f9fafb !important;
+  }
+
+  .chat-bubble {
+    max-width: 85% !important;
+    padding: 0.55rem 0.85rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .chat-box-input-form {
+    flex-shrink: 0 !important;
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.5rem !important;
+    border-top: 1px solid #000000 !important;
+    background-color: #ffffff !important;
+  }
+
+  .chat-box-input {
+    padding: 0.55rem 0.875rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .chat-box-send-btn {
+    padding: 0.55rem !important;
+    border-radius: 50% !important;
+    width: 38px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .chat-box-send-btn span {
+    display: none !important;
+  }
+
+  .chat-box-empty-fallback {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    padding: 2rem 1rem !important;
   }
 
   /* Workspace Spaces on Mobile */
   .account-space,
   .contacts-space,
-  .chat-box-space,
   .profile-space,
   .social-space,
   .privacy-space,
@@ -3915,43 +4053,13 @@ body,
     font-size: 0.95rem;
   }
 
-  /* Chat Box on Mobile */
-  .chat-box-space {
-    padding: 0.75rem 0.5rem;
-  }
-
-  .chat-box-container {
-    height: calc(100vh - 120px);
-    min-height: 420px;
-    border-radius: 12px;
-  }
-
+  /* Chat Box on Small Phones */
   .chat-box-header {
-    padding: 0.65rem 0.75rem;
-  }
-
-  .chat-back-btn span {
-    display: none;
-  }
-
-  .chat-bubble {
-    max-width: 85%;
+    padding: 0.5rem 0.75rem !important;
   }
 
   .chat-box-input-form {
-    padding: 0.65rem 0.75rem;
-    gap: 0.5rem;
-  }
-
-  .chat-box-send-btn span {
-    display: none;
-  }
-
-  .chat-box-send-btn {
-    padding: 0.65rem;
-    border-radius: 50%;
-    width: 38px;
-    height: 38px;
+    padding: 0.5rem 0.625rem !important;
   }
 
   /* Social Connections on Small Phones */

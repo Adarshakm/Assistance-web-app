@@ -2905,7 +2905,10 @@ function App() {
 
           <div className="notification-bar" id="notification-bar" aria-label="Notification Bar"></div>
 
-          <main className="workspace-main" id="workspace-main">
+          <main
+            className={`workspace-main ${currentView === 'messages' ? 'chat-main-active' : ''}`}
+            id="workspace-main"
+          >
           {currentView === 'account' ? (
             <div className="account-space" id="account-space">
               <div className="account-wrapper">
