@@ -35,14 +35,14 @@ const resolveUserAliases = async (identifier = '') => {
 
     const matchedUsers = await User.find(query, 'username displayName phone email').lean();
     for (const u of matchedUsers) {
-      if (u.username) aliases.add(u.username.toLowerCase());
-      if (u.displayName) aliases.add(u.displayName.toLowerCase());
+      if (u.username) aliases.add(String(u.username).trim().toLowerCase());
+      if (u.displayName) aliases.add(String(u.displayName).trim().toLowerCase());
       if (u.phone) {
-        aliases.add(u.phone.toLowerCase());
+        aliases.add(String(u.phone).trim().toLowerCase());
         const uDigits = normalizeDigits(u.phone);
         if (uDigits) aliases.add(uDigits);
       }
-      if (u.email) aliases.add(u.email.toLowerCase());
+      if (u.email) aliases.add(String(u.email).trim().toLowerCase());
     }
   } catch (err) {
     console.warn('[Resolve User Aliases Error]:', err.message);
@@ -55,26 +55,27 @@ const resolveUserAliases = async (identifier = '') => {
  * Format a message object for frontend consumption
  */
 const formatMessage = (msg, userAliases = []) => {
+  const senderStr = String(msg?.sender || '').trim().toLowerCase();
   const isMe =
     Array.isArray(userAliases) && userAliases.length > 0
-      ? userAliases.includes((msg.sender || '').toLowerCase().trim())
+      ? userAliases.includes(senderStr)
       : false;
 
   return {
-    id: msg._id ? msg._id.toString() : msg.id || String(Date.now()),
-    _id: msg._id ? msg._id.toString() : undefined,
-    sender: msg.sender,
-    senderName: msg.senderName || msg.sender,
-    recipient: msg.recipient,
-    recipientName: msg.recipientName || msg.recipient,
-    text: msg.text,
+    id: msg?._id ? msg._id.toString() : msg?.id || String(Date.now()),
+    _id: msg?._id ? msg._id.toString() : undefined,
+    sender: msg?.sender || '',
+    senderName: msg?.senderName || msg?.sender || '',
+    recipient: msg?.recipient || '',
+    recipientName: msg?.recipientName || msg?.recipient || '',
+    text: msg?.text || '',
     time:
-      msg.time ||
-      (msg.createdAt
+      msg?.time ||
+      (msg?.createdAt
         ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
-    createdAt: msg.createdAt || new Date(),
-    read: !!msg.read,
+    createdAt: msg?.createdAt || new Date(),
+    read: !!msg?.read,
     isSent: isMe,
   };
 };
@@ -329,18 +330,33 @@ router.get('/recent', async (req, res) => {
     const conversationMap = new Map();
 
     for (const msg of messages) {
-      const isSender = userAliases.includes(msg.sender.toLowerCase());
-      const otherUser = isSender ? msg.recipient.toLowerCase() : msg.sender.toLowerCase();
-      const otherName = isSender ? msg.recipientName : msg.senderName;
+      if (!msg) continue;
+      const rawSender = msg.sender != null ? String(msg.sender).trim() : '';
+      const rawRecipient = msg.recipient != null ? String(msg.recipient).trim() : '';
+      const lowerSender = rawSender.toLowerCase();
+      const lowerRecipient = rawRecipient.toLowerCase();
+
+      // Skip invalid entries missing both sender and recipient
+      if (!lowerSender && !lowerRecipient) continue;
+
+      const isSender = userAliases.includes(lowerSender);
+      const otherUser = isSender
+        ? (lowerRecipient || 'unknown')
+        : (lowerSender || 'unknown');
+      const otherName = isSender
+        ? (msg.recipientName || rawRecipient || otherUser)
+        : (msg.senderName || rawSender || otherUser);
+
+      if (!otherUser || otherUser === 'unknown') continue;
 
       if (!conversationMap.has(otherUser)) {
         conversationMap.set(otherUser, {
           contact: otherUser,
           contactName: otherName || otherUser,
-          lastMessage: msg.text,
-          lastTime: msg.time,
-          lastTimestamp: msg.createdAt,
-          lastSender: msg.sender,
+          lastMessage: msg.text || '',
+          lastTime: msg.time || '',
+          lastTimestamp: msg.createdAt || new Date(),
+          lastSender: rawSender,
           isSentByMe: isSender,
           unread: !isSender && !msg.read ? 1 : 0,
         });

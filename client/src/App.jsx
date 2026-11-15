@@ -1850,7 +1850,8 @@ function App() {
 
   // Fetch recent conversations for inbox and unread badges
   const fetchRecentConversations = async () => {
-    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim().toLowerCase();
+    if (!currentUser) return;
     try {
       const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}`, {
         cache: 'no-store',
