@@ -1781,10 +1781,33 @@ function App() {
   const [isSimulatingReply, setIsSimulatingReply] = useState(false);
   const messagesEndRef = useRef(null);
   const [incomingToast, setIncomingToast] = useState(null);
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const notifDropdownRef = useRef(null);
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
 
+  // Close notification dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        notifDropdownRef.current &&
+        !notifDropdownRef.current.contains(e.target) &&
+        !e.target.closest('#top-notification-navbar')
+      ) {
+        setIsNotifDropdownOpen(false);
+      }
+    };
+    if (isNotifDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNotifDropdownOpen]);
+
   const playIncomingChime = () => {
+    if (!isSoundEnabled) return;
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -3392,40 +3415,248 @@ function App() {
             </div>
           </nav>
 
-          <div className="notification-bar" id="notification-bar" aria-label="Notification Bar">
-            {incomingToast && (
-              <div className="incoming-msg-banner" role="alert">
-                <div className="incoming-msg-left">
-                  <span className="incoming-msg-dot"></span>
-                  <span className="incoming-msg-icon">💬</span>
-                  <div className="incoming-msg-details">
-                    <strong className="incoming-msg-sender">{incomingToast.contactName}</strong>
-                    <span className="incoming-msg-snippet">{incomingToast.lastMessage}</span>
-                  </div>
+          {/* 2nd Top Navbar - Message Notifications */}
+          <nav className="workspace-sub-navbar" id="top-notification-navbar" aria-label="Message Notifications">
+            <div className="sub-navbar-left">
+              <button
+                type="button"
+                className={`notif-nav-btn ${isNotifDropdownOpen ? 'active' : ''}`}
+                onClick={() => setIsNotifDropdownOpen((prev) => !prev)}
+                title="Toggle Message Notifications"
+                aria-label="Toggle Message Notifications"
+              >
+                <div className="notif-nav-icon-wrap">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                  </svg>
+                  {totalUnreadMessages > 0 && <span className="notif-nav-ping-dot"></span>}
                 </div>
-                <div className="incoming-msg-actions">
+                <span className="notif-nav-title">Notifications</span>
+                {totalUnreadMessages > 0 ? (
+                  <span className="notif-unread-count-pill">{totalUnreadMessages}</span>
+                ) : (
+                  <span className="notif-status-dot-green" title="All caught up"></span>
+                )}
+              </button>
+            </div>
+
+            <div className="sub-navbar-center">
+              {incomingToast ? (
+                <div
+                  className="notif-preview-item active-toast"
+                  onClick={() => {
+                    handleOpenChatWithContact(incomingToast.contactObj);
+                    setIncomingToast(null);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Click to view new message"
+                >
+                  <span className="notif-pulse-dot"></span>
+                  <span className="notif-preview-sender">{incomingToast.contactName}:</span>
+                  <span className="notif-preview-text">{incomingToast.lastMessage}</span>
+                </div>
+              ) : recentConversations.find((c) => c && c.unread > 0 && !c.isSentByMe) ? (
+                (() => {
+                  const unreadConv = recentConversations.find((c) => c && c.unread > 0 && !c.isSentByMe);
+                  return (
+                    <div
+                      className="notif-preview-item unread-conv"
+                      onClick={() => {
+                        handleOpenChatWithContact({
+                          name: unreadConv.contactName || unreadConv.contact,
+                          username: unreadConv.username || unreadConv.contact,
+                          phone: unreadConv.phone || '',
+                          avatar: unreadConv.avatar || '',
+                          status: unreadConv.status || '',
+                        });
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      title="Click to open unread conversation"
+                    >
+                      <span className="notif-unread-indicator-dot"></span>
+                      <span className="notif-preview-sender">{unreadConv.contactName || unreadConv.contact}:</span>
+                      <span className="notif-preview-text">{unreadConv.lastMessage}</span>
+                    </div>
+                  );
+                })()
+              ) : recentConversations.length > 0 ? (
+                <div
+                  className="notif-preview-item idle-conv"
+                  onClick={handleOpenMessagesView}
+                  role="button"
+                  tabIndex={0}
+                  title="Click to open messages"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="notif-idle-icon">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span className="notif-idle-label">Recent:</span>
+                  <span className="notif-preview-sender">{recentConversations[0]?.contactName || recentConversations[0]?.contact}:</span>
+                  <span className="notif-preview-text">{recentConversations[0]?.lastMessage}</span>
+                </div>
+              ) : (
+                <div className="notif-preview-item empty" onClick={handleOpenMessagesView} role="button" tabIndex={0}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="notif-idle-icon">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span>Message Notifications • All caught up</span>
+                </div>
+              )}
+            </div>
+
+            <div className="sub-navbar-right">
+              {incomingToast && (
+                <button
+                  type="button"
+                  className="notif-quick-btn notif-toast-dismiss"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIncomingToast(null);
+                  }}
+                  title="Dismiss notification"
+                  aria-label="Dismiss notification"
+                >
+                  ✕
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={`notif-quick-btn sound-toggle ${!isSoundEnabled ? 'muted' : ''}`}
+                onClick={() => setIsSoundEnabled((prev) => !prev)}
+                title={isSoundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+                aria-label={isSoundEnabled ? 'Mute notification sound' : 'Unmute notification sound'}
+              >
+                {isSoundEnabled ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <line x1="23" y1="9" x2="17" y2="15"></line>
+                    <line x1="17" y1="9" x2="23" y2="15"></line>
+                  </svg>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`notif-quick-btn open-chat-action ${currentView === 'messages' ? 'active' : ''}`}
+                onClick={handleOpenMessagesView}
+                title="Open Messages Inbox"
+                aria-label="Open Messages Inbox"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span className="notif-btn-label">Messages</span>
+              </button>
+            </div>
+
+            {/* Notification Dropdown Popover */}
+            {isNotifDropdownOpen && (
+              <div className="notif-dropdown-popover" ref={notifDropdownRef}>
+                <div className="notif-dropdown-header">
+                  <div className="notif-dropdown-header-left">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span className="notif-dropdown-title">Message Notifications</span>
+                  </div>
+                  {totalUnreadMessages > 0 ? (
+                    <span className="notif-dropdown-badge">{totalUnreadMessages} unread</span>
+                  ) : (
+                    <span className="notif-dropdown-badge-clear">All caught up</span>
+                  )}
+                </div>
+
+                <div className="notif-dropdown-list">
+                  {recentConversations.length === 0 ? (
+                    <div className="notif-dropdown-empty">
+                      <p>No message notifications yet</p>
+                      <small>Incoming and sent messages will appear here.</small>
+                    </div>
+                  ) : (
+                    recentConversations.slice(0, 8).map((conv) => (
+                      <div
+                        key={conv.contact}
+                        className={`notif-dropdown-item ${conv.unread > 0 ? 'unread' : ''}`}
+                        onClick={() => {
+                          handleOpenChatWithContact({
+                            name: conv.contactName || conv.contact,
+                            username: conv.username || conv.contact,
+                            phone: conv.phone || '',
+                            avatar: conv.avatar || '',
+                            status: conv.status || '',
+                          });
+                          setIsNotifDropdownOpen(false);
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleOpenChatWithContact({
+                              name: conv.contactName || conv.contact,
+                              username: conv.username || conv.contact,
+                              phone: conv.phone || '',
+                              avatar: conv.avatar || '',
+                              status: conv.status || '',
+                            });
+                            setIsNotifDropdownOpen(false);
+                          }
+                        }}
+                      >
+                        <div
+                          className="notif-item-avatar"
+                          style={{
+                            backgroundColor: conv.avatar ? 'transparent' : getAvatarColor(conv.contactName || conv.contact),
+                          }}
+                        >
+                          {conv.avatar ? (
+                            <img src={conv.avatar} alt={conv.contactName || conv.contact} className="notif-item-avatar-img" />
+                          ) : (
+                            (conv.contactName || conv.contact || '?').slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div className="notif-item-info">
+                          <div className="notif-item-top">
+                            <span className="notif-item-name">{conv.contactName || conv.contact}</span>
+                            <span className="notif-item-time">{conv.lastTime || ''}</span>
+                          </div>
+                          <div className="notif-item-bottom">
+                            <span className="notif-item-snippet">{conv.lastMessage || 'Message'}</span>
+                            {conv.unread > 0 && (
+                              <span className="notif-item-unread-dot" title={`${conv.unread} unread`}></span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="notif-dropdown-footer">
                   <button
                     type="button"
-                    className="incoming-msg-btn view"
+                    className="notif-footer-btn"
                     onClick={() => {
-                      handleOpenChatWithContact(incomingToast.contactObj);
-                      setIncomingToast(null);
+                      handleOpenMessagesView();
+                      setIsNotifDropdownOpen(false);
                     }}
                   >
-                    View Chat
-                  </button>
-                  <button
-                    type="button"
-                    className="incoming-msg-btn dismiss"
-                    onClick={() => setIncomingToast(null)}
-                    aria-label="Dismiss notification"
-                  >
-                    ✕
+                    View All in Messages Inbox
                   </button>
                 </div>
               </div>
             )}
-          </div>
+          </nav>
 
           <main
             className={`workspace-main ${currentView === 'messages' ? 'chat-main-active' : ''}`}
