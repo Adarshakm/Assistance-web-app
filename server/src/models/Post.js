@@ -45,3 +45,4 @@ postSchema.index({ createdAt: -1 });
 const Post = mongoose.models.Post || mongoose.model('Post', postSchema);
 
 export default Post;
+

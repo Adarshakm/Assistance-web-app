@@ -761,6 +761,7 @@ function App() {
   // Text posts state for "What's Happening Around You"
   const [postContent, setPostContent] = useState('');
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+  const [postFeedback, setPostFeedback] = useState(null);
   const [posts, setPosts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_posts');
@@ -770,14 +771,34 @@ function App() {
     }
   });
 
+  // Automatically clear post feedback after 6 seconds
+  useEffect(() => {
+    if (postFeedback) {
+      const timer = setTimeout(() => setPostFeedback(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [postFeedback]);
+
   // Fetch posts from backend and poll for real-time updates across all users
   const fetchPosts = async () => {
     try {
-      const res = await fetch(`/api/posts?_t=${Date.now()}`);
+      const res = await fetch(`/api/posts?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.posts)) {
-          setPosts(data.posts);
+          // Merge server posts while retaining any post published in the last 15 seconds
+          setPosts((prev) => {
+            const serverIds = new Set(data.posts.map((p) => p.id));
+            const localPending = prev.filter(
+              (p) => !serverIds.has(p.id) && Date.now() - (p._localCreatedAt || 0) < 15000
+            );
+            return [...localPending, ...data.posts];
+          });
           try {
             localStorage.setItem('assistance_posts', JSON.stringify(data.posts));
           } catch {}
@@ -1672,59 +1693,62 @@ function App() {
   };
 
   const handleCreatePost = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const trimmed = postContent.trim();
     if (!trimmed || isSubmittingPost) return;
 
     setIsSubmittingPost(true);
+    setPostFeedback(null);
+
+    // Keep payload lightweight (< 1KB).
+    // Never send multi-megabyte base64 strings in authorAvatar over mobile networks!
+    const safeAvatar =
+      profilePicture && typeof profilePicture === 'string' && profilePicture.length < 1000
+        ? profilePicture
+        : '';
+
     try {
       const res = await fetch('/api/posts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify({
           author: loggedInUser || 'User',
+          authorName: loggedInUser || 'User',
           content: trimmed,
-          authorAvatar: profilePicture || '',
+          authorAvatar: safeAvatar,
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && data.post) {
-        setPosts((prev) => [data.post, ...prev.filter((p) => p.id !== data.post.id)]);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data && data.success && data.post) {
+        // Tag with local creation timestamp to protect from any immediate polling race condition
+        const postWithTag = { ...data.post, _localCreatedAt: Date.now() };
+        setPosts((prev) => [postWithTag, ...prev.filter((p) => p.id !== data.post.id)]);
         setPostContent('');
+        setPostFeedback(null);
         try {
-          localStorage.setItem('assistance_posts', JSON.stringify([data.post, ...posts]));
+          localStorage.setItem(
+            'assistance_posts',
+            JSON.stringify([data.post, ...posts.filter((p) => p.id !== data.post.id)])
+          );
         } catch {}
       } else {
-        // Fallback to local post if offline
-        const fallbackPost = {
-          id: Date.now().toString(),
-          author: loggedInUser || 'User',
-          authorName: loggedInUser || 'User',
-          authorAvatar: profilePicture || '',
-          content: trimmed,
-          likes: [],
-          likesCount: 0,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setPosts((prev) => [fallbackPost, ...prev]);
-        setPostContent('');
+        const errMsg =
+          (data && (data.error || data.message)) ||
+          `Failed to publish post (Server HTTP ${res.status}).`;
+        console.error('[Create Post Error]:', errMsg);
+        setPostFeedback({ type: 'error', text: errMsg });
       }
     } catch (err) {
-      console.error('[Create Post Error]:', err);
-      // Fallback optimistic post
-      const fallbackPost = {
-        id: Date.now().toString(),
-        author: loggedInUser || 'User',
-        authorName: loggedInUser || 'User',
-        authorAvatar: profilePicture || '',
-        content: trimmed,
-        likes: [],
-        likesCount: 0,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setPosts((prev) => [fallbackPost, ...prev]);
-      setPostContent('');
+      console.error('[Create Post Network Error]:', err);
+      setPostFeedback({
+        type: 'error',
+        text: 'Network error while posting. Please check your connection and tap Post again.',
+      });
     } finally {
       setIsSubmittingPost(false);
     }
@@ -5639,6 +5663,11 @@ function App() {
                     rows={3}
                     aria-label="Create a text post"
                   />
+                  {postFeedback && (
+                    <div className={`create-post-feedback ${postFeedback.type}`} role="alert">
+                      {postFeedback.text}
+                    </div>
+                  )}
                   <div className="create-post-actions">
                     <button
                       type="submit"

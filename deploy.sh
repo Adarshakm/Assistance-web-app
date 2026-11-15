@@ -57,9 +57,13 @@ fi
 # 5. Reload Nginx if active
 if command -v nginx >/dev/null 2>&1; then
   echo "🌐 Reloading Nginx reverse proxy..."
-  if systemctl is-active --quiet nginx; then
+  # Ensure Nginx allows mobile image & payload uploads without 413 error
+  if [ -d /etc/nginx/conf.d ]; then
+    echo "client_max_body_size 25M;" | sudo tee /etc/nginx/conf.d/body_size.conf >/dev/null 2>&1 || true
+  fi
+  if systemctl is-active --quiet nginx 2>/dev/null; then
     sudo systemctl reload nginx || systemctl reload nginx || true
-    echo "✅ Nginx reloaded successfully."
+    echo "✅ Nginx reloaded successfully with 25M upload limit."
   fi
 fi
 

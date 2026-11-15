@@ -15,6 +15,11 @@ const escapeRegex = (string = '') => String(string).replace(/[.*+?^${}()|[\]\\]/
  */
 router.get('/', async (req, res) => {
   try {
+    // Disable any HTTP / browser caching for real-time live feed sync across devices
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
     const rawPosts = await Post.find().sort({ createdAt: -1 }).limit(limit).lean();
 
@@ -60,26 +65,29 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { author, content, authorName, authorAvatar, media = '' } = req.body;
+    const { author, content, authorName, authorAvatar, media = '' } = req.body || {};
 
-    if (!author || !content || !content.trim()) {
-      return res.status(400).json({ error: 'Author and content are required' });
+    if (!author || !content || !String(content).trim()) {
+      return res.status(400).json({ success: false, error: 'Author and content are required' });
     }
 
     const cleanAuthor = String(author).trim().toLowerCase();
     const cleanContent = String(content).trim();
 
     // Look up author info if not provided
-    let finalAuthorName = authorName || cleanAuthor;
-    let finalAuthorAvatar = authorAvatar || '';
+    let finalAuthorName = authorName ? String(authorName).trim() : cleanAuthor;
+    // Discard oversized base64 avatars from payload to prevent bloated DB records & 413s
+    let finalAuthorAvatar = (authorAvatar && typeof authorAvatar === 'string' && authorAvatar.length < 50000) ? authorAvatar : '';
 
-    if (!finalAuthorAvatar || !authorName) {
-      const u = await User.findOne({ username: { $regex: '^' + escapeRegex(cleanAuthor) + '$', $options: 'i' } })
-        .select('displayName avatar username')
-        .lean();
-      if (u) {
-        if (!authorName) finalAuthorName = u.displayName || u.username;
-        if (!finalAuthorAvatar && u.avatar) finalAuthorAvatar = u.avatar;
+    const u = await User.findOne({ username: { $regex: '^' + escapeRegex(cleanAuthor) + '$', $options: 'i' } })
+      .select('displayName avatar username')
+      .lean();
+    if (u) {
+      if (!authorName || finalAuthorName === cleanAuthor) {
+        finalAuthorName = u.displayName || u.username || cleanAuthor;
+      }
+      if (!finalAuthorAvatar && u.avatar) {
+        finalAuthorAvatar = u.avatar;
       }
     }
 
@@ -114,7 +122,7 @@ router.post('/', async (req, res) => {
     });
   } catch (err) {
     console.error('[Post Route Error - POST /]:', err);
-    return res.status(500).json({ error: 'Failed to create post', details: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to create post', details: err.message });
   }
 });
 
@@ -188,3 +196,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 export default router;
+
