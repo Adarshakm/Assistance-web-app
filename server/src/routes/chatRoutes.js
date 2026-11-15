@@ -5,6 +5,11 @@ import User from '../models/User.js';
 const router = express.Router();
 
 /**
+ * Escape special regex characters
+ */
+const escapeRegex = (string = '') => String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
  * Normalize a phone number to its last 10 digits
  */
 const normalizeDigits = (str = '') => {
@@ -13,36 +18,63 @@ const normalizeDigits = (str = '') => {
 };
 
 /**
+ * Generate a regex pattern that matches 10 digits regardless of formatting/spaces/hyphens
+ */
+const makePhonePattern = (str = '') => {
+  const digits = String(str).replace(/\D/g, '');
+  if (!digits || digits.length < 5) return null;
+  const slice = digits.length >= 10 ? digits.slice(-10) : digits;
+  return slice.split('').join('\\D*');
+};
+
+/**
  * Resolve all possible aliases (username, phone, email, display name) for a user
  */
 const resolveUserAliases = async (identifier = '') => {
   if (!identifier) return [];
-  const raw = String(identifier).trim().toLowerCase();
-  const digits = normalizeDigits(identifier);
+  const raw = String(identifier).trim();
+  const lowerRaw = raw.toLowerCase();
+  const digits = normalizeDigits(raw);
 
-  const aliases = new Set([raw]);
+  const aliases = new Set([raw, lowerRaw]);
   if (digits) {
     aliases.add(digits);
   }
 
   try {
+    const escaped = escapeRegex(raw);
     const query = {
-      $or: [{ username: raw }, { displayName: raw }, { email: raw }],
+      $or: [
+        { username: { $regex: '^' + escaped + '$', $options: 'i' } },
+        { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
+        { email: { $regex: '^' + escaped + '$', $options: 'i' } },
+      ],
     };
-    if (digits) {
-      query.$or.push({ phone: { $regex: digits + '$' } });
+
+    const phonePattern = makePhonePattern(raw);
+    if (phonePattern) {
+      query.$or.push({ phone: { $regex: phonePattern } });
     }
 
     const matchedUsers = await User.find(query, 'username displayName phone email').lean();
     for (const u of matchedUsers) {
-      if (u.username) aliases.add(String(u.username).trim().toLowerCase());
-      if (u.displayName) aliases.add(String(u.displayName).trim().toLowerCase());
+      if (u.username) {
+        aliases.add(String(u.username).trim());
+        aliases.add(String(u.username).trim().toLowerCase());
+      }
+      if (u.displayName) {
+        aliases.add(String(u.displayName).trim());
+        aliases.add(String(u.displayName).trim().toLowerCase());
+      }
       if (u.phone) {
+        aliases.add(String(u.phone).trim());
         aliases.add(String(u.phone).trim().toLowerCase());
         const uDigits = normalizeDigits(u.phone);
         if (uDigits) aliases.add(uDigits);
       }
-      if (u.email) aliases.add(String(u.email).trim().toLowerCase());
+      if (u.email) {
+        aliases.add(String(u.email).trim().toLowerCase());
+      }
     }
   } catch (err) {
     console.warn('[Resolve User Aliases Error]:', err.message);
@@ -56,9 +88,14 @@ const resolveUserAliases = async (identifier = '') => {
  */
 const formatMessage = (msg, userAliases = []) => {
   const senderStr = String(msg?.sender || '').trim().toLowerCase();
+  const digits = normalizeDigits(senderStr);
   const isMe =
     Array.isArray(userAliases) && userAliases.length > 0
-      ? userAliases.includes(senderStr)
+      ? Boolean(
+          userAliases.includes(senderStr) ||
+            userAliases.includes(String(msg?.sender || '').trim()) ||
+            (digits && userAliases.includes(digits))
+        )
       : false;
 
   return {
@@ -106,12 +143,17 @@ router.post('/send', async (req, res) => {
     let targetSenderName = senderName || cleanSender;
 
     try {
-      const recipientDigits = normalizeDigits(cleanRecipient);
+      const escapedRecipient = escapeRegex(cleanRecipient);
       const rQuery = {
-        $or: [{ username: cleanRecipient }, { displayName: cleanRecipient }],
+        $or: [
+          { username: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
+          { displayName: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
+          { email: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
+        ],
       };
-      if (recipientDigits) {
-        rQuery.$or.push({ phone: { $regex: recipientDigits + '$' } });
+      const rPattern = makePhonePattern(cleanRecipient);
+      if (rPattern) {
+        rQuery.$or.push({ phone: { $regex: rPattern } });
       }
       const foundRecipient = await User.findOne(rQuery, 'username displayName phone').lean();
       if (foundRecipient && foundRecipient.username) {
@@ -119,12 +161,17 @@ router.post('/send', async (req, res) => {
         targetRecipientName = foundRecipient.displayName || foundRecipient.username;
       }
 
-      const senderDigits = normalizeDigits(cleanSender);
+      const escapedSender = escapeRegex(cleanSender);
       const sQuery = {
-        $or: [{ username: cleanSender }, { displayName: cleanSender }],
+        $or: [
+          { username: { $regex: '^' + escapedSender + '$', $options: 'i' } },
+          { displayName: { $regex: '^' + escapedSender + '$', $options: 'i' } },
+          { email: { $regex: '^' + escapedSender + '$', $options: 'i' } },
+        ],
       };
-      if (senderDigits) {
-        sQuery.$or.push({ phone: { $regex: senderDigits + '$' } });
+      const sPattern = makePhonePattern(cleanSender);
+      if (sPattern) {
+        sQuery.$or.push({ phone: { $regex: sPattern } });
       }
       const foundSender = await User.findOne(sQuery, 'username displayName phone').lean();
       if (foundSender && foundSender.username) {
@@ -196,6 +243,9 @@ router.post('/send', async (req, res) => {
  * Fetch all messages between user1 and user2 with universal alias resolution
  */
 router.get('/conversation', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
     const { user1, user2 } = req.query;
 
@@ -315,6 +365,9 @@ router.post('/simulate-reply', async (req, res) => {
  * Get all recent conversations for a user with unread counts and contact profiles
  */
 router.get('/recent', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
     const { user } = req.query;
 
@@ -351,7 +404,13 @@ router.get('/recent', async (req, res) => {
       // Skip invalid entries missing both sender and recipient
       if (!lowerSender && !lowerRecipient) continue;
 
-      const isSender = userAliases.includes(lowerSender);
+      const senderDigits = normalizeDigits(rawSender);
+      const isSender = Boolean(
+        userAliases.includes(lowerSender) ||
+        userAliases.includes(rawSender) ||
+        (senderDigits && userAliases.includes(senderDigits))
+      );
+
       const otherUser = isSender
         ? (lowerRecipient || 'unknown')
         : (lowerSender || 'unknown');
@@ -383,12 +442,17 @@ router.get('/recent', async (req, res) => {
     // Enrich conversations with registered user details (avatar, display name, status, phone)
     for (const conv of conversations) {
       try {
-        const digits = normalizeDigits(conv.contact);
+        const escapedContact = escapeRegex(conv.contact);
         const query = {
-          $or: [{ username: conv.contact }, { displayName: conv.contact }],
+          $or: [
+            { username: { $regex: '^' + escapedContact + '$', $options: 'i' } },
+            { displayName: { $regex: '^' + escapedContact + '$', $options: 'i' } },
+            { email: { $regex: '^' + escapedContact + '$', $options: 'i' } },
+          ],
         };
-        if (digits) {
-          query.$or.push({ phone: { $regex: digits + '$' } });
+        const cPattern = makePhonePattern(conv.contact);
+        if (cPattern) {
+          query.$or.push({ phone: { $regex: cPattern } });
         }
 
         const u = await User.findOne(query, 'username displayName avatar phone status').lean();

@@ -1768,6 +1768,55 @@ function App() {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSimulatingReply, setIsSimulatingReply] = useState(false);
   const messagesEndRef = useRef(null);
+  const [incomingToast, setIncomingToast] = useState(null);
+  const lastNotifiedMessageRef = useRef(new Map());
+  const isInitialRecentFetchRef = useRef(true);
+
+  const playIncomingChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  };
+
+  const handleOpenMessagesView = () => {
+    if (currentView === 'messages') {
+      if (activeChatContact) {
+        setActiveChatContact(null);
+        try {
+          localStorage.removeItem('assistance_active_chat_contact');
+        } catch {}
+      } else {
+        navigateTo('blank');
+      }
+    } else {
+      setActiveChatContact(null);
+      try {
+        localStorage.removeItem('assistance_active_chat_contact');
+      } catch {}
+      navigateTo('messages');
+    }
+  };
+
+  useEffect(() => {
+    if (!incomingToast) return;
+    const timer = setTimeout(() => {
+      setIncomingToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [incomingToast]);
 
   const normalizePhoneKey = (phone = '') => {
     const digits = String(phone).replace(/\D/g, '');
@@ -1850,10 +1899,10 @@ function App() {
 
   // Fetch recent conversations for inbox and unread badges
   const fetchRecentConversations = async () => {
-    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim().toLowerCase();
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim();
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}`, {
+      const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}&_t=${Date.now()}`, {
         cache: 'no-store',
       });
       if (res.ok) {
@@ -1861,6 +1910,52 @@ function App() {
         if (data.success && Array.isArray(data.conversations)) {
           setRecentConversations(data.conversations);
           setTotalUnreadMessages(data.totalUnread || 0);
+
+          // Check for incoming unread messages from contacts to alert the user
+          if (isInitialRecentFetchRef.current) {
+            data.conversations.forEach((c) => {
+              if (c.contact && c.lastMessage) {
+                lastNotifiedMessageRef.current.set(c.contact, c.lastMessage);
+              }
+            });
+            isInitialRecentFetchRef.current = false;
+          } else {
+            let incomingAlert = null;
+            for (const conv of data.conversations) {
+              if (conv.unread > 0 && !conv.isSentByMe && conv.contact && conv.lastMessage) {
+                const prevMsg = lastNotifiedMessageRef.current.get(conv.contact);
+                if (prevMsg !== conv.lastMessage) {
+                  lastNotifiedMessageRef.current.set(conv.contact, conv.lastMessage);
+                  const isCurrentActiveChat =
+                    currentView === 'messages' &&
+                    activeChatContact &&
+                    (getActiveChatKey(activeChatContact) === getActiveChatKey(conv) ||
+                      (activeChatContact.username &&
+                        conv.username &&
+                        activeChatContact.username.toLowerCase() === conv.username.toLowerCase()));
+
+                  if (!isCurrentActiveChat) {
+                    incomingAlert = conv;
+                  }
+                }
+              }
+            }
+
+            if (incomingAlert) {
+              playIncomingChime();
+              setIncomingToast({
+                contactName: incomingAlert.contactName || incomingAlert.contact,
+                lastMessage: incomingAlert.lastMessage || 'New message received',
+                contactObj: {
+                  name: incomingAlert.contactName || incomingAlert.contact,
+                  username: incomingAlert.username || incomingAlert.contact,
+                  phone: incomingAlert.phone || '',
+                  avatar: incomingAlert.avatar || '',
+                  status: incomingAlert.status || 'Active on Assistance',
+                },
+              });
+            }
+          }
         }
       }
     } catch {
@@ -1870,7 +1965,7 @@ function App() {
 
   useEffect(() => {
     fetchRecentConversations();
-    const interval = setInterval(fetchRecentConversations, 3000);
+    const interval = setInterval(fetchRecentConversations, 2500);
     return () => clearInterval(interval);
   }, [loggedInUser, currentView]);
 
@@ -1879,28 +1974,42 @@ function App() {
     if (!contact) return;
     const contactKey = getActiveChatKey(contact);
     if (!contactKey) return;
-    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+    const lowerUser = currentUser.toLowerCase();
 
     try {
       const res = await fetch(
-        `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}`,
+        `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&_t=${Date.now()}`,
         { cache: 'no-store' }
       );
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.messages)) {
-          const normalized = data.messages.map((m) => ({
-            ...m,
-            isSent:
+          const normalized = data.messages.map((m) => {
+            const senderStr = (m.sender || '').trim().toLowerCase();
+            const isMe =
               m.isSent === true ||
-              (m.sender || '').toLowerCase() === currentUser ||
-              m.sender === 'me',
-          }));
+              senderStr === lowerUser ||
+              senderStr === 'me';
+            return {
+              ...m,
+              isSent: isMe,
+            };
+          });
+
           setChatMessages((prev) => {
             const updated = {
               ...prev,
               [contactKey]: normalized,
             };
+            if (contact.username) {
+              const uLower = contact.username.toLowerCase();
+              updated[uLower] = normalized;
+              updated[contact.username] = normalized;
+            }
+            if (contact.phone) {
+              updated[contact.phone] = normalized;
+            }
             try {
               localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
             } catch {}
@@ -1915,7 +2024,7 @@ function App() {
     }
   };
 
-  // Poll conversation when messages view is open
+  // Poll conversation when messages view is open (snappy 1.5s interval)
   useEffect(() => {
     if (currentView !== 'messages' || !activeChatContact) return;
 
@@ -1923,7 +2032,7 @@ function App() {
 
     const intervalId = setInterval(() => {
       fetchActiveConversation(activeChatContact);
-    }, 2500);
+    }, 1500);
 
     return () => clearInterval(intervalId);
   }, [currentView, activeChatContact, loggedInUser]);
@@ -2699,7 +2808,7 @@ function App() {
                 type="button"
                 className={`sidebar-nav-item ${currentView === 'messages' ? 'active' : ''}`}
                 id="messages-btn"
-                onClick={() => navigateTo(currentView === 'messages' ? 'blank' : 'messages')}
+                onClick={handleOpenMessagesView}
                 title="Messages"
                 aria-label="Messages"
               >
@@ -3201,7 +3310,7 @@ function App() {
                 type="button"
                 className={`navbar-item ${currentView === 'messages' ? 'active' : ''}`}
                 id="navbar-messages-btn"
-                onClick={() => navigateTo(currentView === 'messages' ? 'blank' : 'messages')}
+                onClick={handleOpenMessagesView}
                 title="Messages"
                 aria-label="Messages"
               >
@@ -3226,7 +3335,40 @@ function App() {
             </div>
           </nav>
 
-          <div className="notification-bar" id="notification-bar" aria-label="Notification Bar"></div>
+          <div className="notification-bar" id="notification-bar" aria-label="Notification Bar">
+            {incomingToast && (
+              <div className="incoming-msg-banner" role="alert">
+                <div className="incoming-msg-left">
+                  <span className="incoming-msg-dot"></span>
+                  <span className="incoming-msg-icon">💬</span>
+                  <div className="incoming-msg-details">
+                    <strong className="incoming-msg-sender">{incomingToast.contactName}</strong>
+                    <span className="incoming-msg-snippet">{incomingToast.lastMessage}</span>
+                  </div>
+                </div>
+                <div className="incoming-msg-actions">
+                  <button
+                    type="button"
+                    className="incoming-msg-btn view"
+                    onClick={() => {
+                      handleOpenChatWithContact(incomingToast.contactObj);
+                      setIncomingToast(null);
+                    }}
+                  >
+                    View Chat
+                  </button>
+                  <button
+                    type="button"
+                    className="incoming-msg-btn dismiss"
+                    onClick={() => setIncomingToast(null)}
+                    aria-label="Dismiss notification"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <main
             className={`workspace-main ${currentView === 'messages' ? 'chat-main-active' : ''}`}
