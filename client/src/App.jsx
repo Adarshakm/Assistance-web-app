@@ -762,6 +762,10 @@ function App() {
   const [postContent, setPostContent] = useState('');
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [postFeedback, setPostFeedback] = useState(null);
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editingPostContent, setEditingPostContent] = useState('');
+  const [isSavingPostEdit, setIsSavingPostEdit] = useState(false);
+  const [editPostFeedback, setEditPostFeedback] = useState(null);
   const [posts, setPosts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_posts');
@@ -1795,6 +1799,80 @@ function App() {
       });
     } catch (err) {
       console.error('[Delete Post Error]:', err);
+    }
+  };
+
+  const handleStartEditPost = (post) => {
+    setEditingPostId(post.id);
+    setEditingPostContent(post.content || '');
+    setEditPostFeedback(null);
+  };
+
+  const handleCancelEditPost = () => {
+    setEditingPostId(null);
+    setEditingPostContent('');
+    setEditPostFeedback(null);
+  };
+
+  const handleSaveEditPost = async (postId) => {
+    const trimmed = editingPostContent.trim();
+    if (!trimmed || isSavingPostEdit) return;
+
+    setIsSavingPostEdit(true);
+    setEditPostFeedback(null);
+
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: trimmed,
+          user: loggedInUser,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data && data.success && data.post) {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  content: data.post.content,
+                  isEdited: true,
+                  editedAt: data.post.editedAt || new Date().toISOString(),
+                }
+              : p
+          )
+        );
+        try {
+          const currentPosts = JSON.parse(localStorage.getItem('assistance_posts') || '[]');
+          const updated = currentPosts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  content: data.post.content,
+                  isEdited: true,
+                  editedAt: data.post.editedAt || new Date().toISOString(),
+                }
+              : p
+          );
+          localStorage.setItem('assistance_posts', JSON.stringify(updated));
+        } catch {}
+        setEditingPostId(null);
+        setEditingPostContent('');
+      } else {
+        const errorMsg =
+          (data && (data.error || data.message)) ||
+          `Failed to update post (Server HTTP ${res.status})`;
+        setEditPostFeedback(errorMsg);
+      }
+    } catch (err) {
+      console.error('[Edit Post Error]:', err);
+      setEditPostFeedback('Network connection error while saving edit.');
+    } finally {
+      setIsSavingPostEdit(false);
     }
   };
 
@@ -5712,9 +5790,60 @@ function App() {
                               <span className="post-handle">@{post.author || 'user'}</span>
                             </div>
                           </div>
-                          <span className="post-time">{post.time || post.timestamp}</span>
+                          <span className="post-time">
+                            {post.time || post.timestamp}
+                            {post.isEdited && (
+                              <span
+                                className="post-edited-tag"
+                                title={
+                                  post.editedAt
+                                    ? `Edited at ${new Date(post.editedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                    : 'Edited'
+                                }
+                              >
+                                {' '}· Edited
+                              </span>
+                            )}
+                          </span>
                         </div>
-                        <p className="post-content">{post.content}</p>
+                        {editingPostId === post.id ? (
+                          <div className="post-edit-container">
+                            <textarea
+                              className="post-edit-textarea"
+                              value={editingPostContent}
+                              onChange={(e) => setEditingPostContent(e.target.value)}
+                              rows={3}
+                              placeholder="Edit your post..."
+                              autoFocus
+                              aria-label="Edit post content"
+                            />
+                            {editPostFeedback && (
+                              <div className="post-edit-feedback-error" role="alert">
+                                {editPostFeedback}
+                              </div>
+                            )}
+                            <div className="post-edit-actions">
+                              <button
+                                type="button"
+                                className="post-edit-btn cancel"
+                                onClick={handleCancelEditPost}
+                                disabled={isSavingPostEdit}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="post-edit-btn save"
+                                onClick={() => handleSaveEditPost(post.id)}
+                                disabled={!editingPostContent.trim() || isSavingPostEdit}
+                              >
+                                {isSavingPostEdit ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="post-content">{post.content}</p>
+                        )}
 
                         <div className="post-footer">
                           <button
@@ -5730,18 +5859,35 @@ function App() {
                           </button>
 
                           {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
-                            <button
-                              type="button"
-                              className="post-action-btn delete-btn"
-                              onClick={() => handleDeletePost(post.id)}
-                              title="Delete post"
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              </svg>
-                              <span>Delete</span>
-                            </button>
+                            <>
+                              {editingPostId !== post.id && (
+                                <button
+                                  type="button"
+                                  className="post-action-btn edit-btn"
+                                  onClick={() => handleStartEditPost(post)}
+                                  title="Edit post"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  </svg>
+                                  <span>Edit</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="post-action-btn delete-btn"
+                                onClick={() => handleDeletePost(post.id)}
+                                title="Delete post"
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 6 5 6 21 6"></polyline>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                <span>Delete</span>
+                              </button>
+                            </>
                           )}
                         </div>
                       </article>

@@ -48,6 +48,8 @@ router.get('/', async (req, res) => {
         likes: p.likes || [],
         likesCount: (p.likes || []).length,
         time: p.time || new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isEdited: p.isEdited || false,
+        editedAt: p.editedAt || null,
         createdAt: p.createdAt,
       };
     });
@@ -167,6 +169,72 @@ router.post('/:id/like', async (req, res) => {
     console.error('[Post Route Error - Like]:', err);
     return res.status(500).json({ error: 'Failed to toggle like', details: err.message });
   }
+});
+
+/**
+ * PUT /api/posts/:id
+ * Edit an existing post
+ */
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, user, username } = req.body || {};
+    const rawUser = user || username;
+
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ success: false, error: 'Post content cannot be empty' });
+    }
+
+    if (!rawUser) {
+      return res.status(401).json({ success: false, error: 'User must be logged in to edit post' });
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+
+    const cleanUser = String(rawUser).trim().toLowerCase();
+    if (post.author !== cleanUser) {
+      return res.status(403).json({ success: false, error: 'Not authorized to edit this post' });
+    }
+
+    post.content = String(content).trim();
+    post.isEdited = true;
+    post.editedAt = new Date();
+
+    await post.save();
+
+    console.log(`[Post Edited] Post ${id} updated by @${cleanUser}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Post updated successfully',
+      post: {
+        id: post._id.toString(),
+        author: post.author,
+        authorName: post.authorName,
+        authorAvatar: post.authorAvatar,
+        content: post.content,
+        media: post.media,
+        likes: post.likes,
+        likesCount: (post.likes || []).length,
+        time: post.time,
+        isEdited: post.isEdited,
+        editedAt: post.editedAt,
+        createdAt: post.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error('[Post Route Error - PUT /:id]:', err);
+    return res.status(500).json({ success: false, error: 'Failed to update post', details: err.message });
+  }
+});
+
+router.patch('/:id', async (req, res) => {
+  // Delegate to PUT handler
+  req.method = 'PUT';
+  router.handle(req, res);
 });
 
 /**

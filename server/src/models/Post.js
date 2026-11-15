@@ -36,6 +36,14 @@ const postSchema = new mongoose.Schema(
       default: () =>
         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    editedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
