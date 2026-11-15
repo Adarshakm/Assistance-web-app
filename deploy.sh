@@ -34,21 +34,24 @@ if [ -d "$APP_DIR/client" ]; then
   cd "$APP_DIR"
 fi
 
-# 4. Restart Server process using PM2
+# 4. Restart Server process cleanly using PM2
 echo "🔄 Step 4/4: Reloading application with PM2..."
+# Kill any orphan process stuck on port 5000 so there are no port collisions
+fuser -k 5000/tcp 2>/dev/null || true
+
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 restart all --update-env || pm2 reload all --update-env || true
-  if ! pm2 list | grep -q "online"; then
-    echo "⚠️ Starting PM2 instance for assistance-server..."
-    cd "$APP_DIR/server"
-    pm2 delete all 2>/dev/null || true
-    pm2 start src/server.js --name "assistance-server"
-    pm2 save
-    cd "$APP_DIR"
-  fi
+  echo "🚀 Re-launching Node backend in PM2..."
+  pm2 delete all 2>/dev/null || true
+  cd "$APP_DIR/server"
+  pm2 start src/server.js --name "myapp" --update-env
+  pm2 save
+  cd "$APP_DIR"
   pm2 status
 else
-  echo "⚠️ PM2 not found globally. You can install it with: npm install -g pm2"
+  echo "⚠️ PM2 not found globally. Starting with node directly..."
+  cd "$APP_DIR/server"
+  nohup node src/server.js > server.log 2>&1 &
+  cd "$APP_DIR"
 fi
 
 # 5. Reload Nginx if active

@@ -36,12 +36,16 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     message: 'MERN backend server is running',
+    version: '2.0.2',
+    chatAvailable: true,
   });
 });
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     message: 'MERN backend server is running',
+    version: '2.0.2',
+    chatAvailable: true,
   });
 });
 
