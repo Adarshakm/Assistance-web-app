@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import SplashScreen from './components/SplashScreen.jsx';
 import { voiceCallService, callAudioSynthesizer } from './services/voiceCallService.js';
 
@@ -80,6 +80,16 @@ function App() {
       window.location.hash === '#following-feed'
     ) {
       return 'people-i-follow';
+    }
+    if (
+      window.location.pathname === '/friends-only' ||
+      window.location.hash === '#friends-only' ||
+      window.location.pathname === '/friends-only-feed' ||
+      window.location.hash === '#friends-only-feed' ||
+      window.location.pathname === '/friends-feed' ||
+      window.location.hash === '#friends-feed'
+    ) {
+      return 'friends-only';
     }
     if (
       window.location.pathname === '/photo-sharing' ||
@@ -272,6 +282,8 @@ function App() {
         ? '/whats-happening'
         : view === 'people-i-follow'
         ? '/people-i-follow'
+        : view === 'friends-only'
+        ? '/friends-only'
         : view === 'photo-sharing'
         ? '/photo-sharing'
         : view === 'video-sharing'
@@ -383,6 +395,15 @@ function App() {
         window.location.hash === '#following-feed'
       ) {
         setCurrentView('people-i-follow');
+      } else if (
+        window.location.pathname === '/friends-only' ||
+        window.location.hash === '#friends-only' ||
+        window.location.pathname === '/friends-only-feed' ||
+        window.location.hash === '#friends-only-feed' ||
+        window.location.pathname === '/friends-feed' ||
+        window.location.hash === '#friends-feed'
+      ) {
+        setCurrentView('friends-only');
       } else if (
         window.location.pathname === '/photo-sharing' ||
         window.location.hash === '#photo-sharing' ||
@@ -587,6 +608,7 @@ function App() {
         path === '/messages' ||
         path === '/whats-happening' ||
         path === '/people-i-follow' ||
+        path === '/friends-only' ||
         path === '/contacts' ||
         path === '/social-connections'
       ) {
@@ -735,6 +757,29 @@ function App() {
       return [];
     }
   });
+  const [friendsList, setFriendsList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_friends');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Effective friends list: explicit friends from accepted requests + mutual follows
+  const effectiveFriendsList = useMemo(() => {
+    const list = [...friendsList.map((u) => String(u).toLowerCase())];
+    followingList.forEach((u) => {
+      const lower = String(u).toLowerCase();
+      if (
+        followersList.some((f) => String(f).toLowerCase() === lower) &&
+        !list.includes(lower)
+      ) {
+        list.push(lower);
+      }
+    });
+    return list;
+  }, [friendsList, followingList, followersList]);
   const [activeFollowView, setActiveFollowView] = useState('all'); // 'all', 'followers', 'following'
   const [isAddingFollower, setIsAddingFollower] = useState(false);
   const [addFollowerInput, setAddFollowerInput] = useState('');
@@ -1295,6 +1340,12 @@ function App() {
               localStorage.setItem('assistance_received_friend_requests', JSON.stringify(data.user.friendRequestsReceived));
             } catch {}
           }
+          if (Array.isArray(data.user.friends)) {
+            setFriendsList(data.user.friends);
+            try {
+              localStorage.setItem('assistance_friends', JSON.stringify(data.user.friends));
+            } catch {}
+          }
         }
       })
       .catch(() => {});
@@ -1666,6 +1717,13 @@ function App() {
       setFollowingList(updatedFollowing);
       try {
         localStorage.setItem('assistance_following', JSON.stringify(updatedFollowing));
+      } catch {}
+    }
+    if (!friendsList.some((u) => u.toLowerCase() === cleanSender)) {
+      const updatedFriends = [...friendsList, cleanSender];
+      setFriendsList(updatedFriends);
+      try {
+        localStorage.setItem('assistance_friends', JSON.stringify(updatedFriends));
       } catch {}
     }
     setFriendRequestActionFeedback({ type: 'success', text: `Accepted friend request from ${cleanSender}` });
@@ -3338,6 +3396,7 @@ function App() {
     currentView === 'privacy' ||
     currentView === 'whats-happening' ||
     currentView === 'people-i-follow' ||
+    currentView === 'friends-only' ||
     currentView === 'photo-sharing' ||
     currentView === 'video-sharing' ||
     currentView === 'stories' ||
@@ -3974,6 +4033,25 @@ function App() {
                   <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
                 <span>People I Follow</span>
+              </button>
+
+              <button
+                type="button"
+                className={`navbar-item ${currentView === 'friends-only' ? 'active' : ''}`}
+                id="friends-only-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'friends-only' ? 'blank' : 'friends-only')
+                }
+                title="Friends-only feed"
+                aria-label="Friends-only feed"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>Friends-only feed</span>
               </button>
             </div>
 
@@ -5723,10 +5801,10 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : currentView === 'whats-happening' || currentView === 'people-i-follow' ? (
+          ) : currentView === 'whats-happening' || currentView === 'people-i-follow' || currentView === 'friends-only' ? (
             <div className="whats-happening-space" id="whats-happening-space">
               <div className="post-creator-container" id="post-creator-container">
-                {/* Feed Switcher Tabs: What's Happening Around You vs People I Follow */}
+                {/* Feed Switcher Tabs: What's Happening Around You vs People I Follow vs Friends-only feed */}
                 <div className="feed-tabs-switcher" role="tablist" aria-label="Feed selection tabs">
                   <button
                     type="button"
@@ -5740,7 +5818,7 @@ function App() {
                       <circle cx="12" cy="12" r="10"></circle>
                       <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                     </svg>
-                    <span>What's Happening Around You</span>
+                    <span>What's Happening</span>
                   </button>
                   <button
                     type="button"
@@ -5761,16 +5839,41 @@ function App() {
                       <span className="feed-tab-badge">{followingList.length}</span>
                     )}
                   </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-friends-only"
+                    aria-selected={currentView === 'friends-only'}
+                    className={`feed-tab-btn ${currentView === 'friends-only' ? 'active' : ''}`}
+                    onClick={() => navigateTo('friends-only')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>Friends-only feed</span>
+                    {effectiveFriendsList.length > 0 && (
+                      <span className="feed-tab-badge">{effectiveFriendsList.length}</span>
+                    )}
+                  </button>
                 </div>
 
                 {/* Header with Title and Live Updates Refresh */}
                 <div className="whats-happening-header">
                   <div className="whats-happening-title-wrap">
                     <h2 className="whats-happening-title">
-                      {currentView === 'people-i-follow' ? 'People I Follow' : "What's Happening Around You"}
+                      {currentView === 'friends-only'
+                        ? 'Friends-only feed'
+                        : currentView === 'people-i-follow'
+                        ? 'People I Follow'
+                        : "What's Happening Around You"}
                     </h2>
                     <p className="whats-happening-subtitle">
-                      {currentView === 'people-i-follow'
+                      {currentView === 'friends-only'
+                        ? `Exclusive moments and updates from your friends (${effectiveFriendsList.length}) and yourself`
+                        : currentView === 'people-i-follow'
                         ? `Updates and moments from people you follow (${followingList.length}) and yourself`
                         : 'Real-time public updates and moments from everyone'}
                     </p>
@@ -5813,8 +5916,10 @@ function App() {
                     id="create-post-textarea"
                     className="create-post-textarea"
                     placeholder={
-                      currentView === 'people-i-follow'
-                        ? "Share an update with the people you follow..."
+                      currentView === 'friends-only'
+                        ? 'Share something with your friends...'
+                        : currentView === 'people-i-follow'
+                        ? 'Share an update with the people you follow...'
                         : "What's happening around you?"
                     }
                     value={postContent}
@@ -5842,23 +5947,69 @@ function App() {
 
                 {/* Posts Feed */}
                 {(() => {
+                  const isFriendsFeed = currentView === 'friends-only';
                   const isFollowingFeed = currentView === 'people-i-follow';
-                  const displayedPosts = isFollowingFeed
-                    ? posts.filter((post) => {
-                        const authorLower = String(post.author || '').toLowerCase();
-                        const userLower = String(loggedInUser || '').toLowerCase();
-                        return (
-                          authorLower === userLower ||
-                          followingList.some((f) => String(f).toLowerCase() === authorLower)
-                        );
-                      })
-                    : posts;
+                  let displayedPosts = posts;
+
+                  if (isFriendsFeed) {
+                    displayedPosts = posts.filter((post) => {
+                      const authorLower = String(post.author || '').toLowerCase();
+                      const userLower = String(loggedInUser || '').toLowerCase();
+                      return (
+                        authorLower === userLower ||
+                        effectiveFriendsList.some((f) => String(f).toLowerCase() === authorLower)
+                      );
+                    });
+                  } else if (isFollowingFeed) {
+                    displayedPosts = posts.filter((post) => {
+                      const authorLower = String(post.author || '').toLowerCase();
+                      const userLower = String(loggedInUser || '').toLowerCase();
+                      return (
+                        authorLower === userLower ||
+                        followingList.some((f) => String(f).toLowerCase() === authorLower)
+                      );
+                    });
+                  }
 
                   return (
                     <div className="posts-list" id="posts-list">
                       {displayedPosts.length === 0 ? (
                         <div className="posts-empty-state">
-                          {isFollowingFeed ? (
+                          {isFriendsFeed ? (
+                            <>
+                              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                              </svg>
+                              <p className="posts-empty-title">
+                                {effectiveFriendsList.length === 0
+                                  ? 'No friends connected yet'
+                                  : 'No posts from your friends yet'}
+                              </p>
+                              <p className="posts-empty-subtitle">
+                                {effectiveFriendsList.length === 0
+                                  ? 'Connect with friends via Social Connections to see their exclusive posts and updates here.'
+                                  : 'When your friends share moments, they will appear here. Or start the conversation with an update above!'}
+                              </p>
+                              {effectiveFriendsList.length === 0 && (
+                                <button
+                                  type="button"
+                                  className="discover-follow-cta-btn"
+                                  onClick={() => navigateTo('social')}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                                    <line x1="23" y1="11" x2="17" y2="11"></line>
+                                  </svg>
+                                  <span>Find Friends to Connect</span>
+                                </button>
+                              )}
+                            </>
+                          ) : isFollowingFeed ? (
                             <>
                               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>

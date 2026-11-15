@@ -3970,7 +3970,7 @@ body,
   margin: 0 auto;
 }
 
-/* Feed Switcher Tabs (What's Happening Around You vs People I Follow) */
+/* Feed Switcher Tabs (What's Happening Around You vs People I Follow vs Friends-only feed) */
 .feed-tabs-switcher {
   display: flex;
   align-items: center;
@@ -3981,20 +3981,28 @@ body,
   gap: 0.35rem;
   width: 100%;
   box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.feed-tabs-switcher::-webkit-scrollbar {
+  display: none;
 }
 
 .feed-tab-btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: fit-content;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.85rem;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
   background: transparent;
   border: none;
   border-radius: 9px;
   color: #999999;
-  font-size: 0.875rem;
+  font-size: 0.825rem;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -4060,11 +4068,17 @@ body,
 }
 
 @media (max-width: 600px) {
-  .feed-tab-btn {
-    padding: 0.5rem 0.4rem;
-    font-size: 0.775rem;
-    gap: 0.35rem;
+  .feed-tabs-switcher {
+    padding: 0.25rem;
+    gap: 0.25rem;
   }
+
+  .feed-tab-btn {
+    padding: 0.45rem 0.45rem;
+    font-size: 0.75rem;
+    gap: 0.3rem;
+  }
+
   .feed-tab-btn svg {
     width: 14px;
     height: 14px;

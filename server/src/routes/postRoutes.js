@@ -29,7 +29,38 @@ router.get('/', async (req, res) => {
 
     let filter = {};
 
-    if (req.query.feed === 'following' && req.query.user) {
+    if (req.query.feed === 'friends' && req.query.user) {
+      const cleanUser = String(req.query.user).trim();
+      const currentUserDoc = await User.findOne({
+        username: new RegExp('^' + escapeRegex(cleanUser) + '$', 'i'),
+      })
+        .select('friends followers following')
+        .lean();
+
+      const explicitFriends = currentUserDoc && Array.isArray(currentUserDoc.friends)
+        ? currentUserDoc.friends
+        : [];
+      const followers = currentUserDoc && Array.isArray(currentUserDoc.followers)
+        ? currentUserDoc.followers.map((u) => String(u).toLowerCase())
+        : [];
+      const following = currentUserDoc && Array.isArray(currentUserDoc.following)
+        ? currentUserDoc.following.map((u) => String(u).toLowerCase())
+        : [];
+      const mutuals = following.filter((u) => followers.includes(u));
+
+      // Authors who are friends (or mutual follows), plus the user themselves
+      const authorList = [...new Set([
+        ...explicitFriends.map((u) => String(u).trim()),
+        ...mutuals,
+        cleanUser,
+      ])].filter(Boolean);
+
+      filter = {
+        author: {
+          $in: authorList.map((a) => new RegExp('^' + escapeRegex(a) + '$', 'i')),
+        },
+      };
+    } else if (req.query.feed === 'following' && req.query.user) {
       const cleanUser = String(req.query.user).trim();
       const currentUserDoc = await User.findOne({
         username: new RegExp('^' + escapeRegex(cleanUser) + '$', 'i'),
