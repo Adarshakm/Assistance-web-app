@@ -1779,6 +1779,45 @@ function App() {
     return (contact.username || contact.phone || contact.name || '').trim().toLowerCase();
   };
 
+  const isMessageSentByMe = (msg, contact = activeChatContact) => {
+    if (!msg) return false;
+    if (msg.isSent === true) return true;
+    if (msg.isSent === false) return false;
+    if (msg.sender === 'me') return true;
+
+    const currentU = (loggedInUser || localStorage.getItem('assistance_user') || '').trim().toLowerCase();
+    const msgSender = (msg.sender || '').trim().toLowerCase();
+
+    if (currentU && msgSender === currentU) return true;
+    if (
+      msg.senderName &&
+      loggedInUser &&
+      msg.senderName.trim().toLowerCase() === loggedInUser.trim().toLowerCase()
+    ) {
+      return true;
+    }
+
+    if (contact) {
+      const contactU = (contact.username || '').trim().toLowerCase();
+      const contactP = (contact.phone || '').trim();
+      const contactN = (contact.name || '').trim().toLowerCase();
+
+      if (msgSender && (msgSender === contactU || msgSender === contactP || msgSender === contactN)) {
+        return false;
+      }
+
+      const msgRecipient = (msg.recipient || '').trim().toLowerCase();
+      if (
+        msgRecipient &&
+        (msgRecipient === contactU || msgRecipient === contactP || msgRecipient === contactN)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   const handleOpenChatWithContact = (contact) => {
     if (!contact) return;
 
@@ -5192,36 +5231,6 @@ function App() {
                           </div>
                         </div>
                       </div>
-
-                      <div className="chat-header-actions">
-                        <button
-                          type="button"
-                          className="chat-header-action-btn"
-                          id="chat-test-reply-btn"
-                          onClick={handleSimulateReply}
-                          disabled={isSimulatingReply}
-                          title="Simulate incoming reply message from this contact (appears on left side)"
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="15 14 20 9 15 4"></polyline>
-                            <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
-                          </svg>
-                          <span>{isSimulatingReply ? 'Receiving...' : 'Test Reply'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="chat-header-action-btn"
-                          id="chat-clear-btn"
-                          onClick={handleClearConversation}
-                          title="Clear chat history with this contact"
-                          aria-label="Clear chat history"
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                        </button>
-                      </div>
                     </div>
 
                     <div className="chat-box-messages-list" id="chat-messages-container">
@@ -5254,59 +5263,69 @@ function App() {
                         <span className="chat-start-badge">Direct Message Box</span>
                       </div>
 
-                      {((activeChatContact &&
-                        chatMessages[getActiveChatKey(activeChatContact)]) ||
-                        []
-                      ).map((msg) => {
-                        const isSent =
-                          msg.isSent === true ||
-                          msg.sender === 'me' ||
-                          (msg.sender &&
-                            (loggedInUser || localStorage.getItem('assistance_user')) &&
-                            msg.sender.toLowerCase() ===
-                              (loggedInUser || localStorage.getItem('assistance_user') || '').toLowerCase());
+                      {(() => {
+                        const contactKey = getActiveChatKey(activeChatContact);
+                        const list =
+                          (activeChatContact &&
+                            (chatMessages[contactKey] ||
+                              (activeChatContact.username &&
+                                chatMessages[activeChatContact.username.toLowerCase()]) ||
+                              (activeChatContact.username &&
+                                chatMessages[activeChatContact.username]) ||
+                              (activeChatContact.phone &&
+                                chatMessages[activeChatContact.phone]) ||
+                              chatMessages[activeChatContact.name])) ||
+                          [];
 
-                        return (
-                          <div
-                            key={msg.id || msg._id || msg.timestamp || Math.random()}
-                            className={`chat-bubble-row ${isSent ? 'sent' : 'received'}`}
-                          >
-                            {!isSent && (
-                              <div
-                                className="chat-bubble-avatar"
-                                style={{
-                                  backgroundColor: activeChatContact.avatar
-                                    ? 'transparent'
-                                    : getAvatarColor(activeChatContact.name || activeChatContact.username),
-                                }}
-                                title={activeChatContact.name}
-                              >
-                                {activeChatContact.avatar ? (
-                                  <img
-                                    src={activeChatContact.avatar}
-                                    alt={activeChatContact.name}
-                                  />
-                                ) : (
-                                  <span>
-                                    {getInitials(activeChatContact.name || activeChatContact.username)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                        return list.map((msg) => {
+                          const isSent = isMessageSentByMe(msg, activeChatContact);
+
+                          return (
                             <div
-                              className={`chat-bubble ${isSent ? 'sent' : 'received'}`}
+                              key={msg.id || msg._id || msg.timestamp || Math.random()}
+                              className={`chat-bubble-row ${isSent ? 'sent' : 'received'}`}
                             >
                               {!isSent && (
-                                <span className="chat-bubble-sender-name">
-                                  {msg.senderName || activeChatContact.name}
-                                </span>
+                                <div
+                                  className="chat-bubble-avatar"
+                                  style={{
+                                    backgroundColor: activeChatContact.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(
+                                          activeChatContact.name || activeChatContact.username
+                                        ),
+                                  }}
+                                  title={activeChatContact.name}
+                                >
+                                  {activeChatContact.avatar ? (
+                                    <img
+                                      src={activeChatContact.avatar}
+                                      alt={activeChatContact.name}
+                                    />
+                                  ) : (
+                                    <span>
+                                      {getInitials(
+                                        activeChatContact.name || activeChatContact.username
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
                               )}
-                              <p className="chat-bubble-text">{msg.text}</p>
-                              <span className="chat-bubble-time">{msg.time}</span>
+                              <div
+                                className={`chat-bubble ${isSent ? 'sent' : 'received'}`}
+                              >
+                                {!isSent && (
+                                  <span className="chat-bubble-sender-name">
+                                    {msg.senderName || activeChatContact.name}
+                                  </span>
+                                )}
+                                <p className="chat-bubble-text">{msg.text}</p>
+                                <span className="chat-bubble-time">{msg.time}</span>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                       <div ref={messagesEndRef} />
                     </div>
 
