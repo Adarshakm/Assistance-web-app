@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import SplashScreen from './components/SplashScreen.jsx';
+import { voiceCallService, callAudioSynthesizer } from './services/voiceCallService.js';
 
 function App() {
   const [currentView, setCurrentView] = useState(() => {
@@ -1782,85 +1783,63 @@ function App() {
   const messagesEndRef = useRef(null);
   const [incomingToast, setIncomingToast] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [callHistory, setCallHistory] = useState([]);
+  const [audioVisualizerLevel, setAudioVisualizerLevel] = useState(0);
   const callRingRef = useRef(null);
+  const incomingRingRef = useRef(null);
   const callTimerRef = useRef(null);
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
 
-  const startCallRing = () => {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return null;
-      const ctx = new AudioCtx();
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
+  // Poll for incoming calls
+  useEffect(() => {
+    if (!loggedInUser) return;
+    let isMounted = true;
 
-      osc1.type = 'sine';
-      osc2.type = 'sine';
-      osc1.frequency.value = 440;
-      osc2.frequency.value = 480;
+    const pollIncomingCalls = async () => {
+      try {
+        if (activeCall) return;
+        const result = await voiceCallService.constructor.checkIncomingCall(loggedInUser);
+        if (!isMounted) return;
 
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc1.start();
-      osc2.start();
-
-      return {
-        stop: () => {
-          try {
-            osc1.stop();
-            osc2.stop();
-            ctx.close();
-          } catch {}
-        },
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const handleStartCall = (type = 'voice') => {
-    if (!activeChatContact) return;
-    if (callRingRef.current) {
-      callRingRef.current.stop();
-    }
-    const ring = startCallRing();
-    callRingRef.current = ring;
-
-    setActiveCall({
-      type,
-      contact: activeChatContact,
-      status: 'calling',
-      duration: 0,
-      isMuted: false,
-      isVideoOff: false,
-    });
-
-    setTimeout(() => {
-      if (callRingRef.current) {
-        callRingRef.current.stop();
-        callRingRef.current = null;
+        if (result && result.hasIncoming && result.call) {
+          if (!incomingCall || incomingCall.id !== result.call.id) {
+            setIncomingCall(result.call);
+            if (!incomingRingRef.current) {
+              incomingRingRef.current = callAudioSynthesizer.playIncomingRing();
+            }
+          }
+        } else if (incomingCall && (!result || !result.hasIncoming)) {
+          if (incomingRingRef.current) {
+            incomingRingRef.current.stop();
+            incomingRingRef.current = null;
+          }
+          setIncomingCall(null);
+        }
+      } catch (err) {
+        // ignore polling errors
       }
-      setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
-    }, 2500);
-  };
+    };
 
-  const handleEndCall = () => {
-    if (callRingRef.current) {
-      callRingRef.current.stop();
-      callRingRef.current = null;
-    }
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current);
-      callTimerRef.current = null;
-    }
-    setActiveCall(null);
-  };
+    pollIncomingCalls();
+    const interval = setInterval(pollIncomingCalls, 2200);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [loggedInUser, activeCall, incomingCall]);
 
+  // Fetch call history when viewing Voice and Video Call screen
+  useEffect(() => {
+    if (currentView === 'voice-and-video-call' && loggedInUser) {
+      voiceCallService.constructor.getCallHistory(loggedInUser).then((calls) => {
+        setCallHistory(calls);
+      });
+    }
+  }, [currentView, loggedInUser]);
+
+  // Call timer for connected calls
   useEffect(() => {
     if (activeCall && activeCall.status === 'connected') {
       callTimerRef.current = setInterval(() => {
@@ -1879,6 +1858,204 @@ function App() {
       }
     };
   }, [activeCall?.status]);
+
+  const handleStartCall = async (type = 'voice', customContact = null) => {
+    const target = customContact || activeChatContact;
+    if (!target || !loggedInUser) return;
+
+    if (incomingRingRef.current) {
+      incomingRingRef.current.stop();
+      incomingRingRef.current = null;
+    }
+    setIncomingCall(null);
+
+    const contactTarget = {
+      name: target.name || target.username || 'Contact',
+      username: target.username || target.phone || target.name || '',
+      avatar: target.avatar || '',
+      phone: target.phone || '',
+    };
+
+    setActiveCall({
+      callId: null,
+      type,
+      role: 'caller',
+      contact: contactTarget,
+      status: 'calling',
+      statusText: 'Calling...',
+      duration: 0,
+      isMuted: false,
+      isVideoOff: false,
+      audioLevel: 0,
+    });
+
+    try {
+      const res = await voiceCallService.initiateCall({
+        caller: loggedInUser,
+        callerName: loggedInUser,
+        callerAvatar: '',
+        recipient: contactTarget.username || contactTarget.phone || contactTarget.name,
+        recipientName: contactTarget.name,
+        recipientAvatar: contactTarget.avatar,
+        onStatusChange: (status) => {
+          if (status === 'connected') {
+            setActiveCall((prev) =>
+              prev ? { ...prev, status: 'connected', statusText: 'Connected' } : null
+            );
+          } else if (status === 'rejected') {
+            setActiveCall((prev) =>
+              prev ? { ...prev, status: 'rejected', statusText: 'Call Declined' } : null
+            );
+            setTimeout(() => {
+              setActiveCall(null);
+            }, 2000);
+          } else if (status === 'ended' || status === 'missed') {
+            setActiveCall((prev) =>
+              prev ? { ...prev, status: 'ended', statusText: 'Call Ended' } : null
+            );
+            setTimeout(() => {
+              setActiveCall(null);
+            }, 2000);
+          }
+        },
+        onAudioLevel: (lvl) => {
+          setAudioVisualizerLevel(lvl);
+        },
+      });
+
+      if (res && res.callId) {
+        setActiveCall((prev) => (prev ? { ...prev, callId: res.callId } : null));
+      }
+    } catch (err) {
+      console.error('[Voice Call Error]:', err);
+      setActiveCall((prev) =>
+        prev ? { ...prev, status: 'ended', statusText: err.message || 'Call Failed' } : null
+      );
+      setTimeout(() => {
+        setActiveCall(null);
+      }, 2500);
+    }
+  };
+
+  const handleAcceptIncomingCall = async () => {
+    if (!incomingCall || !loggedInUser) return;
+
+    if (incomingRingRef.current) {
+      incomingRingRef.current.stop();
+      incomingRingRef.current = null;
+    }
+
+    const currentIncoming = incomingCall;
+    setIncomingCall(null);
+
+    const callerContact = {
+      name: currentIncoming.callerName || currentIncoming.caller,
+      username: currentIncoming.caller,
+      avatar: currentIncoming.callerAvatar || '',
+      phone: '',
+    };
+
+    setActiveCall({
+      callId: currentIncoming.id,
+      type: currentIncoming.type || 'voice',
+      role: 'recipient',
+      contact: callerContact,
+      status: 'connecting',
+      statusText: 'Connecting...',
+      duration: 0,
+      isMuted: false,
+      isVideoOff: false,
+      audioLevel: 0,
+    });
+
+    try {
+      await voiceCallService.answerCall({
+        callId: currentIncoming.id,
+        user: loggedInUser,
+        sdpOffer: currentIncoming.sdpOffer,
+        onStatusChange: (status) => {
+          if (status === 'connected') {
+            setActiveCall((prev) =>
+              prev ? { ...prev, status: 'connected', statusText: 'Connected' } : null
+            );
+          } else if (status === 'ended' || status === 'missed' || status === 'rejected') {
+            setActiveCall((prev) =>
+              prev ? { ...prev, status: 'ended', statusText: 'Call Ended' } : null
+            );
+            setTimeout(() => {
+              setActiveCall(null);
+            }, 2000);
+          }
+        },
+        onAudioLevel: (lvl) => {
+          setAudioVisualizerLevel(lvl);
+        },
+      });
+    } catch (err) {
+      console.error('[Voice Call Answer Error]:', err);
+      setActiveCall((prev) =>
+        prev ? { ...prev, status: 'ended', statusText: 'Connection failed' } : null
+      );
+      setTimeout(() => {
+        setActiveCall(null);
+      }, 2500);
+    }
+  };
+
+  const handleDeclineIncomingCall = async () => {
+    if (!incomingCall) return;
+    if (incomingRingRef.current) {
+      incomingRingRef.current.stop();
+      incomingRingRef.current = null;
+    }
+    const currentIncoming = incomingCall;
+    setIncomingCall(null);
+    try {
+      await voiceCallService.rejectCall({
+        callId: currentIncoming.id,
+        user: loggedInUser,
+      });
+    } catch {}
+  };
+
+  const handleEndCall = async () => {
+    if (callRingRef.current) {
+      callRingRef.current.stop();
+      callRingRef.current = null;
+    }
+    if (incomingRingRef.current) {
+      incomingRingRef.current.stop();
+      incomingRingRef.current = null;
+    }
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+
+    const currentActive = activeCall;
+    setActiveCall((prev) =>
+      prev ? { ...prev, status: 'ended', statusText: 'Call Ended' } : null
+    );
+
+    if (currentActive) {
+      try {
+        await voiceCallService.endCall({
+          callId: currentActive.callId,
+          user: loggedInUser,
+          duration: currentActive.duration || 0,
+        });
+      } catch {}
+    }
+
+    setTimeout(() => {
+      setActiveCall(null);
+    }, 1500);
+  };
+
+  const handleToggleMute = () => {
+    const muted = voiceCallService.toggleMute();
+    setActiveCall((prev) => (prev ? { ...prev, isMuted: muted } : null));
+  };
 
   const formatCallDuration = (seconds = 0) => {
     const mins = Math.floor(seconds / 60);
@@ -5817,6 +5994,137 @@ function App() {
                 )}
               </div>
             </div>
+          ) : currentView === 'voice-and-video-call' ? (
+            <div className="call-hub-space" id="call-hub-space">
+              <div className="call-hub-header">
+                <div className="call-hub-title-wrap">
+                  <h2 className="call-hub-title">Voice & Video Calls</h2>
+                  <p className="call-hub-subtitle">High-quality, peer-to-peer real-time voice calling</p>
+                </div>
+                <button
+                  type="button"
+                  className="call-hub-refresh-btn"
+                  onClick={() => {
+                    if (loggedInUser) {
+                      voiceCallService.constructor.getCallHistory(loggedInUser).then(setCallHistory);
+                    }
+                  }}
+                  title="Refresh Call History"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                  </svg>
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {/* Quick Call Row */}
+              <div className="call-hub-card">
+                <h3 className="call-hub-section-title">Quick Call Contacts</h3>
+                <div className="call-quick-contacts-list">
+                  {registeredContacts.length === 0 && registeredFriends.length === 0 ? (
+                    <p className="call-empty-quick">No registered contacts yet. Sync or add contacts to call directly!</p>
+                  ) : (
+                    [...new Map([...registeredFriends.map(f => [f.name, f]), ...registeredContacts.map(c => [c.name, c])]).values()].slice(0, 8).map((contact, idx) => (
+                      <div key={idx} className="quick-call-item">
+                        <div
+                          className="quick-call-avatar"
+                          style={{
+                            backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.name || contact.username),
+                          }}
+                        >
+                          {contact.avatar ? (
+                            <img src={contact.avatar} alt={contact.name} />
+                          ) : (
+                            <span>{getInitials(contact.name || contact.username)}</span>
+                          )}
+                        </div>
+                        <div className="quick-call-info">
+                          <span className="quick-call-name">{contact.name}</span>
+                          <span className="quick-call-handle">@{contact.username || contact.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="quick-call-action-btn"
+                          onClick={() => handleStartCall('voice', contact)}
+                          title={`Voice call with ${contact.name}`}
+                          aria-label={`Voice call with ${contact.name}`}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                          </svg>
+                          <span>Call</span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Call History Card */}
+              <div className="call-hub-card">
+                <h3 className="call-hub-section-title">Recent Calls</h3>
+                {callHistory.length === 0 ? (
+                  <div className="call-hub-empty-state">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    </svg>
+                    <p className="call-empty-title">No recent calls</p>
+                    <p className="call-empty-subtitle">Your completed and missed voice calls will show up here</p>
+                  </div>
+                ) : (
+                  <div className="call-history-list">
+                    {callHistory.map((call) => (
+                      <div key={call.id} className="call-history-item">
+                        <div
+                          className="call-history-avatar"
+                          style={{
+                            backgroundColor: call.contactAvatar ? 'transparent' : getAvatarColor(call.contactName),
+                          }}
+                        >
+                          {call.contactAvatar ? (
+                            <img src={call.contactAvatar} alt={call.contactName} />
+                          ) : (
+                            <span>{getInitials(call.contactName)}</span>
+                          )}
+                        </div>
+                        <div className="call-history-details">
+                          <div className="call-history-main-row">
+                            <span className="call-history-name">{call.contactName}</span>
+                            <span className="call-history-time">
+                              {new Date(call.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="call-history-meta-row">
+                            <span className={`call-type-badge ${call.isOutgoing ? 'outgoing' : 'incoming'} ${call.status}`}>
+                              {call.isOutgoing ? '↗ Outgoing' : '↙ Incoming'} • {call.status === 'connected' || call.status === 'ended' ? `${formatCallDuration(call.duration)}` : call.status}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="call-history-redial-btn"
+                          onClick={() =>
+                            handleStartCall(call.type || 'voice', {
+                              name: call.contactName,
+                              username: call.contactUsername,
+                              avatar: call.contactAvatar,
+                            })
+                          }
+                          title={`Call back ${call.contactName}`}
+                          aria-label={`Call back ${call.contactName}`}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="blank-space" id="blank-space">
               {/* Blank space without any content */}
@@ -5829,6 +6137,72 @@ function App() {
         </nav>
       </div>
 
+      {/* Incoming Call Modal Overlay */}
+      {incomingCall && !activeCall && (
+        <div className="active-call-overlay" role="dialog" aria-modal="true" aria-label="Incoming Call">
+          <div className="active-call-modal incoming">
+            <div className="active-call-header">
+              <span className="active-call-type-badge incoming-badge">
+                📞 Incoming Voice Call
+              </span>
+              <span className="active-call-status pulse-status">Ringing...</span>
+            </div>
+
+            <div className="active-call-body">
+              <div className="active-call-avatar-wrap">
+                <div
+                  className="active-call-avatar ringing"
+                  style={{
+                    backgroundColor: incomingCall.callerAvatar
+                      ? 'transparent'
+                      : getAvatarColor(incomingCall.callerName || incomingCall.caller),
+                  }}
+                >
+                  {incomingCall.callerAvatar ? (
+                    <img src={incomingCall.callerAvatar} alt={incomingCall.callerName} />
+                  ) : (
+                    <span>{getInitials(incomingCall.callerName || incomingCall.caller)}</span>
+                  )}
+                </div>
+                <h3 className="active-call-name">{incomingCall.callerName || incomingCall.caller}</h3>
+                <p className="active-call-handle">@{incomingCall.caller}</p>
+                <p className="incoming-call-prompt">is calling you on Assistance voice...</p>
+              </div>
+            </div>
+
+            <div className="active-call-actions incoming-actions">
+              <button
+                type="button"
+                className="call-action-chip decline"
+                id="decline-incoming-call-btn"
+                onClick={handleDeclineIncomingCall}
+                title="Decline Call"
+                aria-label="Decline Call"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 0 1 0-1.41C3.32 8.78 7.46 7 12 7s8.68 1.78 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                </svg>
+                <span>Decline</span>
+              </button>
+
+              <button
+                type="button"
+                className="call-action-chip accept"
+                id="accept-incoming-call-btn"
+                onClick={handleAcceptIncomingCall}
+                title="Accept Call"
+                aria-label="Accept Call"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <span>Accept</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Active Call Modal Overlay */}
       {activeCall && (
         <div className="active-call-overlay" role="dialog" aria-modal="true" aria-label="Active Call">
@@ -5837,8 +6211,14 @@ function App() {
               <span className="active-call-type-badge">
                 {activeCall.type === 'video' ? '📹 Video Call' : '📞 Voice Call'}
               </span>
-              <span className="active-call-status">
-                {activeCall.status === 'calling' ? 'Calling...' : formatCallDuration(activeCall.duration)}
+              <span className={`active-call-status ${activeCall.status}`}>
+                {activeCall.status === 'calling'
+                  ? 'Calling...'
+                  : activeCall.status === 'connecting'
+                  ? 'Connecting...'
+                  : activeCall.status === 'connected'
+                  ? formatCallDuration(activeCall.duration)
+                  : activeCall.statusText || activeCall.status}
               </span>
             </div>
 
@@ -5886,6 +6266,17 @@ function App() {
                   </div>
                   <h3 className="active-call-name">{activeCall.contact.name}</h3>
                   <p className="active-call-handle">@{activeCall.contact.username || activeCall.contact.name}</p>
+
+                  {/* Real-time Audio Equalizer Waveform */}
+                  {activeCall.status === 'connected' && (
+                    <div className="active-call-waveform" aria-label="Audio Visualizer">
+                      <span className="waveform-bar bar-1" style={{ height: `${Math.max(6, Math.min(28, (audioVisualizerLevel || 5) * 0.7))}px` }}></span>
+                      <span className="waveform-bar bar-2" style={{ height: `${Math.max(8, Math.min(36, (audioVisualizerLevel || 8) * 1.1))}px` }}></span>
+                      <span className="waveform-bar bar-3" style={{ height: `${Math.max(12, Math.min(44, (audioVisualizerLevel || 12) * 1.4))}px` }}></span>
+                      <span className="waveform-bar bar-4" style={{ height: `${Math.max(8, Math.min(36, (audioVisualizerLevel || 8) * 1.0))}px` }}></span>
+                      <span className="waveform-bar bar-5" style={{ height: `${Math.max(6, Math.min(28, (audioVisualizerLevel || 5) * 0.6))}px` }}></span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -5894,7 +6285,7 @@ function App() {
               <button
                 type="button"
                 className={`call-control-btn ${activeCall.isMuted ? 'active' : ''}`}
-                onClick={() => setActiveCall((prev) => ({ ...prev, isMuted: !prev.isMuted }))}
+                onClick={handleToggleMute}
                 title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
                 aria-label={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
               >
