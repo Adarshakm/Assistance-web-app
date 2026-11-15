@@ -1781,8 +1781,110 @@ function App() {
   const [isSimulatingReply, setIsSimulatingReply] = useState(false);
   const messagesEndRef = useRef(null);
   const [incomingToast, setIncomingToast] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
+  const callRingRef = useRef(null);
+  const callTimerRef = useRef(null);
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
+
+  const startCallRing = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      const ctx = new AudioCtx();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.value = 440;
+      osc2.frequency.value = 480;
+
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start();
+      osc2.start();
+
+      return {
+        stop: () => {
+          try {
+            osc1.stop();
+            osc2.stop();
+            ctx.close();
+          } catch {}
+        },
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const handleStartCall = (type = 'voice') => {
+    if (!activeChatContact) return;
+    if (callRingRef.current) {
+      callRingRef.current.stop();
+    }
+    const ring = startCallRing();
+    callRingRef.current = ring;
+
+    setActiveCall({
+      type,
+      contact: activeChatContact,
+      status: 'calling',
+      duration: 0,
+      isMuted: false,
+      isVideoOff: false,
+    });
+
+    setTimeout(() => {
+      if (callRingRef.current) {
+        callRingRef.current.stop();
+        callRingRef.current = null;
+      }
+      setActiveCall((prev) => (prev ? { ...prev, status: 'connected' } : null));
+    }, 2500);
+  };
+
+  const handleEndCall = () => {
+    if (callRingRef.current) {
+      callRingRef.current.stop();
+      callRingRef.current = null;
+    }
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+    setActiveCall(null);
+  };
+
+  useEffect(() => {
+    if (activeCall && activeCall.status === 'connected') {
+      callTimerRef.current = setInterval(() => {
+        setActiveCall((prev) => (prev ? { ...prev, duration: (prev.duration || 0) + 1 } : null));
+      }, 1000);
+    } else {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current);
+        callTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (callTimerRef.current) {
+        clearInterval(callTimerRef.current);
+        callTimerRef.current = null;
+      }
+    };
+  }, [activeCall?.status]);
+
+  const formatCallDuration = (seconds = 0) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const playIncomingChime = () => {
     try {
@@ -5402,6 +5504,36 @@ function App() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Top Right Side Action Icons for Voice Call and Video Call */}
+                      <div className="chat-header-actions" id="chat-header-actions">
+                        <button
+                          type="button"
+                          className="chat-header-action-btn voice-call-btn"
+                          id="chat-voice-call-btn"
+                          onClick={() => handleStartCall('voice')}
+                          title={`Voice call with ${activeChatContact.name || 'contact'}`}
+                          aria-label={`Voice call with ${activeChatContact.name || 'contact'}`}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="chat-header-action-btn video-call-btn"
+                          id="chat-video-call-btn"
+                          onClick={() => handleStartCall('video')}
+                          title={`Video call with ${activeChatContact.name || 'contact'}`}
+                          aria-label={`Video call with ${activeChatContact.name || 'contact'}`}
+                        >
+                          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="chat-box-messages-list" id="chat-messages-container">
@@ -5696,6 +5828,131 @@ function App() {
           {/* Blank bottom navbar */}
         </nav>
       </div>
+
+      {/* Active Call Modal Overlay */}
+      {activeCall && (
+        <div className="active-call-overlay" role="dialog" aria-modal="true" aria-label="Active Call">
+          <div className="active-call-modal">
+            <div className="active-call-header">
+              <span className="active-call-type-badge">
+                {activeCall.type === 'video' ? '📹 Video Call' : '📞 Voice Call'}
+              </span>
+              <span className="active-call-status">
+                {activeCall.status === 'calling' ? 'Calling...' : formatCallDuration(activeCall.duration)}
+              </span>
+            </div>
+
+            <div className="active-call-body">
+              {activeCall.type === 'video' && activeCall.status === 'connected' ? (
+                <div className="active-call-video-grid">
+                  <div className="active-call-main-video">
+                    <div
+                      className="mock-video-avatar"
+                      style={{
+                        backgroundColor: activeCall.contact.avatar
+                          ? 'transparent'
+                          : getAvatarColor(activeCall.contact.name || activeCall.contact.username),
+                      }}
+                    >
+                      {activeCall.contact.avatar ? (
+                        <img src={activeCall.contact.avatar} alt={activeCall.contact.name} />
+                      ) : (
+                        <span>{getInitials(activeCall.contact.name || activeCall.contact.username)}</span>
+                      )}
+                    </div>
+                    <span className="mock-video-label">{activeCall.contact.name}</span>
+                  </div>
+                  <div className="active-call-pip-video">
+                    <div className="pip-video-preview">
+                      <span>You</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="active-call-avatar-wrap">
+                  <div
+                    className={`active-call-avatar ${activeCall.status === 'calling' ? 'ringing' : 'connected'}`}
+                    style={{
+                      backgroundColor: activeCall.contact.avatar
+                        ? 'transparent'
+                        : getAvatarColor(activeCall.contact.name || activeCall.contact.username),
+                    }}
+                  >
+                    {activeCall.contact.avatar ? (
+                      <img src={activeCall.contact.avatar} alt={activeCall.contact.name} />
+                    ) : (
+                      <span>{getInitials(activeCall.contact.name || activeCall.contact.username)}</span>
+                    )}
+                  </div>
+                  <h3 className="active-call-name">{activeCall.contact.name}</h3>
+                  <p className="active-call-handle">@{activeCall.contact.username || activeCall.contact.name}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="active-call-actions">
+              <button
+                type="button"
+                className={`call-control-btn ${activeCall.isMuted ? 'active' : ''}`}
+                onClick={() => setActiveCall((prev) => ({ ...prev, isMuted: !prev.isMuted }))}
+                title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                aria-label={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              >
+                {activeCall.isMuted ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                )}
+              </button>
+
+              {activeCall.type === 'video' && (
+                <button
+                  type="button"
+                  className={`call-control-btn ${activeCall.isVideoOff ? 'active' : ''}`}
+                  onClick={() => setActiveCall((prev) => ({ ...prev, isVideoOff: !prev.isVideoOff }))}
+                  title={activeCall.isVideoOff ? 'Turn camera on' : 'Turn camera off'}
+                  aria-label={activeCall.isVideoOff ? 'Turn camera on' : 'Turn camera off'}
+                >
+                  {activeCall.isVideoOff ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                      <path d="M21 15.5l-5-3.3v-1.8l5-3.3v8.4zM2 6h2m4 0h10a2 2 0 0 1 2 2v6m-4 4H4a2 2 0 0 1-2-2V8"></path>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="call-control-btn end-call"
+                onClick={handleEndCall}
+                title="End Call"
+                aria-label="End Call"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 0 1 0-1.41C3.32 8.78 7.46 7 12 7s8.68 1.78 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
