@@ -758,8 +758,9 @@ function App() {
     }
   });
 
-  // Text posts state
+  // Text posts state for "What's Happening Around You"
   const [postContent, setPostContent] = useState('');
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [posts, setPosts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_posts');
@@ -768,6 +769,31 @@ function App() {
       return [];
     }
   });
+
+  // Fetch posts from backend and poll for real-time updates across all users
+  const fetchPosts = async () => {
+    try {
+      const res = await fetch(`/api/posts?_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.posts)) {
+          setPosts(data.posts);
+          try {
+            localStorage.setItem('assistance_posts', JSON.stringify(data.posts));
+          } catch {}
+        }
+      }
+    } catch (err) {
+      // ignore network errors
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    // Poll every 3 seconds so posts from any user appear in real time for everyone
+    const interval = setInterval(fetchPosts, 3000);
+    return () => clearInterval(interval);
+  }, [currentView]);
 
   // Photo and Image Sharing state
   const uploadImageRef = useRef(null);
@@ -1645,24 +1671,110 @@ function App() {
     } catch {}
   };
 
-  const handleCreatePost = (e) => {
+  const handleCreatePost = async (e) => {
     e.preventDefault();
     const trimmed = postContent.trim();
-    if (!trimmed) return;
+    if (!trimmed || isSubmittingPost) return;
 
-    const newPost = {
-      id: Date.now().toString(),
-      author: loggedInUser || 'User',
-      content: trimmed,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    const updatedPosts = [newPost, ...posts];
-    setPosts(updatedPosts);
-    setPostContent('');
+    setIsSubmittingPost(true);
     try {
-      localStorage.setItem('assistance_posts', JSON.stringify(updatedPosts));
-    } catch {}
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: loggedInUser || 'User',
+          content: trimmed,
+          authorAvatar: profilePicture || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.post) {
+        setPosts((prev) => [data.post, ...prev.filter((p) => p.id !== data.post.id)]);
+        setPostContent('');
+        try {
+          localStorage.setItem('assistance_posts', JSON.stringify([data.post, ...posts]));
+        } catch {}
+      } else {
+        // Fallback to local post if offline
+        const fallbackPost = {
+          id: Date.now().toString(),
+          author: loggedInUser || 'User',
+          authorName: loggedInUser || 'User',
+          authorAvatar: profilePicture || '',
+          content: trimmed,
+          likes: [],
+          likesCount: 0,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setPosts((prev) => [fallbackPost, ...prev]);
+        setPostContent('');
+      }
+    } catch (err) {
+      console.error('[Create Post Error]:', err);
+      // Fallback optimistic post
+      const fallbackPost = {
+        id: Date.now().toString(),
+        author: loggedInUser || 'User',
+        authorName: loggedInUser || 'User',
+        authorAvatar: profilePicture || '',
+        content: trimmed,
+        likes: [],
+        likesCount: 0,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setPosts((prev) => [fallbackPost, ...prev]);
+      setPostContent('');
+    } finally {
+      setIsSubmittingPost(false);
+    }
+  };
+
+  const handleLikePost = async (postId) => {
+    if (!loggedInUser || !postId) return;
+    const cleanUser = String(loggedInUser).trim().toLowerCase();
+
+    // Optimistic like toggle
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          const likesArr = Array.isArray(p.likes) ? p.likes : [];
+          const hasLiked = likesArr.includes(cleanUser);
+          const updatedLikes = hasLiked
+            ? likesArr.filter((u) => u !== cleanUser)
+            : [...likesArr, cleanUser];
+          return {
+            ...p,
+            likes: updatedLikes,
+            likesCount: updatedLikes.length,
+          };
+        }
+        return p;
+      })
+    );
+
+    try {
+      await fetch(`/api/posts/${postId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUser }),
+      });
+    } catch (err) {
+      console.error('[Like Post Error]:', err);
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    if (!loggedInUser || !postId) return;
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+
+    try {
+      await fetch(`/api/posts/${postId}?user=${encodeURIComponent(loggedInUser)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.error('[Delete Post Error]:', err);
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -5477,18 +5589,54 @@ function App() {
           ) : currentView === 'whats-happening' ? (
             <div className="whats-happening-space" id="whats-happening-space">
               <div className="post-creator-container" id="post-creator-container">
+                {/* Header with Title and Live Updates Refresh */}
+                <div className="whats-happening-header">
+                  <div className="whats-happening-title-wrap">
+                    <h2 className="whats-happening-title">What's Happening Around You</h2>
+                    <p className="whats-happening-subtitle">Real-time public updates and moments from everyone</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="whats-happening-refresh-btn"
+                    onClick={fetchPosts}
+                    title="Refresh feed"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    <span>Live Feed</span>
+                  </button>
+                </div>
+
+                {/* Create Post Card */}
                 <form
                   className="create-post-card"
                   id="create-post-card"
                   onSubmit={handleCreatePost}
                 >
+                  <div className="create-post-header-row">
+                    <div
+                      className="create-post-user-avatar"
+                      style={{
+                        backgroundColor: profilePicture ? 'transparent' : getAvatarColor(loggedInUser || 'User'),
+                      }}
+                    >
+                      {profilePicture ? (
+                        <img src={profilePicture} alt={loggedInUser || 'User'} />
+                      ) : (
+                        <span>{getInitials(loggedInUser || 'User')}</span>
+                      )}
+                    </div>
+                    <span className="create-post-user-name">@{loggedInUser || 'user'}</span>
+                  </div>
                   <textarea
                     id="create-post-textarea"
                     className="create-post-textarea"
                     placeholder="What's happening around you?"
                     value={postContent}
                     onChange={(e) => setPostContent(e.target.value)}
-                    rows={4}
+                    rows={3}
                     aria-label="Create a text post"
                   />
                   <div className="create-post-actions">
@@ -5496,26 +5644,84 @@ function App() {
                       type="submit"
                       id="create-post-btn"
                       className="create-post-btn"
-                      disabled={!postContent.trim()}
+                      disabled={!postContent.trim() || isSubmittingPost}
                     >
-                      Post
+                      {isSubmittingPost ? 'Posting...' : 'Post'}
                     </button>
                   </div>
                 </form>
 
-                {posts.length > 0 && (
-                  <div className="posts-list" id="posts-list">
-                    {posts.map((post) => (
+                {/* Posts Feed */}
+                <div className="posts-list" id="posts-list">
+                  {posts.length === 0 ? (
+                    <div className="posts-empty-state">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                      </svg>
+                      <p className="posts-empty-title">No posts around you yet</p>
+                      <p className="posts-empty-subtitle">Be the first to share an update with everyone!</p>
+                    </div>
+                  ) : (
+                    posts.map((post) => (
                       <article key={post.id} className="post-card">
                         <div className="post-header">
-                          <span className="post-author">{post.author || loggedInUser || 'User'}</span>
-                          <span className="post-time">{post.timestamp}</span>
+                          <div className="post-author-wrap">
+                            <div
+                              className="post-author-avatar"
+                              style={{
+                                backgroundColor: post.authorAvatar
+                                  ? 'transparent'
+                                  : getAvatarColor(post.authorName || post.author || 'User'),
+                              }}
+                            >
+                              {post.authorAvatar ? (
+                                <img src={post.authorAvatar} alt={post.authorName || post.author} />
+                              ) : (
+                                <span>{getInitials(post.authorName || post.author || 'User')}</span>
+                              )}
+                            </div>
+                            <div className="post-author-meta">
+                              <span className="post-author">{post.authorName || post.author || 'User'}</span>
+                              <span className="post-handle">@{post.author || 'user'}</span>
+                            </div>
+                          </div>
+                          <span className="post-time">{post.time || post.timestamp}</span>
                         </div>
                         <p className="post-content">{post.content}</p>
+
+                        <div className="post-footer">
+                          <button
+                            type="button"
+                            className={`post-action-btn like-btn ${(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'liked' : ''}`}
+                            onClick={() => handleLikePost(post.id)}
+                            title="Like post"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill={(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            <span>{(post.likes || []).length > 0 ? (post.likes || []).length : 'Like'}</span>
+                          </button>
+
+                          {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
+                            <button
+                              type="button"
+                              className="post-action-btn delete-btn"
+                              onClick={() => handleDeletePost(post.id)}
+                              title="Delete post"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              </svg>
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
                       </article>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           ) : currentView === 'photo-sharing' ? (

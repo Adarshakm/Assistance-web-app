@@ -8,6 +8,7 @@ import connectDB from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import callRoutes from './routes/callRoutes.js';
+import postRoutes from './routes/postRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -37,18 +38,20 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     message: 'MERN backend server is running',
-    version: '2.1.0',
+    version: '2.2.0',
     chatAvailable: true,
     callAvailable: true,
+    postsAvailable: true,
   });
 });
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     message: 'MERN backend server is running',
-    version: '2.1.0',
+    version: '2.2.0',
     chatAvailable: true,
     callAvailable: true,
+    postsAvailable: true,
   });
 });
 
@@ -59,6 +62,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/chat', chatRoutes);
 app.use('/api/call', callRoutes);
 app.use('/call', callRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/posts', postRoutes);
 
 // Catch-all for Single Page Application routing (non-API routes)
 app.get('*', (req, res, next) => {
@@ -66,7 +71,8 @@ app.get('*', (req, res, next) => {
     req.path.startsWith('/api') ||
     req.path.startsWith('/chat') ||
     req.path.startsWith('/users') ||
-    req.path.startsWith('/call')
+    req.path.startsWith('/call') ||
+    req.path.startsWith('/posts')
   ) {
     return next();
   }
