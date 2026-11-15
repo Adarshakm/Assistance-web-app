@@ -210,9 +210,15 @@ router.get('/conversation', async (req, res) => {
     const user2Aliases = await resolveUserAliases(user2);
 
     const messages = await Message.find({
-      $or: [
-        { sender: { $in: user1Aliases }, recipient: { $in: user2Aliases } },
-        { sender: { $in: user2Aliases }, recipient: { $in: user1Aliases } },
+      $and: [
+        {
+          $or: [
+            { sender: { $in: user1Aliases }, recipient: { $in: user2Aliases } },
+            { sender: { $in: user2Aliases }, recipient: { $in: user1Aliases } },
+          ],
+        },
+        { sender: { $type: 'string', $ne: '' } },
+        { recipient: { $type: 'string', $ne: '' } },
       ],
     })
       .sort({ createdAt: 1 })
@@ -322,7 +328,13 @@ router.get('/recent', async (req, res) => {
     const userAliases = await resolveUserAliases(user);
 
     const messages = await Message.find({
-      $or: [{ sender: { $in: userAliases } }, { recipient: { $in: userAliases } }],
+      $and: [
+        {
+          $or: [{ sender: { $in: userAliases } }, { recipient: { $in: userAliases } }],
+        },
+        { sender: { $type: 'string', $ne: '' } },
+        { recipient: { $type: 'string', $ne: '' } },
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
