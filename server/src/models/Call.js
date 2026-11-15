@@ -61,6 +61,22 @@ const callSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
+    callerVideoOff: {
+      type: Boolean,
+      default: false,
+    },
+    recipientVideoOff: {
+      type: Boolean,
+      default: false,
+    },
+    callerMuted: {
+      type: Boolean,
+      default: false,
+    },
+    recipientMuted: {
+      type: Boolean,
+      default: false,
+    },
     duration: {
       type: Number,
       default: 0,
@@ -85,3 +101,4 @@ callSchema.index({ status: 1, createdAt: -1 });
 const Call = mongoose.models.Call || mongoose.model('Call', callSchema);
 
 export default Call;
+

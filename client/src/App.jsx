@@ -1786,11 +1786,26 @@ function App() {
   const [incomingCall, setIncomingCall] = useState(null);
   const [callHistory, setCallHistory] = useState([]);
   const [audioVisualizerLevel, setAudioVisualizerLevel] = useState(0);
+  const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [remoteMediaState, setRemoteMediaState] = useState({ remoteVideoOff: false, remoteMuted: false });
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
   const callRingRef = useRef(null);
   const incomingRingRef = useRef(null);
   const callTimerRef = useRef(null);
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
+
+  // Check if multiple cameras are available
+  useEffect(() => {
+    try {
+      navigator.mediaDevices?.enumerateDevices().then((devices) => {
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        setHasMultipleCameras(videoInputs.length > 1);
+      }).catch(() => {});
+    } catch {}
+  }, []);
 
   // Poll for incoming calls
   useEffect(() => {
@@ -1859,6 +1874,20 @@ function App() {
     };
   }, [activeCall?.status]);
 
+  // Attach local and remote video streams to video elements
+  useEffect(() => {
+    if (activeCall && activeCall.type === 'video') {
+      if (localVideoRef.current && voiceCallService.localStream) {
+        localVideoRef.current.srcObject = voiceCallService.localStream;
+        localVideoRef.current.play().catch(() => {});
+      }
+      if (remoteVideoRef.current && voiceCallService.remoteStream) {
+        remoteVideoRef.current.srcObject = voiceCallService.remoteStream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [activeCall?.status, activeCall?.type, activeCall?.isVideoOff]);
+
   const handleStartCall = async (type = 'voice', customContact = null) => {
     const target = customContact || activeChatContact;
     if (!target || !loggedInUser) return;
@@ -1868,6 +1897,8 @@ function App() {
       incomingRingRef.current = null;
     }
     setIncomingCall(null);
+    setIsVideoFullscreen(false);
+    setRemoteMediaState({ remoteVideoOff: false, remoteMuted: false });
 
     const contactTarget = {
       name: target.name || target.username || 'Contact',
@@ -1897,6 +1928,22 @@ function App() {
         recipient: contactTarget.username || contactTarget.phone || contactTarget.name,
         recipientName: contactTarget.name,
         recipientAvatar: contactTarget.avatar,
+        type,
+        onLocalStream: (stream) => {
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.play().catch(() => {});
+          }
+        },
+        onRemoteStream: (stream) => {
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = stream;
+            remoteVideoRef.current.play().catch(() => {});
+          }
+        },
+        onRemoteMediaState: (state) => {
+          setRemoteMediaState(state);
+        },
         onStatusChange: (status) => {
           if (status === 'connected') {
             setActiveCall((prev) =>
@@ -1927,7 +1974,7 @@ function App() {
         setActiveCall((prev) => (prev ? { ...prev, callId: res.callId } : null));
       }
     } catch (err) {
-      console.error('[Voice Call Error]:', err);
+      console.error('[Call Initiate Error]:', err);
       setActiveCall((prev) =>
         prev ? { ...prev, status: 'ended', statusText: err.message || 'Call Failed' } : null
       );
@@ -1947,6 +1994,8 @@ function App() {
 
     const currentIncoming = incomingCall;
     setIncomingCall(null);
+    setIsVideoFullscreen(false);
+    setRemoteMediaState({ remoteVideoOff: false, remoteMuted: false });
 
     const callerContact = {
       name: currentIncoming.callerName || currentIncoming.caller,
@@ -1955,9 +2004,11 @@ function App() {
       phone: '',
     };
 
+    const callType = currentIncoming.type || 'voice';
+
     setActiveCall({
       callId: currentIncoming.id,
-      type: currentIncoming.type || 'voice',
+      type: callType,
       role: 'recipient',
       contact: callerContact,
       status: 'connecting',
@@ -1973,6 +2024,22 @@ function App() {
         callId: currentIncoming.id,
         user: loggedInUser,
         sdpOffer: currentIncoming.sdpOffer,
+        type: callType,
+        onLocalStream: (stream) => {
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.play().catch(() => {});
+          }
+        },
+        onRemoteStream: (stream) => {
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = stream;
+            remoteVideoRef.current.play().catch(() => {});
+          }
+        },
+        onRemoteMediaState: (state) => {
+          setRemoteMediaState(state);
+        },
         onStatusChange: (status) => {
           if (status === 'connected') {
             setActiveCall((prev) =>
@@ -1992,7 +2059,7 @@ function App() {
         },
       });
     } catch (err) {
-      console.error('[Voice Call Answer Error]:', err);
+      console.error('[Call Answer Error]:', err);
       setActiveCall((prev) =>
         prev ? { ...prev, status: 'ended', statusText: 'Connection failed' } : null
       );
@@ -2047,6 +2114,7 @@ function App() {
       } catch {}
     }
 
+    setIsVideoFullscreen(false);
     setTimeout(() => {
       setActiveCall(null);
     }, 1500);
@@ -2055,6 +2123,23 @@ function App() {
   const handleToggleMute = () => {
     const muted = voiceCallService.toggleMute();
     setActiveCall((prev) => (prev ? { ...prev, isMuted: muted } : null));
+  };
+
+  const handleToggleVideo = () => {
+    const videoOff = voiceCallService.toggleVideo();
+    setActiveCall((prev) => (prev ? { ...prev, isVideoOff: videoOff } : null));
+  };
+
+  const handleSwitchCamera = async () => {
+    const switched = await voiceCallService.switchCamera();
+    if (switched && localVideoRef.current && voiceCallService.localStream) {
+      localVideoRef.current.srcObject = voiceCallService.localStream;
+      localVideoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleToggleFullscreen = () => {
+    setIsVideoFullscreen((prev) => !prev);
   };
 
   const formatCallDuration = (seconds = 0) => {
@@ -6044,18 +6129,33 @@ function App() {
                           <span className="quick-call-name">{contact.name}</span>
                           <span className="quick-call-handle">@{contact.username || contact.name}</span>
                         </div>
-                        <button
-                          type="button"
-                          className="quick-call-action-btn"
-                          onClick={() => handleStartCall('voice', contact)}
-                          title={`Voice call with ${contact.name}`}
-                          aria-label={`Voice call with ${contact.name}`}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                          </svg>
-                          <span>Call</span>
-                        </button>
+                        <div className="quick-call-btn-group">
+                          <button
+                            type="button"
+                            className="quick-call-action-btn voice"
+                            onClick={() => handleStartCall('voice', contact)}
+                            title={`Voice call with ${contact.name}`}
+                            aria-label={`Voice call with ${contact.name}`}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Voice</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="quick-call-action-btn video"
+                            onClick={() => handleStartCall('video', contact)}
+                            title={`Video call with ${contact.name}`}
+                            aria-label={`Video call with ${contact.name}`}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                            <span>Video</span>
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -6140,10 +6240,10 @@ function App() {
       {/* Incoming Call Modal Overlay */}
       {incomingCall && !activeCall && (
         <div className="active-call-overlay" role="dialog" aria-modal="true" aria-label="Incoming Call">
-          <div className="active-call-modal incoming">
+          <div className={`active-call-modal incoming ${incomingCall.type === 'video' ? 'video-incoming' : ''}`}>
             <div className="active-call-header">
-              <span className="active-call-type-badge incoming-badge">
-                📞 Incoming Voice Call
+              <span className={`active-call-type-badge incoming-badge ${incomingCall.type === 'video' ? 'video' : 'voice'}`}>
+                {incomingCall.type === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Voice Call'}
               </span>
               <span className="active-call-status pulse-status">Ringing...</span>
             </div>
@@ -6151,7 +6251,7 @@ function App() {
             <div className="active-call-body">
               <div className="active-call-avatar-wrap">
                 <div
-                  className="active-call-avatar ringing"
+                  className={`active-call-avatar ringing ${incomingCall.type === 'video' ? 'video-ring' : ''}`}
                   style={{
                     backgroundColor: incomingCall.callerAvatar
                       ? 'transparent'
@@ -6166,7 +6266,11 @@ function App() {
                 </div>
                 <h3 className="active-call-name">{incomingCall.callerName || incomingCall.caller}</h3>
                 <p className="active-call-handle">@{incomingCall.caller}</p>
-                <p className="incoming-call-prompt">is calling you on Assistance voice...</p>
+                <p className="incoming-call-prompt">
+                  {incomingCall.type === 'video'
+                    ? 'is inviting you to a live video call...'
+                    : 'is calling you on Assistance voice...'}
+                </p>
               </div>
             </div>
 
@@ -6190,13 +6294,20 @@ function App() {
                 className="call-action-chip accept"
                 id="accept-incoming-call-btn"
                 onClick={handleAcceptIncomingCall}
-                title="Accept Call"
-                aria-label="Accept Call"
+                title={incomingCall.type === 'video' ? 'Accept Video Call' : 'Accept Call'}
+                aria-label={incomingCall.type === 'video' ? 'Accept Video Call' : 'Accept Call'}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                </svg>
-                <span>Accept</span>
+                {incomingCall.type === 'video' ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                  </svg>
+                )}
+                <span>{incomingCall.type === 'video' ? 'Accept Video' : 'Accept'}</span>
               </button>
             </div>
           </div>
@@ -6205,10 +6316,10 @@ function App() {
 
       {/* Active Call Modal Overlay */}
       {activeCall && (
-        <div className="active-call-overlay" role="dialog" aria-modal="true" aria-label="Active Call">
-          <div className="active-call-modal">
+        <div className={`active-call-overlay ${isVideoFullscreen ? 'fullscreen-overlay' : ''}`} role="dialog" aria-modal="true" aria-label="Active Call">
+          <div className={`active-call-modal ${activeCall.type === 'video' ? 'video-modal' : ''} ${isVideoFullscreen ? 'fullscreen' : ''}`}>
             <div className="active-call-header">
-              <span className="active-call-type-badge">
+              <span className={`active-call-type-badge ${activeCall.type === 'video' ? 'video' : 'voice'}`}>
                 {activeCall.type === 'video' ? '📹 Video Call' : '📞 Voice Call'}
               </span>
               <span className={`active-call-status ${activeCall.status}`}>
@@ -6223,29 +6334,74 @@ function App() {
             </div>
 
             <div className="active-call-body">
-              {activeCall.type === 'video' && activeCall.status === 'connected' ? (
+              {activeCall.type === 'video' ? (
                 <div className="active-call-video-grid">
+                  {/* Main Remote Video Stream */}
                   <div className="active-call-main-video">
-                    <div
-                      className="mock-video-avatar"
-                      style={{
-                        backgroundColor: activeCall.contact.avatar
-                          ? 'transparent'
-                          : getAvatarColor(activeCall.contact.name || activeCall.contact.username),
-                      }}
-                    >
-                      {activeCall.contact.avatar ? (
-                        <img src={activeCall.contact.avatar} alt={activeCall.contact.name} />
-                      ) : (
-                        <span>{getInitials(activeCall.contact.name || activeCall.contact.username)}</span>
-                      )}
-                    </div>
-                    <span className="mock-video-label">{activeCall.contact.name}</span>
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className={`video-stream-el remote ${remoteMediaState.remoteVideoOff ? 'hidden' : ''}`}
+                    />
+                    {(!voiceCallService.remoteStream || remoteMediaState.remoteVideoOff) && (
+                      <div className="video-avatar-placeholder">
+                        <div
+                          className="mock-video-avatar"
+                          style={{
+                            backgroundColor: activeCall.contact.avatar
+                              ? 'transparent'
+                              : getAvatarColor(activeCall.contact.name || activeCall.contact.username),
+                          }}
+                        >
+                          {activeCall.contact.avatar ? (
+                            <img src={activeCall.contact.avatar} alt={activeCall.contact.name} />
+                          ) : (
+                            <span>{getInitials(activeCall.contact.name || activeCall.contact.username)}</span>
+                          )}
+                        </div>
+                        <span className="mock-video-label">{activeCall.contact.name}</span>
+                        <span className="video-status-hint">
+                          {remoteMediaState.remoteVideoOff
+                            ? 'Camera is turned off'
+                            : activeCall.status === 'connected'
+                            ? 'Live video stream connected'
+                            : 'Waiting for response...'}
+                        </span>
+                      </div>
+                    )}
+
+                    {remoteMediaState.remoteMuted && (
+                      <div className="remote-muted-pill" title="Remote user is muted">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="1" y1="1" x2="23" y2="23"></line>
+                          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+                        </svg>
+                        <span>Muted</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="active-call-pip-video">
-                    <div className="pip-video-preview">
-                      <span>You</span>
-                    </div>
+
+                  {/* PiP Local Video Preview */}
+                  <div className="active-call-pip-video" title="Your camera preview">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={`video-stream-el pip ${activeCall.isVideoOff ? 'hidden' : ''}`}
+                    />
+                    {activeCall.isVideoOff && (
+                      <div className="pip-video-preview camera-off">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" strokeWidth="2">
+                          <line x1="1" y1="1" x2="23" y2="23"></line>
+                          <path d="M21 15.5l-5-3.3v-1.8l5-3.3v8.4zM2 6h2m4 0h10a2 2 0 0 1 2 2v6m-4 4H4a2 2 0 0 1-2-2V8"></path>
+                        </svg>
+                        <span>Camera Off</span>
+                      </div>
+                    )}
+                    <span className="pip-video-label">You</span>
                   </div>
                 </div>
               ) : (
@@ -6282,9 +6438,11 @@ function App() {
             </div>
 
             <div className="active-call-actions">
+              {/* Mic Mute / Unmute */}
               <button
                 type="button"
-                className={`call-control-btn ${activeCall.isMuted ? 'active' : ''}`}
+                className={`call-control-btn ${activeCall.isMuted ? 'active danger' : ''}`}
+                id="call-mute-btn"
                 onClick={handleToggleMute}
                 title={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
                 aria-label={activeCall.isMuted ? 'Unmute microphone' : 'Mute microphone'}
@@ -6307,11 +6465,13 @@ function App() {
                 )}
               </button>
 
+              {/* Camera On / Off (Video calls only) */}
               {activeCall.type === 'video' && (
                 <button
                   type="button"
-                  className={`call-control-btn ${activeCall.isVideoOff ? 'active' : ''}`}
-                  onClick={() => setActiveCall((prev) => ({ ...prev, isVideoOff: !prev.isVideoOff }))}
+                  className={`call-control-btn ${activeCall.isVideoOff ? 'active danger' : ''}`}
+                  id="call-camera-btn"
+                  onClick={handleToggleVideo}
                   title={activeCall.isVideoOff ? 'Turn camera on' : 'Turn camera off'}
                   aria-label={activeCall.isVideoOff ? 'Turn camera on' : 'Turn camera off'}
                 >
@@ -6329,9 +6489,52 @@ function App() {
                 </button>
               )}
 
+              {/* Switch Camera (if >1 cameras available) */}
+              {activeCall.type === 'video' && hasMultipleCameras && (
+                <button
+                  type="button"
+                  className="call-control-btn"
+                  id="call-switch-camera-btn"
+                  onClick={handleSwitchCamera}
+                  title="Switch camera"
+                  aria-label="Switch camera"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="10 9 9 4 15 4 14 9"></polyline>
+                    <path d="M2 10l5-5 5 5"></path>
+                    <path d="M22 14l-5 5-5-5"></path>
+                  </svg>
+                </button>
+              )}
+
+              {/* Fullscreen Toggle (Video calls only) */}
+              {activeCall.type === 'video' && (
+                <button
+                  type="button"
+                  className={`call-control-btn ${isVideoFullscreen ? 'active' : ''}`}
+                  id="call-fullscreen-btn"
+                  onClick={handleToggleFullscreen}
+                  title={isVideoFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                  aria-label={isVideoFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                >
+                  {isVideoFullscreen ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M15 3h6v6m0 6v6h-6M9 21H3v-6M3 9V3h6"></path>
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              {/* End Call Button */}
               <button
                 type="button"
                 className="call-control-btn end-call"
+                id="call-hangup-btn"
                 onClick={handleEndCall}
                 title="End Call"
                 aria-label="End Call"

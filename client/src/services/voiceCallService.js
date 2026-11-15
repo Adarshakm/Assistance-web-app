@@ -1,5 +1,6 @@
 /**
- * Voice Call Service with WebRTC, REST Signaling, and Web Audio API
+ * WebRTC Voice and Video Call Service
+ * Handles P2P media streams, STUN negotiation, and REST signaling
  */
 
 const ICE_SERVERS = [
@@ -7,6 +8,7 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
 ];
 
 /**
@@ -212,10 +214,10 @@ export const callAudioSynthesizer = {
 };
 
 /**
- * Voice Call Manager
- * Orchestrates WebRTC peer connection, mic capture, and backend REST signaling
+ * WebRTC Call Manager
+ * Orchestrates WebRTC peer connection, mic/camera capture, and backend REST signaling
  */
-class VoiceCallManager {
+export class WebRTCCallManager {
   constructor() {
     this.callId = null;
     this.user = null;
@@ -223,7 +225,9 @@ class VoiceCallManager {
     this.localStream = null;
     this.remoteStream = null;
     this.audioElement = null;
+    this.type = 'voice'; // 'voice' | 'video'
     this.isMuted = false;
+    this.isVideoOff = false;
     this.role = null; // 'caller' | 'recipient'
     this.pollInterval = null;
     this.ringSound = null;
@@ -233,45 +237,84 @@ class VoiceCallManager {
     this.processedCandidateCount = 0;
     this.onStatusChange = null;
     this.onAudioLevel = null;
+    this.onLocalStream = null;
+    this.onRemoteStream = null;
+    this.onRemoteMediaState = null;
     this.hasRemoteDescription = false;
     this.pendingCandidates = [];
+    this.videoDevices = [];
+    this.currentVideoDeviceIndex = 0;
   }
 
   /**
-   * Initialize local audio and volume analyser
+   * Request local audio (and video if type === 'video')
    */
-  async initLocalAudio() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+  async initLocalMedia(type = 'voice') {
+    this.type = type;
+
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
+
+    let stream = null;
+
+    if (type === 'video') {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: {
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+            facingMode: 'user',
+          },
+        });
+        this.isVideoOff = false;
+      } catch (videoErr) {
+        console.warn('[WebRTC] Camera unavailable or permission denied, falling back to audio only:', videoErr);
+        // Fallback to audio only
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audioConstraints,
+          video: false,
+        });
+        this.isVideoOff = true;
+      }
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints,
         video: false,
       });
-
-      this.localStream = stream;
-
-      // Setup Web Audio Analyser for live equalizer/waveform
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) {
-          this.audioContext = new AudioCtx();
-          const source = this.audioContext.createMediaStreamSource(stream);
-          this.analyser = this.audioContext.createAnalyser();
-          this.analyser.fftSize = 64;
-          source.connect(this.analyser);
-        }
-      } catch (err) {
-        console.warn('[WebAudio] Analyser setup failed:', err);
-      }
-
-      return stream;
-    } catch (err) {
-      console.error('[WebRTC] Microphone access denied or unavailable:', err);
-      throw new Error('Microphone access is required for voice calls');
+      this.isVideoOff = true;
     }
+
+    this.localStream = stream;
+
+    // Enumerate video devices for camera switching
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      this.videoDevices = devices.filter((d) => d.kind === 'videoinput');
+    } catch {}
+
+    // Setup Web Audio Analyser for live equalizer/waveform
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        this.audioContext = new AudioCtx();
+        const source = this.audioContext.createMediaStreamSource(stream);
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 64;
+        source.connect(this.analyser);
+      }
+    } catch (err) {
+      console.warn('[WebAudio] Analyser setup error:', err);
+    }
+
+    if (this.onLocalStream) {
+      this.onLocalStream(stream);
+    }
+
+    return stream;
   }
 
   /**
@@ -289,7 +332,6 @@ class VoiceCallManager {
           sum += dataArray[i];
         }
         const avg = sum / dataArray.length;
-        // Normalize 0-100
         const level = Math.min(100, Math.round((avg / 255) * 100));
         this.onAudioLevel(this.isMuted ? 0 : level);
       }
@@ -326,15 +368,19 @@ class VoiceCallManager {
       });
     }
 
-    // Handle remote audio stream
+    // Handle remote media streams
     pc.ontrack = (event) => {
-      console.log('[WebRTC] Received remote stream track:', event.track.kind);
+      console.log('[WebRTC] Received remote track:', event.track.kind);
       this.remoteStream = event.streams[0];
+
+      // Play audio through audio element
       const audioEl = this.getOrCreateAudioElement();
       audioEl.srcObject = event.streams[0];
-      audioEl.play().catch((err) => {
-        console.warn('[WebRTC] Remote audio autoplay blocked:', err);
-      });
+      audioEl.play().catch(() => {});
+
+      if (this.onRemoteStream) {
+        this.onRemoteStream(this.remoteStream);
+      }
     };
 
     // Forward local ICE candidates to backend
@@ -347,7 +393,7 @@ class VoiceCallManager {
     pc.oniceconnectionstatechange = () => {
       console.log('[WebRTC] ICE Connection State:', pc.iceConnectionState);
       if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        console.warn('[WebRTC] ICE disconnected or failed');
+        console.warn('[WebRTC] Peer connection disconnected or failed');
       }
     };
 
@@ -376,7 +422,7 @@ class VoiceCallManager {
   }
 
   /**
-   * Initiate an Outgoing Voice Call
+   * Initiate an Outgoing Voice or Video Call
    */
   async initiateCall({
     caller,
@@ -385,18 +431,26 @@ class VoiceCallManager {
     recipient,
     recipientName,
     recipientAvatar,
+    type = 'voice',
+    onLocalStream,
+    onRemoteStream,
     onStatusChange,
     onAudioLevel,
+    onRemoteMediaState,
   }) {
     this.cleanup();
     this.role = 'caller';
     this.user = caller;
+    this.type = type;
+    this.onLocalStream = onLocalStream;
+    this.onRemoteStream = onRemoteStream;
     this.onStatusChange = onStatusChange;
     this.onAudioLevel = onAudioLevel;
+    this.onRemoteMediaState = onRemoteMediaState;
 
     try {
-      // 1. Get mic stream
-      await this.initLocalAudio();
+      // 1. Get mic and camera stream
+      await this.initLocalMedia(type);
       this.startLevelMonitoring();
 
       // 2. Create peer connection
@@ -405,7 +459,7 @@ class VoiceCallManager {
       // 3. Create WebRTC offer
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: false,
+        offerToReceiveVideo: type === 'video',
       });
       await pc.setLocalDescription(offer);
 
@@ -420,7 +474,7 @@ class VoiceCallManager {
           recipient,
           recipientName,
           recipientAvatar,
-          type: 'voice',
+          type,
           sdpOffer: offer,
         }),
       });
@@ -446,19 +500,33 @@ class VoiceCallManager {
   }
 
   /**
-   * Answer an Incoming Voice Call
+   * Answer an Incoming Voice or Video Call
    */
-  async answerCall({ callId, user, sdpOffer, onStatusChange, onAudioLevel }) {
+  async answerCall({
+    callId,
+    user,
+    sdpOffer,
+    type = 'voice',
+    onLocalStream,
+    onRemoteStream,
+    onStatusChange,
+    onAudioLevel,
+    onRemoteMediaState,
+  }) {
     this.cleanup();
     this.role = 'recipient';
     this.user = user;
     this.callId = callId;
+    this.type = type;
+    this.onLocalStream = onLocalStream;
+    this.onRemoteStream = onRemoteStream;
     this.onStatusChange = onStatusChange;
     this.onAudioLevel = onAudioLevel;
+    this.onRemoteMediaState = onRemoteMediaState;
 
     try {
-      // 1. Get mic stream
-      await this.initLocalAudio();
+      // 1. Get mic and camera stream
+      await this.initLocalMedia(type);
       this.startLevelMonitoring();
 
       // 2. Create peer connection
@@ -507,7 +575,7 @@ class VoiceCallManager {
   }
 
   /**
-   * Polling loop to sync call state and exchange ICE candidates
+   * Polling loop to sync call state, ICE candidates, and remote media toggles
    */
   startPolling() {
     if (this.pollInterval) clearInterval(this.pollInterval);
@@ -568,7 +636,15 @@ class VoiceCallManager {
           }
         }
 
-        // 3. Handle call status transitions (rejected, ended, missed)
+        // 3. Notify remote media state change (video off / muted)
+        if (this.onRemoteMediaState && (typeof data.remoteVideoOff === 'boolean' || typeof data.remoteMuted === 'boolean')) {
+          this.onRemoteMediaState({
+            remoteVideoOff: !!data.remoteVideoOff,
+            remoteMuted: !!data.remoteMuted,
+          });
+        }
+
+        // 4. Handle call status transitions (rejected, ended, missed)
         if (data.status === 'rejected') {
           this.handleCallTerminated('rejected');
         } else if (data.status === 'ended' || data.status === 'missed') {
@@ -657,7 +733,83 @@ class VoiceCallManager {
         track.enabled = !this.isMuted;
       });
     }
+    this.broadcastMediaState();
     return this.isMuted;
+  }
+
+  /**
+   * Toggle video camera track on/off
+   */
+  toggleVideo() {
+    this.isVideoOff = !this.isVideoOff;
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach((track) => {
+        track.enabled = !this.isVideoOff;
+      });
+    }
+    this.broadcastMediaState();
+    return this.isVideoOff;
+  }
+
+  /**
+   * Broadcast mute or camera toggle state to peer via backend
+   */
+  async broadcastMediaState() {
+    if (!this.callId || !this.user) return;
+    try {
+      await fetch('/api/call/media-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callId: this.callId,
+          user: this.user,
+          isMuted: this.isMuted,
+          isVideoOff: this.isVideoOff,
+        }),
+      });
+    } catch {}
+  }
+
+  /**
+   * Switch between available cameras (e.g. front/back on mobile)
+   */
+  async switchCamera() {
+    if (!this.localStream || this.videoDevices.length < 2) return false;
+
+    this.currentVideoDeviceIndex = (this.currentVideoDeviceIndex + 1) % this.videoDevices.length;
+    const nextDevice = this.videoDevices[this.currentVideoDeviceIndex];
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: nextDevice.deviceId } },
+      });
+      const newVideoTrack = newStream.getVideoTracks()[0];
+
+      // Replace track on peer connection
+      if (this.peerConnection) {
+        const senders = this.peerConnection.getSenders();
+        const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack);
+        }
+      }
+
+      // Stop old video track
+      const oldTrack = this.localStream.getVideoTracks()[0];
+      if (oldTrack) oldTrack.stop();
+
+      this.localStream.removeTrack(oldTrack);
+      this.localStream.addTrack(newVideoTrack);
+
+      if (this.onLocalStream) {
+        this.onLocalStream(this.localStream);
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[WebRTC] Switch camera error:', err);
+      return false;
+    }
   }
 
   /**
@@ -736,11 +888,14 @@ class VoiceCallManager {
     this.callId = null;
     this.role = null;
     this.isMuted = false;
+    this.isVideoOff = false;
     this.hasRemoteDescription = false;
     this.pendingCandidates = [];
     this.processedCandidateCount = 0;
   }
 }
 
-// Export singleton instance
-export const voiceCallService = new VoiceCallManager();
+// Export singleton instances
+export const webrtcCallService = new WebRTCCallManager();
+export const voiceCallService = webrtcCallService;
+export default webrtcCallService;

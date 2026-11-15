@@ -270,7 +270,8 @@ router.get('/poll/:callId', async (req, res) => {
 
     // Determine which ICE candidates the requester needs
     let remoteCandidates = [];
-    if (cleanUser && (call.caller === cleanUser || (await resolveUserAliases(cleanUser)).includes(call.caller))) {
+    const isCaller = cleanUser && (call.caller === cleanUser || (await resolveUserAliases(cleanUser)).includes(call.caller));
+    if (isCaller) {
       // Caller needs recipient candidates
       remoteCandidates = call.recipientCandidates || [];
     } else {
@@ -280,6 +281,7 @@ router.get('/poll/:callId', async (req, res) => {
 
     return res.status(200).json({
       callId: call._id,
+      type: call.type || 'voice',
       status: call.status,
       sdpOffer: call.sdpOffer,
       sdpAnswer: call.sdpAnswer,
@@ -287,10 +289,48 @@ router.get('/poll/:callId', async (req, res) => {
       duration: call.duration || 0,
       startedAt: call.startedAt,
       endedAt: call.endedAt,
+      remoteVideoOff: isCaller ? !!call.recipientVideoOff : !!call.callerVideoOff,
+      remoteMuted: isCaller ? !!call.recipientMuted : !!call.callerMuted,
     });
   } catch (err) {
     console.error('[Call Poll Error]:', err);
     return res.status(500).json({ error: 'Failed to poll call', details: err.message });
+  }
+});
+
+/**
+ * POST /api/call/media-state
+ * Update camera/microphone mute or video toggle state
+ */
+router.post('/media-state', async (req, res) => {
+  try {
+    const { callId, user, isMuted, isVideoOff } = req.body;
+    if (!callId) {
+      return res.status(400).json({ error: 'Call ID is required' });
+    }
+
+    const cleanUser = String(user || '').trim().toLowerCase();
+    const call = await Call.findById(callId);
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const aliases = cleanUser ? await resolveUserAliases(cleanUser) : [];
+    const isCaller = call.caller === cleanUser || aliases.includes(call.caller);
+
+    if (isCaller) {
+      if (typeof isMuted === 'boolean') call.callerMuted = isMuted;
+      if (typeof isVideoOff === 'boolean') call.callerVideoOff = isVideoOff;
+    } else {
+      if (typeof isMuted === 'boolean') call.recipientMuted = isMuted;
+      if (typeof isVideoOff === 'boolean') call.recipientVideoOff = isVideoOff;
+    }
+
+    await call.save();
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to update media state', details: err.message });
   }
 });
 
@@ -513,3 +553,4 @@ router.delete('/history/:callId', async (req, res) => {
 });
 
 export default router;
+
