@@ -74,6 +74,14 @@ function App() {
       return 'whats-happening';
     }
     if (
+      window.location.pathname === '/people-i-follow' ||
+      window.location.hash === '#people-i-follow' ||
+      window.location.pathname === '/following-feed' ||
+      window.location.hash === '#following-feed'
+    ) {
+      return 'people-i-follow';
+    }
+    if (
       window.location.pathname === '/photo-sharing' ||
       window.location.hash === '#photo-sharing' ||
       window.location.pathname === '/photo-and-image-sharing' ||
@@ -262,6 +270,8 @@ function App() {
         ? '/privacy-security'
         : view === 'whats-happening'
         ? '/whats-happening'
+        : view === 'people-i-follow'
+        ? '/people-i-follow'
         : view === 'photo-sharing'
         ? '/photo-sharing'
         : view === 'video-sharing'
@@ -366,6 +376,13 @@ function App() {
         window.location.hash === '#whats-happening-around-you'
       ) {
         setCurrentView('whats-happening');
+      } else if (
+        window.location.pathname === '/people-i-follow' ||
+        window.location.hash === '#people-i-follow' ||
+        window.location.pathname === '/following-feed' ||
+        window.location.hash === '#following-feed'
+      ) {
+        setCurrentView('people-i-follow');
       } else if (
         window.location.pathname === '/photo-sharing' ||
         window.location.hash === '#photo-sharing' ||
@@ -569,6 +586,7 @@ function App() {
       if (
         path === '/messages' ||
         path === '/whats-happening' ||
+        path === '/people-i-follow' ||
         path === '/contacts' ||
         path === '/social-connections'
       ) {
@@ -3319,6 +3337,7 @@ function App() {
     currentView === 'search-and-discovery' ||
     currentView === 'privacy' ||
     currentView === 'whats-happening' ||
+    currentView === 'people-i-follow' ||
     currentView === 'photo-sharing' ||
     currentView === 'video-sharing' ||
     currentView === 'stories' ||
@@ -3936,6 +3955,25 @@ function App() {
                   <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
                 </svg>
                 <span>What's Happening Around You</span>
+              </button>
+
+              <button
+                type="button"
+                className={`navbar-item ${currentView === 'people-i-follow' ? 'active' : ''}`}
+                id="people-i-follow-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'people-i-follow' ? 'blank' : 'people-i-follow')
+                }
+                title="People I Follow"
+                aria-label="People I Follow"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>People I Follow</span>
               </button>
             </div>
 
@@ -5685,14 +5723,57 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : currentView === 'whats-happening' ? (
+          ) : currentView === 'whats-happening' || currentView === 'people-i-follow' ? (
             <div className="whats-happening-space" id="whats-happening-space">
               <div className="post-creator-container" id="post-creator-container">
+                {/* Feed Switcher Tabs: What's Happening Around You vs People I Follow */}
+                <div className="feed-tabs-switcher" role="tablist" aria-label="Feed selection tabs">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-whats-happening"
+                    aria-selected={currentView === 'whats-happening'}
+                    className={`feed-tab-btn ${currentView === 'whats-happening' ? 'active' : ''}`}
+                    onClick={() => navigateTo('whats-happening')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                    </svg>
+                    <span>What's Happening Around You</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-people-i-follow"
+                    aria-selected={currentView === 'people-i-follow'}
+                    className={`feed-tab-btn ${currentView === 'people-i-follow' ? 'active' : ''}`}
+                    onClick={() => navigateTo('people-i-follow')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>People I Follow</span>
+                    {followingList.length > 0 && (
+                      <span className="feed-tab-badge">{followingList.length}</span>
+                    )}
+                  </button>
+                </div>
+
                 {/* Header with Title and Live Updates Refresh */}
                 <div className="whats-happening-header">
                   <div className="whats-happening-title-wrap">
-                    <h2 className="whats-happening-title">What's Happening Around You</h2>
-                    <p className="whats-happening-subtitle">Real-time public updates and moments from everyone</p>
+                    <h2 className="whats-happening-title">
+                      {currentView === 'people-i-follow' ? 'People I Follow' : "What's Happening Around You"}
+                    </h2>
+                    <p className="whats-happening-subtitle">
+                      {currentView === 'people-i-follow'
+                        ? `Updates and moments from people you follow (${followingList.length}) and yourself`
+                        : 'Real-time public updates and moments from everyone'}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -5731,7 +5812,11 @@ function App() {
                   <textarea
                     id="create-post-textarea"
                     className="create-post-textarea"
-                    placeholder="What's happening around you?"
+                    placeholder={
+                      currentView === 'people-i-follow'
+                        ? "Share an update with the people you follow..."
+                        : "What's happening around you?"
+                    }
                     value={postContent}
                     onChange={(e) => setPostContent(e.target.value)}
                     rows={3}
@@ -5756,144 +5841,198 @@ function App() {
                 </div>
 
                 {/* Posts Feed */}
-                <div className="posts-list" id="posts-list">
-                  {posts.length === 0 ? (
-                    <div className="posts-empty-state">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
-                      </svg>
-                      <p className="posts-empty-title">No posts around you yet</p>
-                      <p className="posts-empty-subtitle">Be the first to share an update with everyone!</p>
-                    </div>
-                  ) : (
-                    posts.map((post) => (
-                      <article key={post.id} className="post-card">
-                        <div className="post-header">
-                          <div className="post-author-wrap">
-                            <div
-                              className="post-author-avatar"
-                              style={{
-                                backgroundColor: post.authorAvatar
-                                  ? 'transparent'
-                                  : getAvatarColor(post.authorName || post.author || 'User'),
-                              }}
-                            >
-                              {post.authorAvatar ? (
-                                <img src={post.authorAvatar} alt={post.authorName || post.author} />
-                              ) : (
-                                <span>{getInitials(post.authorName || post.author || 'User')}</span>
-                              )}
-                            </div>
-                            <div className="post-author-meta">
-                              <span className="post-author">{post.authorName || post.author || 'User'}</span>
-                              <span className="post-handle">@{post.author || 'user'}</span>
-                            </div>
-                          </div>
-                          <span className="post-time">
-                            {post.time || post.timestamp}
-                            {post.isEdited && (
-                              <span
-                                className="post-edited-tag"
-                                title={
-                                  post.editedAt
-                                    ? `Edited at ${new Date(post.editedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                                    : 'Edited'
-                                }
-                              >
-                                {' '}· Edited
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        {editingPostId === post.id ? (
-                          <div className="post-edit-container">
-                            <textarea
-                              className="post-edit-textarea"
-                              value={editingPostContent}
-                              onChange={(e) => setEditingPostContent(e.target.value)}
-                              rows={3}
-                              placeholder="Edit your post..."
-                              autoFocus
-                              aria-label="Edit post content"
-                            />
-                            {editPostFeedback && (
-                              <div className="post-edit-feedback-error" role="alert">
-                                {editPostFeedback}
-                              </div>
-                            )}
-                            <div className="post-edit-actions">
-                              <button
-                                type="button"
-                                className="post-edit-btn cancel"
-                                onClick={handleCancelEditPost}
-                                disabled={isSavingPostEdit}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                className="post-edit-btn save"
-                                onClick={() => handleSaveEditPost(post.id)}
-                                disabled={!editingPostContent.trim() || isSavingPostEdit}
-                              >
-                                {isSavingPostEdit ? 'Saving...' : 'Save'}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="post-content">{post.content}</p>
-                        )}
+                {(() => {
+                  const isFollowingFeed = currentView === 'people-i-follow';
+                  const displayedPosts = isFollowingFeed
+                    ? posts.filter((post) => {
+                        const authorLower = String(post.author || '').toLowerCase();
+                        const userLower = String(loggedInUser || '').toLowerCase();
+                        return (
+                          authorLower === userLower ||
+                          followingList.some((f) => String(f).toLowerCase() === authorLower)
+                        );
+                      })
+                    : posts;
 
-                        <div className="post-footer">
-                          <button
-                            type="button"
-                            className={`post-action-btn like-btn ${(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'liked' : ''}`}
-                            onClick={() => handleLikePost(post.id)}
-                            title="Like post"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill={(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                            </svg>
-                            <span>{(post.likes || []).length > 0 ? (post.likes || []).length : 'Like'}</span>
-                          </button>
-
-                          {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
+                  return (
+                    <div className="posts-list" id="posts-list">
+                      {displayedPosts.length === 0 ? (
+                        <div className="posts-empty-state">
+                          {isFollowingFeed ? (
                             <>
-                              {editingPostId !== post.id && (
+                              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="1.5">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                              </svg>
+                              <p className="posts-empty-title">
+                                {followingList.length === 0
+                                  ? "You're not following anyone yet"
+                                  : "No posts from people you follow yet"}
+                              </p>
+                              <p className="posts-empty-subtitle">
+                                {followingList.length === 0
+                                  ? "Follow people from Social Connections to see their posts and moments here."
+                                  : "When people you follow share moments, they'll show up here. You can also share an update above!"}
+                              </p>
+                              {followingList.length === 0 && (
                                 <button
                                   type="button"
-                                  className="post-action-btn edit-btn"
-                                  onClick={() => handleStartEditPost(post)}
-                                  title="Edit post"
+                                  className="discover-follow-cta-btn"
+                                  onClick={() => navigateTo('social')}
                                 >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                                    <line x1="23" y1="11" x2="17" y2="11"></line>
                                   </svg>
-                                  <span>Edit</span>
+                                  <span>Find People to Follow</span>
                                 </button>
                               )}
-
-                              <button
-                                type="button"
-                                className="post-action-btn delete-btn"
-                                onClick={() => handleDeletePost(post.id)}
-                                title="Delete post"
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
-                                <span>Delete</span>
-                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                              </svg>
+                              <p className="posts-empty-title">No posts around you yet</p>
+                              <p className="posts-empty-subtitle">Be the first to share an update with everyone!</p>
                             </>
                           )}
                         </div>
-                      </article>
-                    ))
-                  )}
-                </div>
+                      ) : (
+                        displayedPosts.map((post) => (
+                          <article key={post.id} className="post-card">
+                            <div className="post-header">
+                              <div className="post-author-wrap">
+                                <div
+                                  className="post-author-avatar"
+                                  style={{
+                                    backgroundColor: post.authorAvatar
+                                      ? 'transparent'
+                                      : getAvatarColor(post.authorName || post.author || 'User'),
+                                  }}
+                                >
+                                  {post.authorAvatar ? (
+                                    <img src={post.authorAvatar} alt={post.authorName || post.author} />
+                                  ) : (
+                                    <span>{getInitials(post.authorName || post.author || 'User')}</span>
+                                  )}
+                                </div>
+                                <div className="post-author-meta">
+                                  <span className="post-author">{post.authorName || post.author || 'User'}</span>
+                                  <span className="post-handle">@{post.author || 'user'}</span>
+                                </div>
+                              </div>
+                              <span className="post-time">
+                                {post.time || post.timestamp}
+                                {post.isEdited && (
+                                  <span
+                                    className="post-edited-tag"
+                                    title={
+                                      post.editedAt
+                                        ? `Edited at ${new Date(post.editedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                        : 'Edited'
+                                    }
+                                  >
+                                    {' '}· Edited
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            {editingPostId === post.id ? (
+                              <div className="post-edit-container">
+                                <textarea
+                                  className="post-edit-textarea"
+                                  value={editingPostContent}
+                                  onChange={(e) => setEditingPostContent(e.target.value)}
+                                  rows={3}
+                                  placeholder="Edit your post..."
+                                  autoFocus
+                                  aria-label="Edit post content"
+                                />
+                                {editPostFeedback && (
+                                  <div className="post-edit-feedback-error" role="alert">
+                                    {editPostFeedback}
+                                  </div>
+                                )}
+                                <div className="post-edit-actions">
+                                  <button
+                                    type="button"
+                                    className="post-edit-btn cancel"
+                                    onClick={handleCancelEditPost}
+                                    disabled={isSavingPostEdit}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="post-edit-btn save"
+                                    onClick={() => handleSaveEditPost(post.id)}
+                                    disabled={!editingPostContent.trim() || isSavingPostEdit}
+                                  >
+                                    {isSavingPostEdit ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="post-content">{post.content}</p>
+                            )}
+
+                            <div className="post-footer">
+                              <button
+                                type="button"
+                                className={`post-action-btn like-btn ${(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'liked' : ''}`}
+                                onClick={() => handleLikePost(post.id)}
+                                title="Like post"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill={(post.likes || []).includes(String(loggedInUser).toLowerCase()) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                </svg>
+                                <span>{(post.likes || []).length > 0 ? (post.likes || []).length : 'Like'}</span>
+                              </button>
+
+                              {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
+                                <>
+                                  {editingPostId !== post.id && (
+                                    <button
+                                      type="button"
+                                      className="post-action-btn edit-btn"
+                                      onClick={() => handleStartEditPost(post)}
+                                      title="Edit post"
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                      </svg>
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    className="post-action-btn delete-btn"
+                                    onClick={() => handleDeletePost(post.id)}
+                                    title="Delete post"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="3 6 5 6 21 6"></polyline>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    <span>Delete</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ) : currentView === 'photo-sharing' ? (

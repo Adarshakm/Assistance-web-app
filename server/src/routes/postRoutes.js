@@ -11,7 +11,12 @@ const escapeRegex = (string = '') => String(string).replace(/[.*+?^${}()|[\]\\]/
 
 /**
  * GET /api/posts
- * Fetch all posts for "What's Happening Around You" feed
+ * Fetch posts for "What's Happening Around You" or "People I Follow" feed
+ * Query params:
+ *   - feed: 'following' (filters by authors followed by user + user's own posts)
+ *   - user: username of current user (used with feed=following)
+ *   - authors: comma-separated list of author usernames to filter by
+ *   - limit: max posts to fetch (default 50)
  */
 router.get('/', async (req, res) => {
   try {
@@ -21,7 +26,41 @@ router.get('/', async (req, res) => {
     res.setHeader('Expires', '0');
 
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
-    const rawPosts = await Post.find().sort({ createdAt: -1 }).limit(limit).lean();
+
+    let filter = {};
+
+    if (req.query.feed === 'following' && req.query.user) {
+      const cleanUser = String(req.query.user).trim();
+      const currentUserDoc = await User.findOne({
+        username: new RegExp('^' + escapeRegex(cleanUser) + '$', 'i'),
+      })
+        .select('following')
+        .lean();
+
+      const following = currentUserDoc && Array.isArray(currentUserDoc.following)
+        ? currentUserDoc.following
+        : [];
+
+      // Include authors followed by the user, plus the user's own posts
+      const authorList = [...new Set([...following.map((u) => String(u).trim()), cleanUser])].filter(Boolean);
+
+      filter = {
+        author: {
+          $in: authorList.map((a) => new RegExp('^' + escapeRegex(a) + '$', 'i')),
+        },
+      };
+    } else if (req.query.authors) {
+      const authorList = req.query.authors.split(',').map((s) => s.trim()).filter(Boolean);
+      if (authorList.length > 0) {
+        filter = {
+          author: {
+            $in: authorList.map((a) => new RegExp('^' + escapeRegex(a) + '$', 'i')),
+          },
+        };
+      }
+    }
+
+    const rawPosts = await Post.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
 
     // Collect unique author usernames to fetch latest avatars & display names
     const authors = [...new Set(rawPosts.map((p) => p.author).filter(Boolean))];
