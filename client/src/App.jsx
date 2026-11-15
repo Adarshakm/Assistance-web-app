@@ -876,8 +876,14 @@ function App() {
       if (response.ok) {
         const activeUser = data.user?.username || username;
         setLoggedInUser(activeUser);
+        setActiveChatContact(null);
+        setChatMessages({});
+        setRecentConversations([]);
+        setTotalUnreadMessages(0);
         try {
           localStorage.setItem('assistance_user', activeUser);
+          localStorage.removeItem('assistance_active_chat_contact');
+          localStorage.removeItem('assistance_chat_history');
         } catch {}
         setFeedback({ type: 'success', text: data.message || 'Registered successfully!' });
         navigateTo('blank');
@@ -918,8 +924,14 @@ function App() {
       if (response.ok) {
         const activeUser = data.user?.username || loginUsername;
         setLoggedInUser(activeUser);
+        setActiveChatContact(null);
+        setChatMessages({});
+        setRecentConversations([]);
+        setTotalUnreadMessages(0);
         try {
           localStorage.setItem('assistance_user', activeUser);
+          localStorage.removeItem('assistance_active_chat_contact');
+          localStorage.removeItem('assistance_chat_history');
           if (data.user?.avatar) {
             setProfilePicture(data.user.avatar);
             localStorage.setItem('assistance_profile_picture', data.user.avatar);
@@ -1825,7 +1837,16 @@ function App() {
 
   const getActiveChatKey = (contact) => {
     if (!contact) return '';
-    return (contact.username || contact.phone || contact.name || '').trim().toLowerCase();
+    if (typeof contact === 'string') return contact.trim().toLowerCase();
+    return (
+      contact.username ||
+      contact.contact ||
+      contact.phone ||
+      contact.name ||
+      contact.contactName ||
+      contact.displayName ||
+      ''
+    ).trim().toLowerCase();
   };
 
   const isMessageSentByMe = (msg, contact = activeChatContact) => {
@@ -2128,9 +2149,38 @@ function App() {
 
           fetchRecentConversations();
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error('[Send Message Error]:', res.status, errData);
+        // Remove optimistic message on server rejection
+        setChatMessages((prev) => {
+          const existing = prev[contactKey] || [];
+          const updated = {
+            ...prev,
+            [contactKey]: existing.filter((m) => m.id !== localId),
+          };
+          try {
+            localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+        alert(`Message delivery failed (${res.status}): ${errData.error || errData.message || 'Please check your connection.'}`);
       }
     } catch (err) {
-      console.warn('[Send Message Warning - Saved Locally]:', err);
+      console.warn('[Send Message Warning]:', err);
+      // Remove optimistic message on failure
+      setChatMessages((prev) => {
+        const existing = prev[contactKey] || [];
+        const updated = {
+          ...prev,
+          [contactKey]: existing.filter((m) => m.id !== localId),
+        };
+        try {
+          localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      alert('Message delivery failed: Network connection error. Please try again.');
     } finally {
       setIsSendingMessage(false);
     }
@@ -3244,8 +3294,15 @@ function App() {
               className="logout-btn"
               onClick={() => {
                 setLoggedInUser('');
+                setActiveChatContact(null);
+                setChatMessages({});
+                setRecentConversations([]);
+                setTotalUnreadMessages(0);
+                setIncomingToast(null);
                 try {
                   localStorage.removeItem('assistance_user');
+                  localStorage.removeItem('assistance_active_chat_contact');
+                  localStorage.removeItem('assistance_chat_history');
                 } catch {}
                 navigateTo('login');
               }}

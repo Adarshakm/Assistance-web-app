@@ -37,15 +37,11 @@ fi
 # 4. Restart Server process using PM2
 echo "🔄 Step 4/4: Reloading application with PM2..."
 if command -v pm2 >/dev/null 2>&1; then
-  if pm2 list | grep -q "assistance-server"; then
-    pm2 reload assistance-server --update-env || pm2 restart assistance-server --update-env
-  elif pm2 list | grep -q "myapp"; then
-    pm2 reload myapp --update-env || pm2 restart myapp --update-env
-  elif pm2 list | grep -q "server"; then
-    pm2 reload server --update-env || pm2 restart server --update-env
-  else
+  pm2 restart all --update-env || pm2 reload all --update-env || true
+  if ! pm2 list | grep -q "online"; then
     echo "⚠️ Starting PM2 instance for assistance-server..."
     cd "$APP_DIR/server"
+    pm2 delete all 2>/dev/null || true
     pm2 start src/server.js --name "assistance-server"
     pm2 save
     cd "$APP_DIR"
