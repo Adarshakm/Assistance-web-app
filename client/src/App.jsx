@@ -782,20 +782,15 @@ function App() {
   // Fetch posts from backend and poll for real-time updates across all users
   const fetchPosts = async () => {
     try {
-      const res = await fetch(`/api/posts?_t=${Date.now()}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        },
-      });
+      const res = await fetch(`/api/posts?_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.posts)) {
-          // Merge server posts while retaining any post published in the last 15 seconds
+          // Merge server posts while retaining any post published locally in the last 60 seconds
           setPosts((prev) => {
             const serverIds = new Set(data.posts.map((p) => p.id));
             const localPending = prev.filter(
-              (p) => !serverIds.has(p.id) && Date.now() - (p._localCreatedAt || 0) < 15000
+              (p) => !serverIds.has(p.id) && Date.now() - (p._localCreatedAt || 0) < 60000
             );
             return [...localPending, ...data.posts];
           });
@@ -1693,7 +1688,10 @@ function App() {
   };
 
   const handleCreatePost = async (e) => {
-    if (e) e.preventDefault();
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
     const trimmed = postContent.trim();
     if (!trimmed || isSubmittingPost) return;
 
@@ -1712,7 +1710,6 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
         },
         body: JSON.stringify({
           author: loggedInUser || 'User',
@@ -5634,10 +5631,9 @@ function App() {
                 </div>
 
                 {/* Create Post Card */}
-                <form
+                <div
                   className="create-post-card"
                   id="create-post-card"
-                  onSubmit={handleCreatePost}
                 >
                   <div className="create-post-header-row">
                     <div
@@ -5670,15 +5666,16 @@ function App() {
                   )}
                   <div className="create-post-actions">
                     <button
-                      type="submit"
+                      type="button"
                       id="create-post-btn"
                       className="create-post-btn"
+                      onClick={handleCreatePost}
                       disabled={!postContent.trim() || isSubmittingPost}
                     >
                       {isSubmittingPost ? 'Posting...' : 'Post'}
                     </button>
                   </div>
-                </form>
+                </div>
 
                 {/* Posts Feed */}
                 <div className="posts-list" id="posts-list">

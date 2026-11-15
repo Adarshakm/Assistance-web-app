@@ -67,15 +67,16 @@ router.post('/', async (req, res) => {
   try {
     const { author, content, authorName, authorAvatar, media = '' } = req.body || {};
 
-    if (!author || !content || !String(content).trim()) {
-      return res.status(400).json({ success: false, error: 'Author and content are required' });
+    const rawAuthor = (author && String(author).trim()) || (authorName && String(authorName).trim()) || 'User';
+    const cleanAuthor = rawAuthor.toLowerCase();
+    const cleanContent = String(content || '').trim();
+
+    if (!cleanContent) {
+      return res.status(400).json({ success: false, error: 'Post content cannot be empty' });
     }
 
-    const cleanAuthor = String(author).trim().toLowerCase();
-    const cleanContent = String(content).trim();
-
     // Look up author info if not provided
-    let finalAuthorName = authorName ? String(authorName).trim() : cleanAuthor;
+    let finalAuthorName = (authorName && String(authorName).trim()) || rawAuthor;
     // Discard oversized base64 avatars from payload to prevent bloated DB records & 413s
     let finalAuthorAvatar = (authorAvatar && typeof authorAvatar === 'string' && authorAvatar.length < 50000) ? authorAvatar : '';
 
@@ -83,8 +84,8 @@ router.post('/', async (req, res) => {
       .select('displayName avatar username')
       .lean();
     if (u) {
-      if (!authorName || finalAuthorName === cleanAuthor) {
-        finalAuthorName = u.displayName || u.username || cleanAuthor;
+      if (!authorName || finalAuthorName.toLowerCase() === cleanAuthor) {
+        finalAuthorName = u.displayName || u.username || rawAuthor;
       }
       if (!finalAuthorAvatar && u.avatar) {
         finalAuthorAvatar = u.avatar;
