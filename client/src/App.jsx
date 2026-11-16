@@ -1012,6 +1012,7 @@ function App() {
 
   // Photo and Image Sharing state
   const uploadImageRef = useRef(null);
+  const photoFileInputRef = useRef(null);
   const [uploadedImage, setUploadedImage] = useState(() => {
     try {
       return localStorage.getItem('assistance_shared_image') || null;
@@ -1019,6 +1020,16 @@ function App() {
       return null;
     }
   });
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [photoSharingTab, setPhotoSharingTab] = useState('all'); // 'all' | 'my-photos' | 'upload'
+  const [photoCategoryFilter, setPhotoCategoryFilter] = useState('all'); // 'all' | 'photography' | 'nature' | 'travel' | 'art' | 'tech' | 'memories' | 'food'
+  const [photoSearchQuery, setPhotoSearchQuery] = useState('');
+  const [isPublishingPhoto, setIsPublishingPhoto] = useState(false);
+  const [isUploadingPhotoFile, setIsUploadingPhotoFile] = useState(false);
+  const [photoShareFeedback, setPhotoShareFeedback] = useState(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [photoShareCopiedId, setPhotoShareCopiedId] = useState(null);
+  const [deletePhotoConfirmId, setDeletePhotoConfirmId] = useState(null);
 
   // Video Sharing state
   const uploadVideoRef = useRef(null);
@@ -2876,20 +2887,144 @@ function App() {
     }
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result;
-        if (result) {
-          setUploadedImage(result);
-          try {
-            localStorage.setItem('assistance_shared_image', result);
-          } catch {}
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setPhotoShareFeedback({ type: 'error', text: 'Please select a valid image file (PNG, JPG, WebP, GIF).' });
+      return;
+    }
+    try {
+      setIsUploadingPhotoFile(true);
+      setPhotoShareFeedback(null);
+      const compressed = await compressImageFile(file, 1200, 0.85);
+      if (compressed) {
+        setUploadedImage(compressed);
+        try {
+          localStorage.setItem('assistance_shared_image', compressed);
+        } catch {}
+      }
+    } catch (err) {
+      console.error('[Photo File Error]:', err);
+      setPhotoShareFeedback({ type: 'error', text: 'Failed to process image file. Please try another.' });
+    } finally {
+      setIsUploadingPhotoFile(false);
+    }
+  };
+
+  const handlePublishSharedPhoto = async (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (!uploadedImage) {
+      setPhotoShareFeedback({ type: 'error', text: 'Please select or upload an image to share.' });
+      return;
+    }
+    if (isPublishingPhoto) return;
+
+    setIsPublishingPhoto(true);
+    setPhotoShareFeedback(null);
+
+    const safeAvatar =
+      profilePicture && typeof profilePicture === 'string' && profilePicture.length < 50000
+        ? profilePicture
+        : '';
+
+    const captionTrimmed = photoCaption.trim();
+    const tempId = `temp_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimisticPost = {
+      id: tempId,
+      author: loggedInUser || 'User',
+      authorName: loggedInUser || 'User',
+      authorAvatar: safeAvatar,
+      content: captionTrimmed,
+      media: uploadedImage,
+      image: uploadedImage,
+      video: '',
+      mediaType: 'image',
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      time: 'Just now',
+      createdAt: new Date().toISOString(),
+      _localCreatedAt: Date.now(),
+    };
+
+    // Prepend to posts list instantly (0ms UI latency)
+    setPosts((prev) => [optimisticPost, ...prev]);
+
+    const imagePayload = uploadedImage;
+    const captionPayload = captionTrimmed;
+
+    // Reset upload composer
+    setUploadedImage(null);
+    setPhotoCaption('');
+    try {
+      localStorage.removeItem('assistance_shared_image');
+    } catch {}
+
+    setPhotoSharingTab('all');
+    setPhotoShareFeedback({ type: 'success', text: 'Your photo was shared successfully!' });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          author: loggedInUser || 'User',
+          authorName: loggedInUser || 'User',
+          content: captionPayload,
+          media: imagePayload,
+          image: imagePayload,
+          video: '',
+          mediaType: 'image',
+          authorAvatar: safeAvatar,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data && data.success && data.post) {
+        const postWithTag = { ...data.post, _localCreatedAt: Date.now() };
+        setPosts((prev) =>
+          prev.map((p) => (p.id === tempId ? postWithTag : p))
+        );
+      } else {
+        setPosts((prev) => prev.filter((p) => p.id !== tempId));
+        const errMsg =
+          (data && (data.error || data.message)) ||
+          `Failed to share photo (Server HTTP ${res.status}).`;
+        setPhotoShareFeedback({ type: 'error', text: errMsg });
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      setPosts((prev) => prev.filter((p) => p.id !== tempId));
+      setPhotoShareFeedback({
+        type: 'error',
+        text: err.name === 'AbortError'
+          ? 'Photo upload timed out. Please check your network and try again.'
+          : 'Failed to share photo due to network error.',
+      });
+    } finally {
+      setIsPublishingPhoto(false);
+    }
+  };
+
+  const handleCopyPhotoLink = (photo) => {
+    const photoUrl = `${window.location.origin}/#photo-sharing?photo=${photo.id}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(photoUrl);
+      setPhotoShareCopiedId(photo.id);
+      setTimeout(() => setPhotoShareCopiedId(null), 2500);
     }
   };
 
@@ -4605,6 +4740,42 @@ function App() {
     );
     return !isVideo && Boolean(p.image || p.media);
   });
+
+  const allCommunityPhotos = useMemo(() => {
+    return posts.filter((p) => {
+      const isVideo = Boolean(
+        p.video ||
+        p.mediaType === 'video' ||
+        (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov') || p.media.includes('/video/')))
+      );
+      return !isVideo && Boolean(p.image || p.media);
+    });
+  }, [posts]);
+
+  const filteredCommunityPhotos = useMemo(() => {
+    let list = photoSharingTab === 'my-photos' ? myPhotosPosts : allCommunityPhotos;
+
+    if (photoCategoryFilter !== 'all') {
+      const tag = `#${photoCategoryFilter}`.toLowerCase();
+      list = list.filter((p) => {
+        const content = String(p.content || '').toLowerCase();
+        return content.includes(tag) || content.includes(photoCategoryFilter.toLowerCase());
+      });
+    }
+
+    if (photoSearchQuery.trim()) {
+      const q = photoSearchQuery.trim().toLowerCase();
+      const cleanQ = q.replace(/^@/, '');
+      list = list.filter((p) => {
+        const content = String(p.content || '').toLowerCase();
+        const author = String(p.author || '').toLowerCase();
+        const authorName = String(p.authorName || '').toLowerCase();
+        return content.includes(q) || author.includes(cleanQ) || authorName.includes(cleanQ);
+      });
+    }
+
+    return list;
+  }, [allCommunityPhotos, myPhotosPosts, photoSharingTab, photoCategoryFilter, photoSearchQuery]);
 
   const myVideosPosts = myAuthoredPosts.filter((p) => {
     return Boolean(
@@ -11036,12 +11207,118 @@ function App() {
             </div>
           ) : currentView === 'photo-sharing' ? (
             <div className="photo-sharing-space" id="photo-sharing-space">
-              <div className="photo-upload-container" id="photo-upload-container">
+              <div className="photo-sharing-container" id="photo-sharing-container">
+                {/* Header */}
+                <div className="photo-sharing-header">
+                  <div className="photo-sharing-title-col">
+                    <h1 className="heading photo-sharing-heading" id="photo-sharing-heading">
+                      Photo & Image Sharing
+                    </h1>
+                    <p className="photo-sharing-subtitle">
+                      Discover high-quality photos from the community and share your moments
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="photo-btn photo-btn-primary photo-share-launch-btn"
+                    onClick={() => {
+                      setPhotoSharingTab('upload');
+                      setTimeout(() => photoFileInputRef.current?.click(), 100);
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>Share Photo</span>
+                  </button>
+                </div>
+
+                {/* Feedback Toast / Alert */}
+                {photoShareFeedback && (
+                  <div
+                    className={`photo-feedback-alert ${
+                      photoShareFeedback.type === 'error' ? 'error' : 'success'
+                    }`}
+                  >
+                    <span>{photoShareFeedback.text}</span>
+                    <button
+                      type="button"
+                      className="photo-feedback-close"
+                      onClick={() => setPhotoShareFeedback(null)}
+                      aria-label="Dismiss feedback"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* Main Navigation Tabs */}
+                <div className="photo-tabs-bar" role="tablist" aria-label="Photo sharing views">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="photo-tab-all"
+                    aria-selected={photoSharingTab === 'all'}
+                    className={`photo-tab-btn ${photoSharingTab === 'all' ? 'active' : ''}`}
+                    onClick={() => {
+                      setPhotoSharingTab('all');
+                      setPhotoSearchQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                    <span>All Photos</span>
+                    <span className="photo-tab-badge">{allCommunityPhotos.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="photo-tab-my"
+                    aria-selected={photoSharingTab === 'my-photos'}
+                    className={`photo-tab-btn ${photoSharingTab === 'my-photos' ? 'active' : ''}`}
+                    onClick={() => {
+                      setPhotoSharingTab('my-photos');
+                      setPhotoSearchQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span>My Photos</span>
+                    <span className="photo-tab-badge">{myPhotosPosts.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="photo-tab-upload"
+                    aria-selected={photoSharingTab === 'upload'}
+                    className={`photo-tab-btn ${photoSharingTab === 'upload' ? 'active' : ''}`}
+                    onClick={() => setPhotoSharingTab('upload')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Share New Photo</span>
+                    {uploadedImage && <span className="photo-tab-dot"></span>}
+                  </button>
+                </div>
+
+                {/* Hidden File Input for Image Upload */}
                 <input
-                  ref={uploadImageRef}
+                  ref={photoFileInputRef}
                   type="file"
-                  id="upload-image-input"
-                  accept="image/*"
+                  id="photo-share-file-input"
+                  accept="image/png, image/jpeg, image/jpg, image/webp, image/gif"
                   className="hidden-file-input"
                   onClick={(e) => {
                     e.target.value = null;
@@ -11049,43 +11326,609 @@ function App() {
                   onChange={handleImageUpload}
                 />
 
-                {!uploadedImage ? (
-                  <div
-                    className="upload-image-dropzone"
-                    id="upload-image-dropzone"
-                    onClick={() => uploadImageRef.current?.click()}
-                  >
-                    <div className="upload-image-icon-wrapper">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                      </svg>
+                {/* UPLOADER / COMPOSER CARD (when tab is 'upload' OR an image is selected) */}
+                {(photoSharingTab === 'upload' || uploadedImage) && (
+                  <div className="photo-composer-card" id="photo-composer-card">
+                    <div className="photo-composer-header">
+                      <h3 className="photo-composer-title">Share a Photo</h3>
+                      <p className="photo-composer-desc">
+                        Post an image with a caption to the community photo feed
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      id="upload-image-btn"
-                      className="upload-image-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        uploadImageRef.current?.click();
-                      }}
-                    >
-                      Upload Image
-                    </button>
+
+                    {!uploadedImage ? (
+                      <div
+                        className={`photo-dropzone ${isUploadingPhotoFile ? 'uploading' : ''}`}
+                        onClick={() => photoFileInputRef.current?.click()}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            photoFileInputRef.current?.click();
+                          }
+                        }}
+                      >
+                        <div className="photo-dropzone-icon">
+                          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                          </svg>
+                        </div>
+                        <div className="photo-dropzone-text">
+                          <strong>{isUploadingPhotoFile ? 'Optimizing photo...' : 'Click to select or drag & drop a photo'}</strong>
+                          <span>Supports PNG, JPG, WebP, GIF (auto-optimized)</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="photo-btn photo-btn-primary"
+                          disabled={isUploadingPhotoFile}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            photoFileInputRef.current?.click();
+                          }}
+                        >
+                          {isUploadingPhotoFile ? 'Processing...' : 'Browse Photo'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="photo-preview-layout">
+                        <div className="photo-preview-wrapper">
+                          <img src={uploadedImage} alt="Photo preview" className="photo-preview-img" />
+                          <div className="photo-preview-actions">
+                            <button
+                              type="button"
+                              className="photo-btn photo-btn-subtle small"
+                              onClick={() => photoFileInputRef.current?.click()}
+                            >
+                              Change Photo
+                            </button>
+                            <button
+                              type="button"
+                              className="photo-btn photo-btn-danger-ghost small"
+                              onClick={() => {
+                                setUploadedImage(null);
+                                try {
+                                  localStorage.removeItem('assistance_shared_image');
+                                } catch {}
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="photo-form-col">
+                          <label htmlFor="photo-caption-input" className="photo-form-label">
+                            Caption & Description
+                          </label>
+                          <textarea
+                            id="photo-caption-input"
+                            className="photo-caption-textarea"
+                            placeholder="Write a caption, tell a story, or tag categories (e.g. Beautiful sunset #photography #nature)..."
+                            value={photoCaption}
+                            onChange={(e) => setPhotoCaption(e.target.value)}
+                            rows={3}
+                          />
+
+                          {/* Quick Tag Pills to append to caption */}
+                          <div className="photo-tags-suggestions">
+                            <span className="photo-tags-label">Quick tags:</span>
+                            {['#Photography', '#Nature', '#Travel', '#Art', '#Tech', '#Memories', '#Life', '#Food'].map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                className="photo-tag-pill"
+                                onClick={() => {
+                                  if (!photoCaption.includes(tag)) {
+                                    setPhotoCaption((prev) => (prev ? `${prev.trim()} ${tag}` : tag));
+                                  }
+                                }}
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="photo-composer-actions">
+                            <button
+                              type="button"
+                              className="photo-btn photo-btn-subtle"
+                              onClick={() => {
+                                setUploadedImage(null);
+                                setPhotoCaption('');
+                                try {
+                                  localStorage.removeItem('assistance_shared_image');
+                                } catch {}
+                                if (photoSharingTab === 'upload') setPhotoSharingTab('all');
+                              }}
+                            >
+                              Cancel
+                            </button>
+
+                            <button
+                              type="button"
+                              className="photo-btn photo-btn-primary photo-btn-submit"
+                              disabled={isPublishingPhoto}
+                              onClick={handlePublishSharedPhoto}
+                            >
+                              {isPublishingPhoto ? 'Sharing Photo...' : 'Share Photo Now'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="uploaded-image-preview-card" id="uploaded-image-preview-card">
-                    <img src={uploadedImage} alt="Uploaded preview" className="uploaded-image-preview" />
-                    <div className="uploaded-image-actions">
+                )}
+
+                {/* SEARCH & CATEGORY FILTERS (when viewing galleries) */}
+                {photoSharingTab !== 'upload' && (
+                  <div className="photo-gallery-controls">
+                    {/* Search Bar */}
+                    <div className="photo-search-box">
+                      <svg
+                        className="contacts-search-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                      <input
+                        type="text"
+                        className="photo-search-input"
+                        placeholder="Search photos by caption, tags, or author @username..."
+                        value={photoSearchQuery}
+                        onChange={(e) => setPhotoSearchQuery(e.target.value)}
+                        aria-label="Search photos"
+                      />
+                      {photoSearchQuery && (
+                        <button
+                          type="button"
+                          className="contacts-search-clear"
+                          onClick={() => setPhotoSearchQuery('')}
+                          aria-label="Clear search"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Pills */}
+                    <div className="photo-categories-bar" role="toolbar" aria-label="Filter photos by category">
+                      {[
+                        { id: 'all', label: 'All Photos' },
+                        { id: 'photography', label: '📷 Photography' },
+                        { id: 'nature', label: '🌲 Nature' },
+                        { id: 'travel', label: '✈️ Travel' },
+                        { id: 'art', label: '🎨 Art' },
+                        { id: 'tech', label: '💻 Tech' },
+                        { id: 'memories', label: '✨ Memories' },
+                        { id: 'food', label: '🍕 Food' },
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          className={`photo-category-pill ${photoCategoryFilter === cat.id ? 'active' : ''}`}
+                          onClick={() => setPhotoCategoryFilter(cat.id)}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* PHOTO GALLERY GRID */}
+                {photoSharingTab !== 'upload' && (
+                  <div className="photo-gallery-section">
+                    {filteredCommunityPhotos.length === 0 ? (
+                      <div className="photo-empty-state">
+                        <div className="photo-empty-icon">
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                          </svg>
+                        </div>
+                        <h3 className="photo-empty-title">
+                          {photoSearchQuery
+                            ? `No photos match "${photoSearchQuery}"`
+                            : photoCategoryFilter !== 'all'
+                            ? `No photos found in #${photoCategoryFilter}`
+                            : photoSharingTab === 'my-photos'
+                            ? 'You have not shared any photos yet'
+                            : 'No photos have been shared yet'}
+                        </h3>
+                        <p className="photo-empty-desc">
+                          Be the first to share a high-quality photo with the community!
+                        </p>
+                        <button
+                          type="button"
+                          className="photo-btn photo-btn-primary"
+                          onClick={() => {
+                            setPhotoSharingTab('upload');
+                            setTimeout(() => photoFileInputRef.current?.click(), 100);
+                          }}
+                        >
+                          Share Your First Photo
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="photo-grid-layout" id="photo-grid-layout">
+                        {filteredCommunityPhotos.map((photo) => {
+                          const imgSrc = photo.image || photo.media;
+                          const authorHandle = photo.author || 'User';
+                          const authorDisplayName = photo.authorName || photo.author || 'User';
+                          const isLiked = Array.isArray(photo.likes) &&
+                            photo.likes.map((u) => u.toLowerCase()).includes((loggedInUser || '').toLowerCase());
+                          const isOwnPhoto = (photo.author || '').toLowerCase() === (loggedInUser || '').toLowerCase();
+                          const areCommentsOpen = Boolean(openCommentsPosts[photo.id]);
+                          const isCopied = photoShareCopiedId === photo.id;
+
+                          return (
+                            <div key={photo.id} className="photo-card" id={`photo-card-${photo.id}`}>
+                              {/* Photo Card Header */}
+                              <div className="photo-card-author-header">
+                                <div
+                                  className="photo-card-author-info"
+                                  onClick={() => handleOpenUserProfile(authorHandle)}
+                                  role="button"
+                                  tabIndex={0}
+                                  title={`View ${authorDisplayName}'s profile`}
+                                >
+                                  <div
+                                    className="contact-avatar small"
+                                    style={{
+                                      backgroundColor: photo.authorAvatar
+                                        ? 'transparent'
+                                        : getAvatarColor(authorDisplayName),
+                                    }}
+                                  >
+                                    {photo.authorAvatar ? (
+                                      <img
+                                        src={photo.authorAvatar}
+                                        alt={authorDisplayName}
+                                        className="contact-avatar-img"
+                                      />
+                                    ) : (
+                                      <span>{getInitials(authorDisplayName)}</span>
+                                    )}
+                                  </div>
+                                  <div className="photo-card-author-text">
+                                    <span className="photo-card-author-name">{authorDisplayName}</span>
+                                    <span className="photo-card-author-handle">@{authorHandle}</span>
+                                  </div>
+                                </div>
+
+                                <div className="photo-card-header-right">
+                                  <span className="photo-card-time">{photo.time || 'Recently'}</span>
+                                  {isOwnPhoto && (
+                                    <>
+                                      {deletePhotoConfirmId === photo.id ? (
+                                        <div className="photo-confirm-delete-inline">
+                                          <span>Delete?</span>
+                                          <button
+                                            type="button"
+                                            className="photo-btn-text danger"
+                                            onClick={() => {
+                                              handleDeletePost(photo.id);
+                                              setDeletePhotoConfirmId(null);
+                                            }}
+                                          >
+                                            Yes
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="photo-btn-text"
+                                            onClick={() => setDeletePhotoConfirmId(null)}
+                                          >
+                                            No
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="photo-action-icon-btn delete"
+                                          onClick={() => setDeletePhotoConfirmId(photo.id)}
+                                          title="Delete photo"
+                                          aria-label="Delete photo"
+                                        >
+                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Photo Media Container */}
+                              <div
+                                className="photo-card-img-wrap"
+                                onClick={() => setLightboxPhoto(photo)}
+                                role="button"
+                                tabIndex={0}
+                                title="Click to view full photo"
+                              >
+                                <img
+                                  src={imgSrc}
+                                  alt={photo.content || 'Shared photo'}
+                                  className="photo-card-img"
+                                  loading="lazy"
+                                />
+                                <div className="photo-card-img-overlay">
+                                  <span>View Photo 🔍</span>
+                                </div>
+                              </div>
+
+                              {/* Caption */}
+                              {photo.content && (
+                                <div className="photo-card-caption">
+                                  <p>{photo.content}</p>
+                                </div>
+                              )}
+
+                              {/* Social Actions Toolbar */}
+                              <div className="photo-card-toolbar">
+                                <div className="photo-card-toolbar-left">
+                                  {/* Like Button */}
+                                  <button
+                                    type="button"
+                                    className={`photo-action-btn like ${isLiked ? 'liked' : ''}`}
+                                    onClick={() => handleLikePost(photo.id)}
+                                    title={isLiked ? 'Unlike photo' : 'Like photo'}
+                                  >
+                                    <svg
+                                      width="18"
+                                      height="18"
+                                      viewBox="0 0 24 24"
+                                      fill={isLiked ? '#ef4444' : 'none'}
+                                      stroke={isLiked ? '#ef4444' : 'currentColor'}
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                    <span>{photo.likesCount || (photo.likes && photo.likes.length) || 0}</span>
+                                  </button>
+
+                                  {/* Comment Toggle Button */}
+                                  <button
+                                    type="button"
+                                    className={`photo-action-btn comment ${areCommentsOpen ? 'active' : ''}`}
+                                    onClick={() => toggleComments(photo.id)}
+                                    title="View & add comments"
+                                  >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                    </svg>
+                                    <span>{photo.commentsCount || (photo.comments && photo.comments.length) || 0}</span>
+                                  </button>
+                                </div>
+
+                                <div className="photo-card-toolbar-right">
+                                  {/* Download Photo */}
+                                  <a
+                                    href={imgSrc}
+                                    download={`assistance-photo-${photo.id}.jpg`}
+                                    className="photo-action-icon-btn"
+                                    title="Download photo"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                      <polyline points="7 10 12 15 17 10"></polyline>
+                                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                  </a>
+
+                                  {/* Copy Link Button */}
+                                  <button
+                                    type="button"
+                                    className="photo-action-icon-btn"
+                                    onClick={() => handleCopyPhotoLink(photo)}
+                                    title="Copy photo link"
+                                  >
+                                    {isCopied ? (
+                                      <span style={{ fontSize: '0.72rem', color: '#22c55e' }}>✓</span>
+                                    ) : (
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expandable Comments Drawer */}
+                              {areCommentsOpen && (
+                                <div className="photo-comments-drawer">
+                                  <form
+                                    className="photo-comment-input-form"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      handleAddComment(photo.id);
+                                    }}
+                                  >
+                                    <input
+                                      type="text"
+                                      className="photo-comment-input"
+                                      placeholder="Add a comment on this photo..."
+                                      value={commentInputs[photo.id] || ''}
+                                      onChange={(e) =>
+                                        setCommentInputs((prev) => ({
+                                          ...prev,
+                                          [photo.id]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="photo-comment-submit-btn"
+                                      disabled={!(commentInputs[photo.id] || '').trim() || submittingCommentPostIds[photo.id]}
+                                    >
+                                      Send
+                                    </button>
+                                  </form>
+
+                                  <div className="photo-comments-list">
+                                    {photo.comments && photo.comments.length > 0 ? (
+                                      photo.comments.map((comment) => (
+                                        <div key={comment.id || comment._id} className="photo-comment-row">
+                                          <div
+                                            className="contact-avatar small"
+                                            style={{
+                                              backgroundColor: comment.authorAvatar
+                                                ? 'transparent'
+                                                : getAvatarColor(comment.authorName || comment.author),
+                                              width: '26px',
+                                              height: '26px',
+                                              minWidth: '26px',
+                                              fontSize: '0.7rem',
+                                            }}
+                                          >
+                                            {comment.authorAvatar ? (
+                                              <img
+                                                src={comment.authorAvatar}
+                                                alt={comment.authorName || comment.author}
+                                                className="contact-avatar-img"
+                                              />
+                                            ) : (
+                                              <span>{getInitials(comment.authorName || comment.author)}</span>
+                                            )}
+                                          </div>
+                                          <div className="photo-comment-bubble">
+                                            <div className="photo-comment-author-row">
+                                              <strong className="photo-comment-author">
+                                                {comment.authorName || comment.author}
+                                              </strong>
+                                              <span className="photo-comment-time">
+                                                {comment.time || 'Recently'}
+                                              </span>
+                                            </div>
+                                            <p className="photo-comment-text">{comment.content}</p>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="photo-no-comments">No comments yet. Start the conversation!</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* FULL-SCREEN PHOTO LIGHTBOX MODAL */}
+                {lightboxPhoto && (
+                  <div
+                    className="photo-lightbox-overlay"
+                    onClick={() => setLightboxPhoto(null)}
+                    role="dialog"
+                    aria-modal="true"
+                  >
+                    <div
+                      className="photo-lightbox-content"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
-                        id="upload-image-btn"
-                        className="upload-image-btn"
-                        onClick={() => uploadImageRef.current?.click()}
+                        className="photo-lightbox-close"
+                        onClick={() => setLightboxPhoto(null)}
+                        aria-label="Close photo preview"
                       >
-                        Upload Image
+                        ×
                       </button>
+
+                      <div className="photo-lightbox-media-col">
+                        <img
+                          src={lightboxPhoto.image || lightboxPhoto.media}
+                          alt={lightboxPhoto.content || 'Full size photo'}
+                          className="photo-lightbox-img"
+                        />
+                      </div>
+
+                      <div className="photo-lightbox-info-col">
+                        <div className="photo-lightbox-author-row">
+                          <div
+                            className="contact-avatar"
+                            style={{
+                              backgroundColor: lightboxPhoto.authorAvatar
+                                ? 'transparent'
+                                : getAvatarColor(lightboxPhoto.authorName || lightboxPhoto.author),
+                            }}
+                            onClick={() => {
+                              setLightboxPhoto(null);
+                              handleOpenUserProfile(lightboxPhoto.author);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            {lightboxPhoto.authorAvatar ? (
+                              <img
+                                src={lightboxPhoto.authorAvatar}
+                                alt={lightboxPhoto.authorName || lightboxPhoto.author}
+                                className="contact-avatar-img"
+                              />
+                            ) : (
+                              <span>{getInitials(lightboxPhoto.authorName || lightboxPhoto.author)}</span>
+                            )}
+                          </div>
+                          <div className="photo-lightbox-author-text">
+                            <strong className="photo-lightbox-name">
+                              {lightboxPhoto.authorName || lightboxPhoto.author}
+                            </strong>
+                            <span className="photo-lightbox-handle">@{lightboxPhoto.author}</span>
+                            <span className="photo-lightbox-date">{lightboxPhoto.time || 'Shared photo'}</span>
+                          </div>
+                        </div>
+
+                        {lightboxPhoto.content && (
+                          <div className="photo-lightbox-caption">
+                            <p>{lightboxPhoto.content}</p>
+                          </div>
+                        )}
+
+                        <div className="photo-lightbox-stats">
+                          <span>❤️ {(lightboxPhoto.likes || []).length} Likes</span>
+                          <span>💬 {(lightboxPhoto.comments || []).length} Comments</span>
+                        </div>
+
+                        <div className="photo-lightbox-actions">
+                          <a
+                            href={lightboxPhoto.image || lightboxPhoto.media}
+                            download={`assistance-photo-${lightboxPhoto.id}.jpg`}
+                            className="photo-btn photo-btn-primary"
+                          >
+                            Download High-Res
+                          </a>
+
+                          <button
+                            type="button"
+                            className="photo-btn photo-btn-subtle"
+                            onClick={() => handleCopyPhotoLink(lightboxPhoto)}
+                          >
+                            {photoShareCopiedId === lightboxPhoto.id ? 'Copied Link! ✓' : 'Copy Photo Link'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
