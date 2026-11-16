@@ -91,6 +91,28 @@ router.get('/', async (req, res) => {
       }
     }
 
+    const searchQuery = String(req.query.search || req.query.q || '').trim();
+    if (searchQuery) {
+      const cleanQ = searchQuery.replace(/^@/, '').trim();
+      const searchRegex = new RegExp(escapeRegex(searchQuery), 'i');
+      const cleanRegex = new RegExp(escapeRegex(cleanQ), 'i');
+      const searchOr = [
+        { content: searchRegex },
+        { author: cleanRegex },
+        { authorName: cleanRegex },
+      ];
+      if (filter.author) {
+        filter = {
+          $and: [
+            { author: filter.author },
+            { $or: searchOr },
+          ],
+        };
+      } else {
+        filter.$or = searchOr;
+      }
+    }
+
     const rawPosts = await Post.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
 
     // Collect unique author usernames to fetch latest avatars & display names

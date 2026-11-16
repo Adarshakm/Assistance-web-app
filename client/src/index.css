@@ -6680,6 +6680,30 @@ body,
     width: 100%;
   }
 
+  .discovery-tabs-bar {
+    gap: 0.35rem;
+    padding: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .discovery-tab-btn {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.8125rem;
+    gap: 0.35rem;
+  }
+
+  .discovery-tab-count {
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.68rem;
+    padding: 0 0.35rem;
+  }
+
+  .discovery-post-card {
+    padding: 1rem 0.875rem !important;
+    border-radius: 12px !important;
+  }
+
   #social-search-input {
     font-size: 0.875rem;
     padding: 0.65rem 2.25rem 0.65rem 2.4rem;
@@ -7053,6 +7077,185 @@ body,
   color: #ffffff;
   box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
   transform: translateX(2px);
+}
+
+/* ==========================================================================
+   Search and Discovery: Tabs & Posts Search View
+   ========================================================================== */
+.discovery-subtitle {
+  font-size: 0.875rem;
+  color: #a1a1aa;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+.discovery-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem;
+  background: #0f0f11;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.discovery-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #a1a1aa;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.discovery-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.discovery-tab-btn.active {
+  background: #27272a;
+  color: #ffffff;
+  border-color: #3f3f46;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.discovery-tab-btn svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.discovery-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  background: #18181b;
+  border: 1px solid #333333;
+  color: #d4d4d8;
+  transition: all 0.2s ease;
+}
+
+.discovery-tab-btn.active .discovery-tab-count {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.discovery-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.discovery-search-spinner {
+  position: absolute;
+  right: 2.5rem;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: discoverySpin 0.7s linear infinite;
+}
+
+@keyframes discoverySpin {
+  to { transform: rotate(360deg); }
+}
+
+.discovery-search-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.25rem 0.75rem 0.25rem;
+  font-size: 0.8125rem;
+  color: #a1a1aa;
+}
+
+.discovery-clear-text-btn,
+.discovery-clear-filter-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.discovery-clear-filter-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+.discovery-clear-text-btn:hover,
+.discovery-clear-filter-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.discovery-posts-space {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.discovery-posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.discovery-post-card {
+  background: #0a0a0a !important;
+  border: 1px solid #262626 !important;
+  border-radius: 14px !important;
+  padding: 1.15rem 1.25rem !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.discovery-post-card:hover {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6) !important;
+}
+
+.discovery-empty-posts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem !important;
+  text-align: center;
 }
 
 /* ==========================================================================
@@ -7982,5 +8185,1263 @@ body,
     padding: 0.32rem 0.5rem !important;
     font-size: 0.72rem !important;
     height: 30px !important;
+  }
+}
+
+/* ==========================================================================
+   SOCIAL CONNECTIONS COMPREHENSIVE FEATURES & RESPONSIVE STYLES
+   ========================================================================== */
+
+.workspace-main .social-connections-wrapper h1,
+.workspace-main .social-connections-wrapper h2,
+.workspace-main .social-connections-wrapper h3,
+.workspace-main .social-connections-wrapper h4,
+.social-connections-wrapper .social-section-title,
+.social-connections-wrapper .social-list-box-title,
+.social-connections-wrapper .social-invite-title,
+.social-connections-wrapper .social-modal-title {
+  color: #ffffff !important;
+}
+
+.workspace-main .social-connections-wrapper .social-section-desc,
+.workspace-main .social-connections-wrapper .social-invite-desc,
+.workspace-main .social-connections-wrapper .social-modal-subtitle,
+.workspace-main .social-connections-wrapper .social-checklist-header,
+.workspace-main .social-connections-wrapper .social-checklist-item,
+.workspace-main .social-connections-wrapper .social-lists-menu-item,
+.workspace-main .social-connections-wrapper .social-invite-link-label {
+  color: #a1a1aa !important;
+}
+
+body.light-theme .workspace-main .social-connections-wrapper h1,
+body.light-theme .workspace-main .social-connections-wrapper h2,
+body.light-theme .workspace-main .social-connections-wrapper h3,
+body.light-theme .workspace-main .social-connections-wrapper h4,
+body.light-theme .social-connections-wrapper .social-section-title,
+body.light-theme .social-connections-wrapper .social-list-box-title,
+body.light-theme .social-connections-wrapper .social-invite-title,
+body.light-theme .social-connections-wrapper .social-modal-title {
+  color: #111827 !important;
+}
+
+body.light-theme .workspace-main .social-connections-wrapper .social-section-desc,
+body.light-theme .workspace-main .social-connections-wrapper .social-invite-desc,
+body.light-theme .workspace-main .social-connections-wrapper .social-modal-subtitle,
+body.light-theme .workspace-main .social-connections-wrapper .social-checklist-header,
+body.light-theme .workspace-main .social-connections-wrapper .social-checklist-item,
+body.light-theme .workspace-main .social-connections-wrapper .social-lists-menu-item,
+body.light-theme .workspace-main .social-connections-wrapper .social-invite-link-label {
+  color: #4b5563 !important;
+}
+
+.social-connections-wrapper {
+  max-width: 820px !important;
+  width: 100% !important;
+  margin: 0 auto;
+  gap: 1rem;
+}
+
+/* Feedback alert banner */
+.social-feedback-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  width: 100%;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.social-feedback-alert.success {
+  background-color: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.social-feedback-alert.info {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.social-feedback-alert.error {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.social-feedback-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+/* Tabs Navigation Bar */
+.social-tabs-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  overflow-x: auto;
+  padding: 0.25rem 0.1rem 0.5rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid #27272a;
+}
+
+.social-tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.social-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 9999px;
+  background-color: #18181b;
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid #27272a;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.social-tab-btn:hover {
+  background-color: #27272a;
+  color: #ffffff;
+  border-color: #3f3f46;
+}
+
+.social-tab-btn.active {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.15);
+}
+
+body.light-theme .social-tabs-nav {
+  border-bottom-color: #e5e7eb;
+}
+
+body.light-theme .social-tab-btn {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+body.light-theme .social-tab-btn:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+body.light-theme .social-tab-btn.active {
+  background-color: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+.social-tab-badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  background-color: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font-weight: 700;
+}
+
+.social-tab-btn.active .social-tab-badge {
+  background-color: rgba(0, 0, 0, 0.14);
+}
+
+body.light-theme .social-tab-btn.active .social-tab-badge {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.social-tab-badge.highlight {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+/* Sub-filters bar (in Friends tab) */
+.social-subfilters-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.25rem 0;
+  margin-bottom: 0.75rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.social-subfilters-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.social-filter-pill {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 8px;
+  background-color: #141416;
+  color: #a1a1aa;
+  border: 1px solid #27272a;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.social-filter-pill:hover {
+  background-color: #1f1f23;
+  color: #f4f4f5;
+  border-color: #3f3f46;
+}
+
+.social-filter-pill.active {
+  background-color: #27272a;
+  color: #ffffff;
+  border-color: #52525b;
+}
+
+.social-filter-pill.manage-lists-shortcut {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+  background-color: rgba(96, 165, 250, 0.05);
+}
+
+.social-filter-pill.manage-lists-shortcut:hover {
+  background-color: rgba(96, 165, 250, 0.15);
+}
+
+body.light-theme .social-filter-pill {
+  background-color: #f9fafb;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+body.light-theme .social-filter-pill.active {
+  background-color: #e5e7eb;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+/* Tab content wrapper */
+.social-content-tab {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Social Connection Card */
+.social-connection-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  background-color: #121214;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  gap: 0.85rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.social-connection-card:hover {
+  border-color: #3f3f46;
+  background-color: #161619;
+}
+
+body.light-theme .social-connection-card {
+  background-color: #ffffff;
+  border-color: #e5e7eb;
+}
+
+body.light-theme .social-connection-card:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.social-card-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.social-card-main .contact-avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #ffffff;
+  position: relative;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.social-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.social-card-info .contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.social-card-info .contact-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.social-card-info .contact-name:hover {
+  text-decoration: underline;
+}
+
+body.light-theme .social-card-info .contact-name {
+  color: #111827;
+}
+
+.social-card-info .contact-username {
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.social-card-info .contact-status {
+  font-size: 0.8rem;
+  color: #a1a1aa;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 380px;
+}
+
+body.light-theme .social-card-info .contact-status {
+  color: #6b7280;
+}
+
+/* Star favorite button */
+.social-star-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: #71717a;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.social-star-btn:hover {
+  transform: scale(1.2);
+  color: #facc15;
+}
+
+.social-star-btn.favorited {
+  color: #facc15;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.4);
+}
+
+/* Mutual friends badge */
+.social-mutual-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  width: fit-content;
+  margin-top: 0.15rem;
+  transition: background-color 0.15s ease;
+}
+
+.social-mutual-badge:hover {
+  background-color: rgba(56, 189, 248, 0.2);
+}
+
+.social-mutual-badge.highlighted {
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.social-suggested-reason {
+  font-size: 0.72rem;
+  color: #71717a;
+}
+
+/* Pill badges */
+.social-pending-pill,
+.social-friend-pill,
+.social-follows-you-pill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+}
+
+.social-pending-pill {
+  background-color: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.social-friend-pill {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.social-follows-you-pill {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Assigned custom lists tags */
+.social-assigned-lists-tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.social-list-tag {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.45rem;
+  background-color: #27272a;
+  color: #d4d4d8;
+  border-radius: 4px;
+}
+
+/* Card Actions */
+.social-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Buttons */
+.social-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.social-btn-primary {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.social-btn-primary:hover {
+  background-color: #e4e4e7;
+}
+
+body.light-theme .social-btn-primary {
+  background-color: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+body.light-theme .social-btn-primary:hover {
+  background-color: #1f2937;
+}
+
+.social-btn-subtle {
+  background-color: #18181b;
+  color: #d4d4d8;
+  border-color: #27272a;
+}
+
+.social-btn-subtle:hover,
+.social-btn-subtle.active {
+  background-color: #27272a;
+  color: #ffffff;
+}
+
+body.light-theme .social-btn-subtle {
+  background-color: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+body.light-theme .social-btn-subtle:hover {
+  background-color: #e5e7eb;
+}
+
+.social-btn-follow {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.social-btn-follow:hover {
+  background-color: #1d4ed8;
+}
+
+.social-btn-following {
+  background-color: #18181b;
+  color: #a1a1aa;
+  border-color: #27272a;
+}
+
+.social-btn-following:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.social-btn-danger {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.social-btn-danger:hover {
+  background-color: #dc2626;
+}
+
+.social-btn-danger-ghost {
+  background: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.social-btn-danger-ghost:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+/* Inline unfriend confirmation */
+.social-confirm-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: rgba(239, 68, 68, 0.08);
+  padding: 0.2rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Dropdown menu to assign friend to custom lists */
+.social-lists-dropdown-wrap {
+  position: relative;
+}
+
+.social-lists-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  width: 190px;
+  background-color: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 10px;
+  padding: 0.6rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+body.light-theme .social-lists-menu {
+  background-color: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.social-lists-menu-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #a1a1aa;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid #27272a;
+}
+
+.social-lists-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #e4e4e7;
+  cursor: pointer;
+}
+
+body.light-theme .social-lists-menu-item {
+  color: #1f2937;
+}
+
+.social-lists-menu-close {
+  margin-top: 0.25rem;
+  padding: 0.25rem;
+  background-color: #27272a;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Quick Send Friend Request Box */
+.social-send-request-box,
+.social-create-list-card,
+.social-list-box,
+.social-invite-card {
+  background-color: #121214;
+  border: 1px solid #27272a;
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+body.light-theme .social-send-request-box,
+body.light-theme .social-create-list-card,
+body.light-theme .social-list-box,
+body.light-theme .social-invite-card {
+  background-color: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.social-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.social-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+body.light-theme .social-section-title {
+  color: #111827;
+}
+
+.social-section-desc {
+  font-size: 0.8rem;
+  color: #71717a;
+  margin: 0;
+}
+
+.social-send-form,
+.social-create-list-form {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.social-input {
+  flex: 1;
+  padding: 0.6rem 0.85rem;
+  background-color: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.social-input:focus {
+  border-color: #3b82f6;
+}
+
+body.light-theme .social-input {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+.social-request-feedback {
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+
+.social-request-feedback.success {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.social-request-feedback.error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* Friend Lists management */
+.social-custom-lists-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.social-list-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.social-list-box-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.social-list-icon {
+  font-size: 1.1rem;
+}
+
+.social-list-box-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+body.light-theme .social-list-box-title {
+  color: #111827;
+}
+
+.social-list-box-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.social-list-empty-note {
+  font-size: 0.8rem;
+  color: #71717a;
+  margin: 0;
+}
+
+.social-list-members-chips {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.social-member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  background-color: #1c1c20;
+  border: 1px solid #2e2e34;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  color: #e4e4e7;
+}
+
+body.light-theme .social-member-chip {
+  background-color: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.social-member-chip-remove {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.social-member-chip-remove:hover {
+  color: #ef4444;
+}
+
+/* Checklist box for managing members */
+.social-list-checklist-box {
+  margin-top: 0.6rem;
+  padding: 0.85rem;
+  background-color: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+body.light-theme .social-list-checklist-box {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.social-checklist-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #d4d4d8;
+}
+
+body.light-theme .social-checklist-header {
+  color: #374151;
+}
+
+.social-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.social-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: #e4e4e7;
+  cursor: pointer;
+}
+
+body.light-theme .social-checklist-item {
+  color: #1f2937;
+}
+
+/* Invite Hub */
+.social-invite-card {
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  gap: 1.25rem;
+}
+
+.social-invite-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 480px;
+}
+
+.social-invite-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.social-invite-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+body.light-theme .social-invite-title {
+  color: #111827;
+}
+
+.social-invite-desc {
+  font-size: 0.875rem;
+  color: #a1a1aa;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.social-invite-link-box {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+}
+
+.social-invite-link-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #71717a;
+}
+
+.social-invite-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.social-invite-url-input {
+  font-family: monospace;
+  font-size: 0.825rem;
+}
+
+.social-btn-copy {
+  min-width: 100px;
+}
+
+.social-invite-actions-grid {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.social-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.15rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.social-share-btn.whatsapp {
+  background-color: #25d366;
+  color: #ffffff;
+}
+
+.social-share-btn.whatsapp:hover {
+  background-color: #22c35e;
+}
+
+.social-share-btn.email {
+  background-color: #27272a;
+  color: #ffffff;
+  border: 1px solid #3f3f46;
+}
+
+.social-share-btn.email:hover {
+  background-color: #3f3f46;
+}
+
+.social-invite-preview-box {
+  background-color: #18181b;
+  border: 1px dashed #3f3f46;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  max-width: 520px;
+  width: 100%;
+  text-align: left;
+}
+
+body.light-theme .social-invite-preview-box {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.social-invite-preview-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #71717a;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.social-invite-preview-text {
+  font-size: 0.8rem;
+  color: #d4d4d8;
+  margin: 0;
+  font-style: italic;
+}
+
+body.light-theme .social-invite-preview-text {
+  color: #4b5563;
+}
+
+/* Modal: Mutual Friends Viewer */
+.social-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.social-modal-content {
+  background-color: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease-out;
+}
+
+body.light-theme .social-modal-content {
+  background-color: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.social-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #27272a;
+}
+
+body.light-theme .social-modal-header {
+  border-bottom-color: #e5e7eb;
+}
+
+.social-modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+body.light-theme .social-modal-title {
+  color: #111827;
+}
+
+.social-modal-subtitle {
+  font-size: 0.78rem;
+  color: #71717a;
+  margin: 0;
+}
+
+.social-modal-close {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.2rem;
+}
+
+.social-modal-body {
+  padding: 1.25rem;
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.social-mutual-friends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.social-mutual-user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem;
+  background-color: #121214;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+}
+
+body.light-theme .social-mutual-user-row {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.social-mutual-user-row .contact-avatar.small {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  font-size: 0.8rem;
+}
+
+.social-mutual-user-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.social-mutual-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+body.light-theme .social-mutual-name {
+  color: #111827;
+}
+
+.social-mutual-username {
+  font-size: 0.75rem;
+  color: #71717a;
+}
+
+.social-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid #27272a;
+}
+
+body.light-theme .social-modal-footer {
+  border-top-color: #e5e7eb;
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVENESS FOR SOCIAL CONNECTIONS
+   ========================================================================== */
+@media (max-width: 768px) {
+  .social-connections-wrapper {
+    gap: 0.75rem;
+    padding: 0 0.25rem;
+  }
+
+  .social-tabs-nav {
+    gap: 0.35rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .social-tab-btn {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.78rem;
+    gap: 0.35rem;
+  }
+
+  .social-tab-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .social-connection-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .social-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    border-top: 1px solid #1f1f23;
+    padding-top: 0.6rem;
+  }
+
+  body.light-theme .social-card-actions {
+    border-top-color: #f3f4f6;
+  }
+
+  .social-card-actions .social-btn {
+    flex: 1 1 auto;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .social-send-form,
+  .social-create-list-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .social-invite-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .social-invite-card {
+    padding: 1.25rem 1rem;
+  }
+
+  .social-share-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .social-subfilters-bar {
+    gap: 0.35rem;
+  }
+
+  .social-filter-pill {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .social-card-main .contact-avatar {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    font-size: 0.85rem;
+  }
+
+  .social-card-info .contact-name {
+    font-size: 0.875rem;
+  }
+
+  .social-card-info .contact-status {
+    max-width: 220px;
+  }
+
+  .social-card-actions .social-btn {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.72rem;
   }
 }

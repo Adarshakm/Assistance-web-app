@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import SplashScreen from './components/SplashScreen.jsx';
 import { voiceCallService, callAudioSynthesizer } from './services/voiceCallService.js';
 
@@ -837,9 +837,46 @@ function App() {
   const [addFollowingInput, setAddFollowingInput] = useState('');
   const [followError, setFollowError] = useState('');
 
-  // Social connections search state
+  // Social connections search & tabs state
   const [searchFriendsQuery, setSearchFriendsQuery] = useState('');
-  const [activeSocialFollowTab, setActiveSocialFollowTab] = useState('all'); // 'all', 'followers', 'following', 'follow-unfollow', 'friend-requests'
+  const [socialTab, setSocialTab] = useState('friends'); // 'friends' | 'requests' | 'followers' | 'following' | 'suggestions' | 'lists' | 'invite'
+  const [selectedFriendListFilter, setSelectedFriendListFilter] = useState('all'); // 'all' | 'favorites' | listId
+  const [isCreatingFriendList, setIsCreatingFriendList] = useState(false);
+  const [newFriendListName, setNewFriendListName] = useState('');
+  const [managingMembersListId, setManagingMembersListId] = useState(null);
+  const [assigningFriendToList, setAssigningFriendToList] = useState(null);
+  const [mutualFriendsModalUser, setMutualFriendsModalUser] = useState(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [unfriendConfirmUser, setUnfriendConfirmUser] = useState(null);
+
+  // Favorites & Friend Lists state
+  const [favoriteFriendsList, setFavoriteFriendsList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_favorite_friends');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [customFriendLists, setCustomFriendLists] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_friend_lists');
+      return saved
+        ? JSON.parse(saved)
+        : [
+            { id: 'close-friends', name: 'Close Friends', members: [] },
+            { id: 'work', name: 'Work', members: [] },
+            { id: 'family', name: 'Family', members: [] },
+          ];
+    } catch {
+      return [
+        { id: 'close-friends', name: 'Close Friends', members: [] },
+        { id: 'work', name: 'Work', members: [] },
+        { id: 'family', name: 'Family', members: [] },
+      ];
+    }
+  });
 
   // Friend requests state
   const [sentFriendRequests, setSentFriendRequests] = useState(() => {
@@ -1474,6 +1511,18 @@ function App() {
             setFriendsList(data.user.friends);
             try {
               localStorage.setItem('assistance_friends', JSON.stringify(data.user.friends));
+            } catch {}
+          }
+          if (Array.isArray(data.user.favoriteFriends)) {
+            setFavoriteFriendsList(data.user.favoriteFriends);
+            try {
+              localStorage.setItem('assistance_favorite_friends', JSON.stringify(data.user.favoriteFriends));
+            } catch {}
+          }
+          if (Array.isArray(data.user.friendLists) && data.user.friendLists.length > 0) {
+            setCustomFriendLists(data.user.friendLists);
+            try {
+              localStorage.setItem('assistance_friend_lists', JSON.stringify(data.user.friendLists));
             } catch {}
           }
         }
@@ -2133,6 +2182,160 @@ function App() {
     }
   };
 
+  const handleRemoveFriend = async (target) => {
+    const cleanTarget = String(target).trim().toLowerCase();
+    const updated = friendsList.filter((u) => u.toLowerCase() !== cleanTarget);
+    setFriendsList(updated);
+    try {
+      localStorage.setItem('assistance_friends', JSON.stringify(updated));
+    } catch {}
+
+    // Also remove from favorites
+    const updatedFavs = favoriteFriendsList.filter((u) => u.toLowerCase() !== cleanTarget);
+    setFavoriteFriendsList(updatedFavs);
+    try {
+      localStorage.setItem('assistance_favorite_friends', JSON.stringify(updatedFavs));
+    } catch {}
+
+    // Also remove from custom friend lists
+    setCustomFriendLists((prev) => {
+      const next = prev.map((l) => ({
+        ...l,
+        members: (l.members || []).filter((m) => m.toLowerCase() !== cleanTarget),
+      }));
+      try {
+        localStorage.setItem('assistance_friend_lists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setFriendRequestActionFeedback({ type: 'info', text: `Removed @${cleanTarget} from your friends` });
+    setUnfriendConfirmUser(null);
+
+    if (loggedInUser) {
+      fetch('/api/users/remove-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleToggleFavoriteFriend = async (target) => {
+    const cleanTarget = String(target).trim().toLowerCase();
+    const exists = favoriteFriendsList.some((u) => u.toLowerCase() === cleanTarget);
+    const updated = exists
+      ? favoriteFriendsList.filter((u) => u.toLowerCase() !== cleanTarget)
+      : [...favoriteFriendsList, cleanTarget];
+    setFavoriteFriendsList(updated);
+    try {
+      localStorage.setItem('assistance_favorite_friends', JSON.stringify(updated));
+    } catch {}
+    setFriendRequestActionFeedback({
+      type: 'success',
+      text: exists ? `Removed @${cleanTarget} from favorites` : `Added @${cleanTarget} to favorites ⭐`,
+    });
+    if (loggedInUser) {
+      fetch('/api/users/toggle-favorite-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, targetUsername: cleanTarget }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleCreateFriendList = async (name) => {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return;
+    const newList = {
+      id: `list_${Date.now()}`,
+      name: cleanName,
+      members: [],
+    };
+    const updated = [...customFriendLists, newList];
+    setCustomFriendLists(updated);
+    try {
+      localStorage.setItem('assistance_friend_lists', JSON.stringify(updated));
+    } catch {}
+    setNewFriendListName('');
+    setIsCreatingFriendList(false);
+    setFriendRequestActionFeedback({ type: 'success', text: `Created friend list "${cleanName}"` });
+    if (loggedInUser) {
+      fetch('/api/users/friend-lists/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, name: cleanName }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleDeleteFriendList = async (listId) => {
+    const listToDelete = customFriendLists.find((l) => l.id === listId);
+    const updated = customFriendLists.filter((l) => l.id !== listId);
+    setCustomFriendLists(updated);
+    if (selectedFriendListFilter === listId) {
+      setSelectedFriendListFilter('all');
+    }
+    try {
+      localStorage.setItem('assistance_friend_lists', JSON.stringify(updated));
+    } catch {}
+    setFriendRequestActionFeedback({
+      type: 'info',
+      text: `Deleted list "${listToDelete?.name || 'Friend List'}"`,
+    });
+    if (loggedInUser) {
+      fetch('/api/users/friend-lists/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, listId }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleToggleFriendListMember = async (listId, memberUsername) => {
+    const cleanMember = String(memberUsername).trim().toLowerCase();
+    const updated = customFriendLists.map((l) => {
+      if (l.id !== listId) return l;
+      const members = Array.isArray(l.members) ? l.members : [];
+      const exists = members.some((m) => m.toLowerCase() === cleanMember);
+      return {
+        ...l,
+        members: exists
+          ? members.filter((m) => m.toLowerCase() !== cleanMember)
+          : [...members, cleanMember],
+      };
+    });
+    setCustomFriendLists(updated);
+    try {
+      localStorage.setItem('assistance_friend_lists', JSON.stringify(updated));
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/friend-lists/toggle-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, listId, memberUsername: cleanMember }),
+      }).catch(() => {});
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    const inviteUrl = `${window.location.origin}/?invite=${encodeURIComponent(loggedInUser || 'friend')}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inviteUrl);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2500);
+    } else {
+      const el = document.createElement('textarea');
+      el.value = inviteUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2500);
+    }
+  };
+
   const handleSearchFriends = (e) => {
     e.preventDefault();
   };
@@ -2386,6 +2589,7 @@ function App() {
     // Optimistic like toggle in feed and profile feed
     setPosts((prev) => prev.map(updateLikes));
     setProfileUserPosts((prev) => prev.map(updateLikes));
+    setDiscoveryPostSearchResults((prev) => prev.map(updateLikes));
 
     try {
       await fetch(`/api/posts/${postId}/like`, {
@@ -2402,6 +2606,7 @@ function App() {
     if (!loggedInUser || !postId) return;
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     setProfileUserPosts((prev) => prev.filter((p) => p.id !== postId));
+    setDiscoveryPostSearchResults((prev) => prev.filter((p) => p.id !== postId));
 
     try {
       await fetch(`/api/posts/${postId}?user=${encodeURIComponent(loggedInUser)}`, {
@@ -2452,6 +2657,7 @@ function App() {
     };
     setPosts((prev) => prev.map(addCommentToPost));
     setProfileUserPosts((prev) => prev.map(addCommentToPost));
+    setDiscoveryPostSearchResults((prev) => prev.map(addCommentToPost));
 
     // Clear input for this post immediately
     setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
@@ -2487,6 +2693,7 @@ function App() {
           };
           setPosts((prev) => prev.map(replaceTempComment));
           setProfileUserPosts((prev) => prev.map(replaceTempComment));
+          setDiscoveryPostSearchResults((prev) => prev.map(replaceTempComment));
         }
       } else {
         // Rollback optimistic comment on failure
@@ -3938,6 +4145,9 @@ function App() {
   });
   const [isLoadingDiscoveryUsers, setIsLoadingDiscoveryUsers] = useState(false);
   const [discoverySearchQuery, setDiscoverySearchQuery] = useState('');
+  const [discoveryTab, setDiscoveryTab] = useState('people'); // 'people' | 'posts'
+  const [discoveryPostSearchResults, setDiscoveryPostSearchResults] = useState([]);
+  const [isSearchingBackendPosts, setIsSearchingBackendPosts] = useState(false);
 
   useEffect(() => {
     if (currentView !== 'search-and-discovery' && currentView !== 'social') return;
@@ -4024,6 +4234,76 @@ function App() {
     );
   });
 
+  // Debounced server search for posts when searching on "Posts" tab in Search and Discovery
+  useEffect(() => {
+    if (currentView !== 'search-and-discovery' || discoveryTab !== 'posts') return;
+    const query = discoverySearchQuery.trim();
+    if (!query) {
+      setDiscoveryPostSearchResults([]);
+      setIsSearchingBackendPosts(false);
+      return;
+    }
+
+    let isCurrent = true;
+    setIsSearchingBackendPosts(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/posts?search=${encodeURIComponent(query)}&limit=50`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isCurrent && data && data.success && Array.isArray(data.posts)) {
+            setDiscoveryPostSearchResults(data.posts);
+          }
+        }
+      } catch (err) {
+        console.warn('Error searching posts:', err);
+      } finally {
+        if (isCurrent) setIsSearchingBackendPosts(false);
+      }
+    }, 250);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
+  }, [currentView, discoveryTab, discoverySearchQuery]);
+
+  // Combined filtered posts for Search and Discovery (instant client-side + backend merged)
+  const filteredDiscoveryPosts = useMemo(() => {
+    const query = discoverySearchQuery.trim().toLowerCase();
+    if (!query) {
+      return posts;
+    }
+
+    const cleanQ = query.replace(/^@/, '');
+
+    const localMatches = posts.filter((p) => {
+      const content = String(p.content || '').toLowerCase();
+      const author = String(p.author || '').toLowerCase();
+      const authorName = String(p.authorName || '').toLowerCase();
+      return (
+        content.includes(query) ||
+        author.includes(cleanQ) ||
+        authorName.includes(cleanQ)
+      );
+    });
+
+    const seenIds = new Set(localMatches.map((p) => String(p.id)));
+    const merged = [...localMatches];
+    for (const bp of discoveryPostSearchResults) {
+      const idStr = String(bp.id);
+      if (!seenIds.has(idStr)) {
+        seenIds.add(idStr);
+        merged.push(bp);
+      }
+    }
+
+    return merged;
+  }, [posts, discoverySearchQuery, discoveryPostSearchResults]);
+
   const socialRegisteredUsers = discoveryUsers.filter((u) => {
     if (!searchFriendsQuery.trim()) return true;
     const q = searchFriendsQuery.trim().toLowerCase();
@@ -4069,15 +4349,236 @@ function App() {
     return nameMatch || phoneMatch;
   });
 
-  const socialFilteredFollowers = followersList.filter((u) => {
-    if (!searchFriendsQuery.trim()) return true;
-    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
-  });
+  // Helper to compute mutual friends between logged in user and target user
+  const getMutualFriends = useCallback(
+    (targetUser) => {
+      if (!loggedInUser || !targetUser) return [];
+      const myUsername = loggedInUser.toLowerCase();
+      const targetUsername = (
+        typeof targetUser === 'string' ? targetUser : targetUser.username || ''
+      ).toLowerCase();
+      if (!targetUsername || targetUsername === myUsername) return [];
 
-  const socialFilteredFollowing = followingList.filter((u) => {
-    if (!searchFriendsQuery.trim()) return true;
-    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
-  });
+      let targetFriends = [];
+      if (typeof targetUser === 'object' && Array.isArray(targetUser.friends) && targetUser.friends.length > 0) {
+        targetFriends = targetUser.friends.map((f) => String(f).toLowerCase());
+      } else {
+        const found = discoveryUsers.find((u) => (u.username || '').toLowerCase() === targetUsername);
+        if (found && Array.isArray(found.friends)) {
+          targetFriends = found.friends.map((f) => String(f).toLowerCase());
+        }
+      }
+
+      const myFriendsSet = new Set(effectiveFriendsList.map((f) => String(f).toLowerCase()));
+
+      return targetFriends.filter(
+        (f) => myFriendsSet.has(f) && f !== myUsername && f !== targetUsername
+      );
+    },
+    [loggedInUser, discoveryUsers, effectiveFriendsList]
+  );
+
+  // Detailed friends list
+  const friendsWithDetails = useMemo(() => {
+    return effectiveFriendsList.map((friendUsername) => {
+      const cleanName = String(friendUsername).toLowerCase();
+      const u = discoveryUsers.find(
+        (user) => (user.username || '').toLowerCase() === cleanName
+      );
+      return {
+        id: u?.id || cleanName,
+        username: cleanName,
+        displayName: u?.displayName || friendUsername,
+        avatar: u?.avatar || null,
+        status: u?.status || '',
+        phone: u?.phone || '',
+        email: u?.email || '',
+        friends: u?.friends || [],
+        followers: u?.followers || [],
+        following: u?.following || [],
+        isFavorite: favoriteFriendsList.some((f) => f.toLowerCase() === cleanName),
+        isFollowing: followingList.some((f) => f.toLowerCase() === cleanName),
+      };
+    });
+  }, [effectiveFriendsList, discoveryUsers, favoriteFriendsList, followingList]);
+
+  // Filtered friends by search query and custom list / favorites filter
+  const filteredFriends = useMemo(() => {
+    let list = friendsWithDetails;
+    if (selectedFriendListFilter === 'favorites') {
+      list = list.filter((f) => f.isFavorite);
+    } else if (selectedFriendListFilter !== 'all') {
+      const customList = customFriendLists.find((l) => l.id === selectedFriendListFilter);
+      if (customList) {
+        const memberSet = new Set((customList.members || []).map((m) => m.toLowerCase()));
+        list = list.filter((f) => memberSet.has(f.username.toLowerCase()));
+      }
+    }
+    if (searchFriendsQuery.trim()) {
+      const q = searchFriendsQuery.trim().toLowerCase();
+      list = list.filter(
+        (f) =>
+          f.username.toLowerCase().includes(q) ||
+          f.displayName.toLowerCase().includes(q) ||
+          (f.phone && f.phone.includes(q)) ||
+          (f.email && f.email.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [friendsWithDetails, selectedFriendListFilter, customFriendLists, searchFriendsQuery]);
+
+  // Followers with details
+  const followersWithDetails = useMemo(() => {
+    return followersList.map((followerUsername) => {
+      const cleanName = String(followerUsername).toLowerCase();
+      const u = discoveryUsers.find(
+        (user) => (user.username || '').toLowerCase() === cleanName
+      );
+      return {
+        id: u?.id || cleanName,
+        username: cleanName,
+        displayName: u?.displayName || followerUsername,
+        avatar: u?.avatar || null,
+        status: u?.status || '',
+        friends: u?.friends || [],
+        isFollowing: followingList.some((f) => f.toLowerCase() === cleanName),
+        isFriend: effectiveFriendsList.some((f) => f.toLowerCase() === cleanName),
+      };
+    });
+  }, [followersList, discoveryUsers, followingList, effectiveFriendsList]);
+
+  const filteredFollowers = useMemo(() => {
+    if (!searchFriendsQuery.trim()) return followersWithDetails;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return followersWithDetails.filter(
+      (f) => f.username.toLowerCase().includes(q) || f.displayName.toLowerCase().includes(q)
+    );
+  }, [followersWithDetails, searchFriendsQuery]);
+
+  // Following with details
+  const followingWithDetails = useMemo(() => {
+    return followingList.map((followingUsername) => {
+      const cleanName = String(followingUsername).toLowerCase();
+      const u = discoveryUsers.find(
+        (user) => (user.username || '').toLowerCase() === cleanName
+      );
+      return {
+        id: u?.id || cleanName,
+        username: cleanName,
+        displayName: u?.displayName || followingUsername,
+        avatar: u?.avatar || null,
+        status: u?.status || '',
+        friends: u?.friends || [],
+        isFollower: followersList.some((f) => f.toLowerCase() === cleanName),
+        isFriend: effectiveFriendsList.some((f) => f.toLowerCase() === cleanName),
+      };
+    });
+  }, [followingList, discoveryUsers, followersList, effectiveFriendsList]);
+
+  const filteredFollowing = useMemo(() => {
+    if (!searchFriendsQuery.trim()) return followingWithDetails;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return followingWithDetails.filter(
+      (f) => f.username.toLowerCase().includes(q) || f.displayName.toLowerCase().includes(q)
+    );
+  }, [followingWithDetails, searchFriendsQuery]);
+
+  // Friend requests with details
+  const receivedRequestsWithDetails = useMemo(() => {
+    return receivedFriendRequests.map((reqUsername) => {
+      const cleanName = String(reqUsername).toLowerCase();
+      const u = discoveryUsers.find(
+        (user) => (user.username || '').toLowerCase() === cleanName
+      );
+      return {
+        id: u?.id || cleanName,
+        username: cleanName,
+        displayName: u?.displayName || reqUsername,
+        avatar: u?.avatar || null,
+        status: u?.status || '',
+        friends: u?.friends || [],
+      };
+    });
+  }, [receivedFriendRequests, discoveryUsers]);
+
+  const filteredReceivedRequests = useMemo(() => {
+    if (!searchFriendsQuery.trim()) return receivedRequestsWithDetails;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return receivedRequestsWithDetails.filter(
+      (r) => r.username.toLowerCase().includes(q) || r.displayName.toLowerCase().includes(q)
+    );
+  }, [receivedRequestsWithDetails, searchFriendsQuery]);
+
+  const sentRequestsWithDetails = useMemo(() => {
+    return sentFriendRequests.map((reqUsername) => {
+      const cleanName = String(reqUsername).toLowerCase();
+      const u = discoveryUsers.find(
+        (user) => (user.username || '').toLowerCase() === cleanName
+      );
+      return {
+        id: u?.id || cleanName,
+        username: cleanName,
+        displayName: u?.displayName || reqUsername,
+        avatar: u?.avatar || null,
+        status: u?.status || '',
+        friends: u?.friends || [],
+      };
+    });
+  }, [sentFriendRequests, discoveryUsers]);
+
+  const filteredSentRequests = useMemo(() => {
+    if (!searchFriendsQuery.trim()) return sentRequestsWithDetails;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return sentRequestsWithDetails.filter(
+      (r) => r.username.toLowerCase().includes(q) || r.displayName.toLowerCase().includes(q)
+    );
+  }, [sentRequestsWithDetails, searchFriendsQuery]);
+
+  // Suggested connections: users not yet friends, not pending, ranked by mutual friends
+  const suggestedConnections = useMemo(() => {
+    if (!loggedInUser) return [];
+    const myUsername = loggedInUser.toLowerCase();
+    const myFriendsSet = new Set(effectiveFriendsList.map((f) => f.toLowerCase()));
+    const sentSet = new Set(sentFriendRequests.map((f) => f.toLowerCase()));
+    const receivedSet = new Set(receivedFriendRequests.map((f) => f.toLowerCase()));
+
+    const candidates = discoveryUsers.filter((u) => {
+      const uName = (u.username || '').toLowerCase();
+      if (!uName || uName === myUsername) return false;
+      if (myFriendsSet.has(uName)) return false;
+      if (sentSet.has(uName) || receivedSet.has(uName)) return false;
+      return true;
+    });
+
+    return candidates
+      .map((u) => {
+        const mutual = getMutualFriends(u);
+        const isFollowingUser = followingList.some((f) => f.toLowerCase() === u.username.toLowerCase());
+        return {
+          ...u,
+          mutualFriends: mutual,
+          mutualCount: mutual.length,
+          isFollowingUser,
+        };
+      })
+      .sort((a, b) => b.mutualCount - a.mutualCount);
+  }, [
+    loggedInUser,
+    discoveryUsers,
+    effectiveFriendsList,
+    sentFriendRequests,
+    receivedFriendRequests,
+    followingList,
+    getMutualFriends,
+  ]);
+
+  const filteredSuggestions = useMemo(() => {
+    if (!searchFriendsQuery.trim()) return suggestedConnections;
+    const q = searchFriendsQuery.trim().toLowerCase();
+    return suggestedConnections.filter(
+      (s) => s.username.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q)
+    );
+  }, [suggestedConnections, searchFriendsQuery]);
 
   const allSocialUsers = discoveryUsers.filter(
     (u) => u.username && u.username.toLowerCase() !== (loggedInUser || '').toLowerCase()
@@ -4090,16 +4591,6 @@ function App() {
       (u.username && u.username.toLowerCase().includes(q)) ||
       (u.displayName && u.displayName.toLowerCase().includes(q))
     );
-  });
-
-  const socialFilteredReceivedRequests = receivedFriendRequests.filter((u) => {
-    if (!searchFriendsQuery.trim()) return true;
-    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
-  });
-
-  const socialFilteredSentRequests = sentFriendRequests.filter((u) => {
-    if (!searchFriendsQuery.trim()) return true;
-    return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
   });
 
   const myAuthoredPosts = posts.filter(
@@ -6534,185 +7025,1451 @@ function App() {
             </div>
           ) : currentView === 'social' ? (
             <div className="social-space" id="social-space">
-              <div className="contacts-container" id="social-connections-container">
+              <div className="contacts-container social-connections-wrapper" id="social-connections-container">
+                {/* Header */}
                 <div className="contacts-header-wrapper">
                   <div className="contacts-title-col">
                     <h1 className="heading contacts-heading" id="social-connections-heading">
                       Social Connections
                     </h1>
-                    <p className="contacts-subheading">
-                      Registered users on Assistance ({discoveryUsers.length})
+                    <p className="discovery-subtitle">
+                      Follow, connect with friends, manage lists, and discover mutual connections
                     </p>
                   </div>
                 </div>
 
-                <div className="contacts-search-box">
-                  <svg
-                    className="contacts-search-icon"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                {/* Feedback Toast / Alert */}
+                {friendRequestActionFeedback && (
+                  <div
+                    className={`social-feedback-alert ${
+                      friendRequestActionFeedback.type === 'error'
+                        ? 'error'
+                        : friendRequestActionFeedback.type === 'info'
+                        ? 'info'
+                        : 'success'
+                    }`}
                   >
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                  <input
-                    type="text"
-                    id="social-search-input"
-                    className="contacts-search-input"
-                    placeholder="Search registered people by name, username, phone..."
-                    value={searchFriendsQuery}
-                    onChange={(e) => setSearchFriendsQuery(e.target.value)}
-                    aria-label="Search registered people"
-                  />
-                  {searchFriendsQuery && (
+                    <span>{friendRequestActionFeedback.text}</span>
                     <button
                       type="button"
-                      className="contacts-search-clear"
-                      onClick={() => setSearchFriendsQuery('')}
-                      aria-label="Clear search"
+                      className="social-feedback-close"
+                      onClick={() => setFriendRequestActionFeedback(null)}
+                      aria-label="Dismiss feedback"
                     >
                       ×
                     </button>
-                  )}
+                  </div>
+                )}
+
+                {/* Main Navigation Tabs */}
+                <div className="social-tabs-nav" role="tablist" aria-label="Social connections navigation">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-friends"
+                    aria-selected={socialTab === 'friends'}
+                    className={`social-tab-btn ${socialTab === 'friends' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('friends');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>Friends</span>
+                    <span className="social-tab-badge">{effectiveFriendsList.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-requests"
+                    aria-selected={socialTab === 'requests'}
+                    className={`social-tab-btn ${socialTab === 'requests' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('requests');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="8.5" cy="7" r="4"></circle>
+                      <line x1="20" y1="8" x2="20" y2="14"></line>
+                      <line x1="23" y1="11" x2="17" y2="11"></line>
+                    </svg>
+                    <span>Requests</span>
+                    {(receivedFriendRequests.length > 0 || sentFriendRequests.length > 0) && (
+                      <span className={`social-tab-badge ${receivedFriendRequests.length > 0 ? 'highlight' : ''}`}>
+                        {receivedFriendRequests.length + sentFriendRequests.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-followers"
+                    aria-selected={socialTab === 'followers'}
+                    className={`social-tab-btn ${socialTab === 'followers' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('followers');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                    </svg>
+                    <span>Followers</span>
+                    <span className="social-tab-badge">{followersList.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-following"
+                    aria-selected={socialTab === 'following'}
+                    className={`social-tab-btn ${socialTab === 'following' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('following');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>Following</span>
+                    <span className="social-tab-badge">{followingList.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-suggestions"
+                    aria-selected={socialTab === 'suggestions'}
+                    className={`social-tab-btn ${socialTab === 'suggestions' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('suggestions');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="9" y1="18" x2="15" y2="18"></line>
+                      <line x1="10" y1="22" x2="14" y2="22"></line>
+                      <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
+                    </svg>
+                    <span>Suggestions</span>
+                    {suggestedConnections.length > 0 && (
+                      <span className="social-tab-badge">{suggestedConnections.length}</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-lists"
+                    aria-selected={socialTab === 'lists'}
+                    className={`social-tab-btn ${socialTab === 'lists' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('lists');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                      <line x1="12" y1="11" x2="12" y2="17"></line>
+                      <line x1="9" y1="14" x2="15" y2="14"></line>
+                    </svg>
+                    <span>Friend Lists</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="social-tab-invite"
+                    aria-selected={socialTab === 'invite'}
+                    className={`social-tab-btn ${socialTab === 'invite' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSocialTab('invite');
+                      setSearchFriendsQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <span>Invite</span>
+                  </button>
                 </div>
 
-                <div className="contacts-list" id="social-registered-users-list">
-                  {isLoadingDiscoveryUsers && discoveryUsers.length === 0 ? (
-                    <div className="contacts-empty-state">
-                      <p className="contacts-empty-text">Loading registered people...</p>
+                {/* Instant Search Bar (for tabs that support search) */}
+                {socialTab !== 'invite' && (
+                  <div className="contacts-search-box social-search-box">
+                    <svg
+                      className="contacts-search-icon"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input
+                      type="text"
+                      id="social-search-input"
+                      className="contacts-search-input"
+                      placeholder={
+                        socialTab === 'friends'
+                          ? 'Search friends by name, @username, phone, email...'
+                          : socialTab === 'followers'
+                          ? 'Search followers by name or @username...'
+                          : socialTab === 'following'
+                          ? 'Search people you follow...'
+                          : socialTab === 'requests'
+                          ? 'Search pending friend requests...'
+                          : socialTab === 'suggestions'
+                          ? 'Search suggested connections...'
+                          : 'Search connections...'
+                      }
+                      value={searchFriendsQuery}
+                      onChange={(e) => setSearchFriendsQuery(e.target.value)}
+                      aria-label="Search connections"
+                    />
+                    {searchFriendsQuery && (
+                      <button
+                        type="button"
+                        className="contacts-search-clear"
+                        onClick={() => setSearchFriendsQuery('')}
+                        aria-label="Clear search"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 1: FRIENDS */}
+                {socialTab === 'friends' && (
+                  <div className="social-content-tab" id="social-friends-view">
+                    {/* Filter Pills: All, Favorites, Custom Lists */}
+                    <div className="social-subfilters-bar" role="toolbar" aria-label="Filter friends">
+                      <button
+                        type="button"
+                        className={`social-filter-pill ${selectedFriendListFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setSelectedFriendListFilter('all')}
+                      >
+                        All Friends ({friendsWithDetails.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`social-filter-pill ${selectedFriendListFilter === 'favorites' ? 'active' : ''}`}
+                        onClick={() => setSelectedFriendListFilter('favorites')}
+                      >
+                        ⭐ Favorites ({favoriteFriendsList.length})
+                      </button>
+
+                      {customFriendLists.map((list) => {
+                        const count = (list.members || []).length;
+                        return (
+                          <button
+                            key={list.id}
+                            type="button"
+                            className={`social-filter-pill ${selectedFriendListFilter === list.id ? 'active' : ''}`}
+                            onClick={() => setSelectedFriendListFilter(list.id)}
+                          >
+                            📁 {list.name} ({count})
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        className="social-filter-pill manage-lists-shortcut"
+                        onClick={() => setSocialTab('lists')}
+                        title="Manage friend lists"
+                      >
+                        + Manage Lists
+                      </button>
                     </div>
-                  ) : socialRegisteredUsers.length === 0 ? (
-                    <div className="contacts-empty-state">
-                      <h3 className="contacts-empty-title">No registered users found</h3>
-                      <p className="contacts-empty-text">
-                        {searchFriendsQuery
-                          ? `No registered people match "${searchFriendsQuery}"`
-                          : 'No people have registered on this application yet.'}
+
+                    {/* Friends Cards List */}
+                    <div className="contacts-list" id="social-friends-list">
+                      {filteredFriends.length === 0 ? (
+                        <div className="contacts-empty-state">
+                          <h3 className="contacts-empty-title">
+                            {searchFriendsQuery
+                              ? `No friends match "${searchFriendsQuery}"`
+                              : selectedFriendListFilter === 'favorites'
+                              ? 'No favorite friends yet'
+                              : selectedFriendListFilter !== 'all'
+                              ? 'No friends in this list yet'
+                              : 'You have no friends yet'}
+                          </h3>
+                          <p className="contacts-empty-text">
+                            {selectedFriendListFilter === 'favorites'
+                              ? 'Click the star icon (⭐) on any friend card to add them to your favorites!'
+                              : selectedFriendListFilter !== 'all'
+                              ? 'Manage members in this list via the "Friend Lists" tab.'
+                              : 'Explore Suggested Connections or Search and Discovery to connect with people.'}
+                          </p>
+                          {effectiveFriendsList.length === 0 && (
+                            <button
+                              type="button"
+                              className="social-btn social-btn-primary"
+                              style={{ marginTop: '0.75rem' }}
+                              onClick={() => setSocialTab('suggestions')}
+                            >
+                              Explore Suggested Connections
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        filteredFriends.map((friend) => {
+                          const mutualFriends = getMutualFriends(friend);
+                          const isAssignedMenuOpen = assigningFriendToList === friend.username;
+
+                          return (
+                            <div key={friend.username} className="social-connection-card">
+                              <div className="social-card-main">
+                                <div
+                                  className="contact-avatar"
+                                  style={{
+                                    backgroundColor: friend.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(friend.displayName || friend.username),
+                                  }}
+                                  onClick={() => handleOpenUserProfile(friend.username)}
+                                  role="button"
+                                  tabIndex={0}
+                                  title={`View ${friend.displayName || friend.username}'s profile`}
+                                >
+                                  {friend.avatar ? (
+                                    <img
+                                      src={friend.avatar}
+                                      alt={friend.displayName || friend.username}
+                                      className="contact-avatar-img"
+                                    />
+                                  ) : (
+                                    <span>{getInitials(friend.displayName || friend.username)}</span>
+                                  )}
+                                  <span className="contact-online-dot"></span>
+                                </div>
+
+                                <div className="social-card-info">
+                                  <div className="contact-name-row">
+                                    <span
+                                      className="contact-name"
+                                      onClick={() => handleOpenUserProfile(friend.username)}
+                                      role="button"
+                                      tabIndex={0}
+                                    >
+                                      {friend.displayName || friend.username}
+                                    </span>
+                                    <span className="contact-username">@{friend.username}</span>
+
+                                    {/* Favorite Star Badge */}
+                                    <button
+                                      type="button"
+                                      className={`social-star-btn ${friend.isFavorite ? 'favorited' : ''}`}
+                                      onClick={() => handleToggleFavoriteFriend(friend.username)}
+                                      title={friend.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                      aria-label={friend.isFavorite ? 'Unfavorite friend' : 'Favorite friend'}
+                                    >
+                                      {friend.isFavorite ? '★' : '☆'}
+                                    </button>
+                                  </div>
+
+                                  {friend.status && (
+                                    <p className="contact-status" title={friend.status}>
+                                      {friend.status}
+                                    </p>
+                                  )}
+
+                                  {/* Mutual Friends Pill */}
+                                  {mutualFriends.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="social-mutual-badge"
+                                      onClick={() => setMutualFriendsModalUser(friend)}
+                                      title="View mutual friends"
+                                    >
+                                      🤝 {mutualFriends.length} mutual {mutualFriends.length === 1 ? 'friend' : 'friends'}
+                                    </button>
+                                  )}
+
+                                  {/* Custom Lists Tags for this Friend */}
+                                  {customFriendLists.some((l) =>
+                                    (l.members || []).map((m) => m.toLowerCase()).includes(friend.username.toLowerCase())
+                                  ) && (
+                                    <div className="social-assigned-lists-tags">
+                                      {customFriendLists
+                                        .filter((l) =>
+                                          (l.members || []).map((m) => m.toLowerCase()).includes(friend.username.toLowerCase())
+                                        )
+                                        .map((l) => (
+                                          <span key={l.id} className="social-list-tag">
+                                            {l.name}
+                                          </span>
+                                        ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Card Actions */}
+                              <div className="social-card-actions">
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenUserProfile(friend.username)}
+                                  title="View Profile"
+                                >
+                                  Profile
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenChatWithContact(friend)}
+                                  title="Chat"
+                                >
+                                  Chat
+                                </button>
+
+                                {/* Follow / Unfollow Toggle */}
+                                {friend.isFollowing ? (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-following"
+                                    onClick={() => handleUnfollowUser(friend.username)}
+                                    title="Unfollow user"
+                                  >
+                                    Following
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-follow"
+                                    onClick={() => handleFollowUser(friend.username)}
+                                    title="Follow user"
+                                  >
+                                    Follow
+                                  </button>
+                                )}
+
+                                {/* Assign to Custom Lists Menu Toggle */}
+                                <div className="social-lists-dropdown-wrap">
+                                  <button
+                                    type="button"
+                                    className={`social-btn social-btn-subtle ${isAssignedMenuOpen ? 'active' : ''}`}
+                                    onClick={() =>
+                                      setAssigningFriendToList(isAssignedMenuOpen ? null : friend.username)
+                                    }
+                                    title="Add to friend lists"
+                                  >
+                                    Lists ▾
+                                  </button>
+
+                                  {isAssignedMenuOpen && (
+                                    <div className="social-lists-menu">
+                                      <div className="social-lists-menu-title">Add to List:</div>
+                                      {customFriendLists.map((l) => {
+                                        const isMember = (l.members || [])
+                                          .map((m) => m.toLowerCase())
+                                          .includes(friend.username.toLowerCase());
+                                        return (
+                                          <label key={l.id} className="social-lists-menu-item">
+                                            <input
+                                              type="checkbox"
+                                              checked={isMember}
+                                              onChange={() => handleToggleFriendListMember(l.id, friend.username)}
+                                            />
+                                            <span>{l.name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                      <button
+                                        type="button"
+                                        className="social-lists-menu-close"
+                                        onClick={() => setAssigningFriendToList(null)}
+                                      >
+                                        Done
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Remove Friend (Unfriend) with Confirmation */}
+                                {unfriendConfirmUser === friend.username ? (
+                                  <div className="social-confirm-inline">
+                                    <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>Unfriend?</span>
+                                    <button
+                                      type="button"
+                                      className="social-btn social-btn-danger"
+                                      onClick={() => handleRemoveFriend(friend.username)}
+                                    >
+                                      Yes
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="social-btn social-btn-subtle"
+                                      onClick={() => setUnfriendConfirmUser(null)}
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-danger-ghost"
+                                    onClick={() => setUnfriendConfirmUser(friend.username)}
+                                    title="Remove from friends"
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: FRIEND REQUESTS */}
+                {socialTab === 'requests' && (
+                  <div className="social-content-tab" id="social-requests-view">
+                    {/* Quick Send Friend Request Box */}
+                    <div className="social-send-request-box">
+                      <div className="social-section-header">
+                        <h3 className="social-section-title">Send Friend Request</h3>
+                        <p className="social-section-desc">Connect with someone by their username</p>
+                      </div>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSendFriendRequest();
+                        }}
+                        className="social-send-form"
+                      >
+                        <input
+                          type="text"
+                          className="social-input"
+                          placeholder="Enter username (e.g. alex_dev)..."
+                          value={sendRequestInput}
+                          onChange={(e) => setSendRequestInput(e.target.value)}
+                        />
+                        <button type="submit" className="social-btn social-btn-primary">
+                          Send Request
+                        </button>
+                      </form>
+                      {sendRequestFeedback && (
+                        <div
+                          className={`social-request-feedback ${
+                            sendRequestFeedback.type === 'error' ? 'error' : 'success'
+                          }`}
+                        >
+                          {sendRequestFeedback.text}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 1: Received Friend Requests */}
+                    <div className="social-requests-section">
+                      <div className="social-section-header">
+                        <h3 className="social-section-title">
+                          Received Requests ({filteredReceivedRequests.length})
+                        </h3>
+                        <p className="social-section-desc">People who want to connect as friends</p>
+                      </div>
+
+                      {filteredReceivedRequests.length === 0 ? (
+                        <div className="contacts-empty-state" style={{ padding: '1.25rem' }}>
+                          <p className="contacts-empty-text">No pending incoming friend requests.</p>
+                        </div>
+                      ) : (
+                        <div className="contacts-list">
+                          {filteredReceivedRequests.map((req) => {
+                            const mutualFriends = getMutualFriends(req);
+                            return (
+                              <div key={req.username} className="social-connection-card">
+                                <div className="social-card-main">
+                                  <div
+                                    className="contact-avatar"
+                                    style={{
+                                      backgroundColor: req.avatar
+                                        ? 'transparent'
+                                        : getAvatarColor(req.displayName || req.username),
+                                    }}
+                                    onClick={() => handleOpenUserProfile(req.username)}
+                                    role="button"
+                                    tabIndex={0}
+                                  >
+                                    {req.avatar ? (
+                                      <img
+                                        src={req.avatar}
+                                        alt={req.displayName || req.username}
+                                        className="contact-avatar-img"
+                                      />
+                                    ) : (
+                                      <span>{getInitials(req.displayName || req.username)}</span>
+                                    )}
+                                  </div>
+                                  <div className="social-card-info">
+                                    <div className="contact-name-row">
+                                      <span
+                                        className="contact-name"
+                                        onClick={() => handleOpenUserProfile(req.username)}
+                                        role="button"
+                                        tabIndex={0}
+                                      >
+                                        {req.displayName || req.username}
+                                      </span>
+                                      <span className="contact-username">@{req.username}</span>
+                                    </div>
+                                    {req.status && <p className="contact-status">{req.status}</p>}
+                                    {mutualFriends.length > 0 && (
+                                      <button
+                                        type="button"
+                                        className="social-mutual-badge"
+                                        onClick={() => setMutualFriendsModalUser(req)}
+                                      >
+                                        🤝 {mutualFriends.length} mutual friends
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="social-card-actions">
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-subtle"
+                                    onClick={() => handleOpenUserProfile(req.username)}
+                                  >
+                                    Profile
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-primary"
+                                    onClick={() => handleAcceptFriendRequest(req.username)}
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-subtle"
+                                    onClick={() => handleRejectFriendRequest(req.username)}
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 2: Sent Friend Requests (Pending) */}
+                    <div className="social-requests-section" style={{ marginTop: '1.5rem' }}>
+                      <div className="social-section-header">
+                        <h3 className="social-section-title">
+                          Sent Requests ({filteredSentRequests.length})
+                        </h3>
+                        <p className="social-section-desc">Pending requests you sent to others</p>
+                      </div>
+
+                      {filteredSentRequests.length === 0 ? (
+                        <div className="contacts-empty-state" style={{ padding: '1.25rem' }}>
+                          <p className="contacts-empty-text">No outgoing pending requests.</p>
+                        </div>
+                      ) : (
+                        <div className="contacts-list">
+                          {filteredSentRequests.map((req) => (
+                            <div key={req.username} className="social-connection-card">
+                              <div className="social-card-main">
+                                <div
+                                  className="contact-avatar"
+                                  style={{
+                                    backgroundColor: req.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(req.displayName || req.username),
+                                  }}
+                                  onClick={() => handleOpenUserProfile(req.username)}
+                                  role="button"
+                                  tabIndex={0}
+                                >
+                                  {req.avatar ? (
+                                    <img
+                                      src={req.avatar}
+                                      alt={req.displayName || req.username}
+                                      className="contact-avatar-img"
+                                    />
+                                  ) : (
+                                    <span>{getInitials(req.displayName || req.username)}</span>
+                                  )}
+                                </div>
+                                <div className="social-card-info">
+                                  <div className="contact-name-row">
+                                    <span
+                                      className="contact-name"
+                                      onClick={() => handleOpenUserProfile(req.username)}
+                                      role="button"
+                                      tabIndex={0}
+                                    >
+                                      {req.displayName || req.username}
+                                    </span>
+                                    <span className="contact-username">@{req.username}</span>
+                                    <span className="social-pending-pill">Pending</span>
+                                  </div>
+                                  {req.status && <p className="contact-status">{req.status}</p>}
+                                </div>
+                              </div>
+                              <div className="social-card-actions">
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenUserProfile(req.username)}
+                                >
+                                  Profile
+                                </button>
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-danger-ghost"
+                                  onClick={() => handleCancelFriendRequest(req.username)}
+                                  title="Cancel friend request"
+                                >
+                                  Cancel Request
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: FOLLOWERS */}
+                {socialTab === 'followers' && (
+                  <div className="social-content-tab" id="social-followers-view">
+                    <div className="social-section-header">
+                      <h3 className="social-section-title">Followers ({filteredFollowers.length})</h3>
+                      <p className="social-section-desc">People who follow your updates and posts</p>
+                    </div>
+
+                    {filteredFollowers.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <h3 className="contacts-empty-title">
+                          {searchFriendsQuery ? `No followers match "${searchFriendsQuery}"` : 'No followers yet'}
+                        </h3>
+                        <p className="contacts-empty-text">
+                          Share posts and engage with the community to grow your followers!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="contacts-list">
+                        {filteredFollowers.map((follower) => {
+                          const mutualFriends = getMutualFriends(follower);
+
+                          return (
+                            <div key={follower.username} className="social-connection-card">
+                              <div className="social-card-main">
+                                <div
+                                  className="contact-avatar"
+                                  style={{
+                                    backgroundColor: follower.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(follower.displayName || follower.username),
+                                  }}
+                                  onClick={() => handleOpenUserProfile(follower.username)}
+                                  role="button"
+                                  tabIndex={0}
+                                >
+                                  {follower.avatar ? (
+                                    <img
+                                      src={follower.avatar}
+                                      alt={follower.displayName || follower.username}
+                                      className="contact-avatar-img"
+                                    />
+                                  ) : (
+                                    <span>{getInitials(follower.displayName || follower.username)}</span>
+                                  )}
+                                </div>
+                                <div className="social-card-info">
+                                  <div className="contact-name-row">
+                                    <span
+                                      className="contact-name"
+                                      onClick={() => handleOpenUserProfile(follower.username)}
+                                      role="button"
+                                      tabIndex={0}
+                                    >
+                                      {follower.displayName || follower.username}
+                                    </span>
+                                    <span className="contact-username">@{follower.username}</span>
+                                    {follower.isFriend && (
+                                      <span className="social-friend-pill">Friend</span>
+                                    )}
+                                  </div>
+                                  {follower.status && <p className="contact-status">{follower.status}</p>}
+                                  {mutualFriends.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="social-mutual-badge"
+                                      onClick={() => setMutualFriendsModalUser(follower)}
+                                    >
+                                      🤝 {mutualFriends.length} mutual friends
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="social-card-actions">
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenUserProfile(follower.username)}
+                                >
+                                  Profile
+                                </button>
+                                {follower.isFollowing ? (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-following"
+                                    onClick={() => handleUnfollowUser(follower.username)}
+                                  >
+                                    Following
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-follow"
+                                    onClick={() => handleFollowUser(follower.username)}
+                                  >
+                                    Follow Back
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-danger-ghost"
+                                  onClick={() => handleRemoveFollower(follower.username)}
+                                  title="Remove follower"
+                                >
+                                  Remove Follower
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 4: FOLLOWING */}
+                {socialTab === 'following' && (
+                  <div className="social-content-tab" id="social-following-view">
+                    <div className="social-section-header">
+                      <h3 className="social-section-title">Following ({filteredFollowing.length})</h3>
+                      <p className="social-section-desc">People whose updates and posts you follow</p>
+                    </div>
+
+                    {filteredFollowing.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <h3 className="contacts-empty-title">
+                          {searchFriendsQuery ? `No following match "${searchFriendsQuery}"` : 'Not following anyone yet'}
+                        </h3>
+                        <p className="contacts-empty-text">
+                          Discover interesting people in Suggestions or Search & Discovery to follow them!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="contacts-list">
+                        {filteredFollowing.map((person) => {
+                          const mutualFriends = getMutualFriends(person);
+
+                          return (
+                            <div key={person.username} className="social-connection-card">
+                              <div className="social-card-main">
+                                <div
+                                  className="contact-avatar"
+                                  style={{
+                                    backgroundColor: person.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(person.displayName || person.username),
+                                  }}
+                                  onClick={() => handleOpenUserProfile(person.username)}
+                                  role="button"
+                                  tabIndex={0}
+                                >
+                                  {person.avatar ? (
+                                    <img
+                                      src={person.avatar}
+                                      alt={person.displayName || person.username}
+                                      className="contact-avatar-img"
+                                    />
+                                  ) : (
+                                    <span>{getInitials(person.displayName || person.username)}</span>
+                                  )}
+                                </div>
+                                <div className="social-card-info">
+                                  <div className="contact-name-row">
+                                    <span
+                                      className="contact-name"
+                                      onClick={() => handleOpenUserProfile(person.username)}
+                                      role="button"
+                                      tabIndex={0}
+                                    >
+                                      {person.displayName || person.username}
+                                    </span>
+                                    <span className="contact-username">@{person.username}</span>
+                                    {person.isFollower && (
+                                      <span className="social-follows-you-pill">Follows you</span>
+                                    )}
+                                  </div>
+                                  {person.status && <p className="contact-status">{person.status}</p>}
+                                  {mutualFriends.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="social-mutual-badge"
+                                      onClick={() => setMutualFriendsModalUser(person)}
+                                    >
+                                      🤝 {mutualFriends.length} mutual friends
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="social-card-actions">
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenUserProfile(person.username)}
+                                >
+                                  Profile
+                                </button>
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-following"
+                                  onClick={() => handleUnfollowUser(person.username)}
+                                  title="Unfollow user"
+                                >
+                                  Unfollow
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 5: SUGGESTED CONNECTIONS */}
+                {socialTab === 'suggestions' && (
+                  <div className="social-content-tab" id="social-suggestions-view">
+                    <div className="social-section-header">
+                      <h3 className="social-section-title">Suggested Connections ({filteredSuggestions.length})</h3>
+                      <p className="social-section-desc">
+                        People you may know ranked by mutual connections and community activity
                       </p>
                     </div>
-                  ) : (
-                    socialRegisteredUsers.map((user) => (
-                      <div
-                        key={user.id || user.username}
-                        className="contact-card"
-                        onClick={() => handleOpenChatWithContact(user)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleOpenChatWithContact(user);
-                          }
-                        }}
-                      >
-                        <div className="contact-card-left">
-                          <div
-                            className="contact-avatar"
-                            style={{
-                              backgroundColor: user.avatar
-                                ? 'transparent'
-                                : getAvatarColor(user.displayName || user.username),
-                            }}
-                          >
-                            {user.avatar ? (
-                              <img
-                                src={user.avatar}
-                                alt={user.displayName || user.username}
-                                className="contact-avatar-img"
-                              />
-                            ) : (
-                              <span>{getInitials(user.displayName || user.username)}</span>
-                            )}
-                            <span className="contact-online-dot" title="Registered User"></span>
-                          </div>
 
-                          <div className="contact-info">
-                            <div className="contact-name-row">
-                              <span className="contact-name">
-                                {user.displayName || user.username}
-                              </span>
-                              <span className="contact-username">@{user.username}</span>
-                              {loggedInUser &&
-                                user.username.toLowerCase() === loggedInUser.toLowerCase() && (
-                                  <span
-                                    className="contact-tab-badge secondary"
-                                    style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}
-                                  >
-                                    You
-                                  </span>
-                                )}
-                              <span
-                                className="contact-verified-badge"
-                                title="Registered on Assistance"
-                              >
-                                <svg
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 24 24"
-                                  fill="currentColor"
+                    {filteredSuggestions.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <h3 className="contacts-empty-title">No new suggestions at the moment</h3>
+                        <p className="contacts-empty-text">
+                          You are already connected with most registered members, or no new registered users were found.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="contacts-list">
+                        {filteredSuggestions.map((suggested) => {
+                          const mutualCount = suggested.mutualCount || 0;
+                          const hasSentReq = sentFriendRequests.some(
+                            (r) => r.toLowerCase() === suggested.username.toLowerCase()
+                          );
+
+                          return (
+                            <div key={suggested.username} className="social-connection-card">
+                              <div className="social-card-main">
+                                <div
+                                  className="contact-avatar"
+                                  style={{
+                                    backgroundColor: suggested.avatar
+                                      ? 'transparent'
+                                      : getAvatarColor(suggested.displayName || suggested.username),
+                                  }}
+                                  onClick={() => handleOpenUserProfile(suggested.username)}
+                                  role="button"
+                                  tabIndex={0}
                                 >
-                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                                </svg>
-                                Registered
-                              </span>
+                                  {suggested.avatar ? (
+                                    <img
+                                      src={suggested.avatar}
+                                      alt={suggested.displayName || suggested.username}
+                                      className="contact-avatar-img"
+                                    />
+                                  ) : (
+                                    <span>{getInitials(suggested.displayName || suggested.username)}</span>
+                                  )}
+                                </div>
+                                <div className="social-card-info">
+                                  <div className="contact-name-row">
+                                    <span
+                                      className="contact-name"
+                                      onClick={() => handleOpenUserProfile(suggested.username)}
+                                      role="button"
+                                      tabIndex={0}
+                                    >
+                                      {suggested.displayName || suggested.username}
+                                    </span>
+                                    <span className="contact-username">@{suggested.username}</span>
+                                  </div>
+                                  {suggested.status && (
+                                    <p className="contact-status">{suggested.status}</p>
+                                  )}
+
+                                  {mutualCount > 0 ? (
+                                    <button
+                                      type="button"
+                                      className="social-mutual-badge highlighted"
+                                      onClick={() => setMutualFriendsModalUser(suggested)}
+                                    >
+                                      🤝 {mutualCount} mutual {mutualCount === 1 ? 'friend' : 'friends'}
+                                      {suggested.mutualFriends && suggested.mutualFriends[0]
+                                        ? ` (including @${suggested.mutualFriends[0]})`
+                                        : ''}
+                                    </button>
+                                  ) : (
+                                    <span className="social-suggested-reason">Registered member</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="social-card-actions">
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => handleOpenUserProfile(suggested.username)}
+                                >
+                                  Profile
+                                </button>
+
+                                {hasSentReq ? (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-subtle"
+                                    onClick={() => handleCancelFriendRequest(suggested.username)}
+                                  >
+                                    Request Sent
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-primary"
+                                    onClick={() => handleSendFriendRequest(suggested.username)}
+                                  >
+                                    Add Friend
+                                  </button>
+                                )}
+
+                                {suggested.isFollowingUser ? (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-following"
+                                    onClick={() => handleUnfollowUser(suggested.username)}
+                                  >
+                                    Following
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-follow"
+                                    onClick={() => handleFollowUser(suggested.username)}
+                                  >
+                                    Follow
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 6: FRIEND LISTS & FAVORITES MANAGEMENT */}
+                {socialTab === 'lists' && (
+                  <div className="social-content-tab" id="social-lists-view">
+                    {/* Create New List Header Card */}
+                    <div className="social-create-list-card">
+                      <div className="social-section-header">
+                        <h3 className="social-section-title">Manage Friend Lists</h3>
+                        <p className="social-section-desc">
+                          Organize friends into categories (Close Friends, Work, Family) and manage favorites
+                        </p>
+                      </div>
+
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleCreateFriendList(newFriendListName);
+                        }}
+                        className="social-create-list-form"
+                      >
+                        <input
+                          type="text"
+                          className="social-input"
+                          placeholder="New list name (e.g. College, Gaming, Design Team)..."
+                          value={newFriendListName}
+                          onChange={(e) => setNewFriendListName(e.target.value)}
+                        />
+                        <button type="submit" className="social-btn social-btn-primary">
+                          Create List
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Section: Favorites List */}
+                    <div className="social-list-box">
+                      <div className="social-list-box-header">
+                        <div className="social-list-box-title-wrap">
+                          <span className="social-list-icon">⭐</span>
+                          <h4 className="social-list-box-title">Favorites List</h4>
+                          <span className="social-tab-badge">{favoriteFriendsList.length} members</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="social-btn social-btn-subtle"
+                          onClick={() => {
+                            setSocialTab('friends');
+                            setSelectedFriendListFilter('favorites');
+                          }}
+                        >
+                          View in Friends
+                        </button>
+                      </div>
+
+                      {favoriteFriendsList.length === 0 ? (
+                        <p className="social-list-empty-note">
+                          No favorite friends added yet. Click the star icon (⭐) next to any friend to add them to your favorites list.
+                        </p>
+                      ) : (
+                        <div className="social-list-members-chips">
+                          {favoriteFriendsList.map((favUsername) => (
+                            <span key={favUsername} className="social-member-chip">
+                              <span>@{favUsername}</span>
+                              <button
+                                type="button"
+                                className="social-member-chip-remove"
+                                onClick={() => handleToggleFavoriteFriend(favUsername)}
+                                title="Remove from favorites"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section: Custom Friend Lists */}
+                    <div className="social-custom-lists-container">
+                      {customFriendLists.map((list) => {
+                        const members = Array.isArray(list.members) ? list.members : [];
+                        const isManagingThis = managingMembersListId === list.id;
+
+                        return (
+                          <div key={list.id} className="social-list-box">
+                            <div className="social-list-box-header">
+                              <div className="social-list-box-title-wrap">
+                                <span className="social-list-icon">📁</span>
+                                <h4 className="social-list-box-title">{list.name}</h4>
+                                <span className="social-tab-badge">{members.length} members</span>
+                              </div>
+
+                              <div className="social-list-box-actions">
+                                <button
+                                  type="button"
+                                  className={`social-btn ${isManagingThis ? 'social-btn-primary' : 'social-btn-subtle'}`}
+                                  onClick={() =>
+                                    setManagingMembersListId(isManagingThis ? null : list.id)
+                                  }
+                                >
+                                  {isManagingThis ? 'Done' : 'Manage Members'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-subtle"
+                                  onClick={() => {
+                                    setSocialTab('friends');
+                                    setSelectedFriendListFilter(list.id);
+                                  }}
+                                >
+                                  View
+                                </button>
+                                <button
+                                  type="button"
+                                  className="social-btn social-btn-danger-ghost"
+                                  onClick={() => handleDeleteFriendList(list.id)}
+                                  title="Delete this list"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </div>
 
-                            {user.status && (
-                              <div className="contact-status" title={user.status}>
-                                {user.status}
+                            {/* Member Chips Preview */}
+                            {members.length > 0 ? (
+                              <div className="social-list-members-chips">
+                                {members.map((mUsername) => (
+                                  <span key={mUsername} className="social-member-chip">
+                                    <span>@{mUsername}</span>
+                                    <button
+                                      type="button"
+                                      className="social-member-chip-remove"
+                                      onClick={() => handleToggleFriendListMember(list.id, mUsername)}
+                                      title="Remove from list"
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
                               </div>
+                            ) : (
+                              <p className="social-list-empty-note">
+                                No friends in this list yet. Click &quot;Manage Members&quot; below to add friends.
+                              </p>
                             )}
 
-                            {(user.phone || user.email) && (
-                              <div className="contact-meta-row">
-                                {user.phone && (
-                                  <span className="contact-phone">
-                                    <svg
-                                      width="13"
-                                      height="13"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                    >
-                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                    </svg>
-                                    {user.phone}
-                                  </span>
-                                )}
-                                {user.email && (
-                                  <span
-                                    className="contact-phone"
-                                    style={{ color: '#4b5563' }}
-                                  >
-                                    <svg
-                                      width="13"
-                                      height="13"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                    >
-                                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                                      <polyline points="22,6 12,13 2,6"></polyline>
-                                    </svg>
-                                    {user.email}
-                                  </span>
+                            {/* Expandable Member Checklist */}
+                            {isManagingThis && (
+                              <div className="social-list-checklist-box">
+                                <div className="social-checklist-header">
+                                  <span>Select friends to include in &quot;{list.name}&quot;:</span>
+                                </div>
+                                {effectiveFriendsList.length === 0 ? (
+                                  <p className="social-list-empty-note">
+                                    You don&apos;t have any friends yet to add to this list.
+                                  </p>
+                                ) : (
+                                  <div className="social-checklist-grid">
+                                    {effectiveFriendsList.map((friendUsername) => {
+                                      const isChecked = members
+                                        .map((m) => m.toLowerCase())
+                                        .includes(friendUsername.toLowerCase());
+                                      return (
+                                        <label key={friendUsername} className="social-checklist-item">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() =>
+                                              handleToggleFriendListMember(list.id, friendUsername)
+                                            }
+                                          />
+                                          <span>@{friendUsername}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
                                 )}
                               </div>
                             )}
                           </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 7: INVITE FRIENDS */}
+                {socialTab === 'invite' && (
+                  <div className="social-content-tab" id="social-invite-view">
+                    <div className="social-invite-card">
+                      <div className="social-invite-header">
+                        <div className="social-invite-icon-wrap">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <polyline points="17 11 19 13 23 9"></polyline>
+                          </svg>
+                        </div>
+                        <h3 className="social-invite-title">Invite Friends to Assistance</h3>
+                        <p className="social-invite-desc">
+                          Invite your colleagues, family, and peers to chat, collaborate, share posts, and stay connected.
+                        </p>
+                      </div>
+
+                      {/* Copy Link Section */}
+                      <div className="social-invite-link-box">
+                        <label className="social-invite-link-label">Your Personal Invite Link</label>
+                        <div className="social-invite-input-row">
+                          <input
+                            type="text"
+                            readOnly
+                            className="social-input social-invite-url-input"
+                            value={`${window.location.origin}/?invite=${encodeURIComponent(loggedInUser || 'friend')}`}
+                          />
+                          <button
+                            type="button"
+                            className="social-btn social-btn-primary social-btn-copy"
+                            onClick={handleCopyInviteLink}
+                          >
+                            {inviteCopied ? 'Copied! ✓' : 'Copy Link'}
+                          </button>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
+
+                      {/* Share Buttons */}
+                      <div className="social-invite-actions-grid">
+                        <a
+                          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                            `Hey! Join me on Assistance to chat, share updates, and connect: ${window.location.origin}/?invite=${encodeURIComponent(
+                              loggedInUser || 'friend'
+                            )}`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="social-share-btn whatsapp"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.981.536 1.771.82 2.796.82 3.18 0 5.766-2.586 5.767-5.766.001-3.18-2.585-5.766-5.767-5.766zm0 10.375c-.947 0-1.68-.261-2.451-.718l-.175-.104-1.82.477.486-1.776-.115-.183c-.538-.856-.822-1.468-.822-2.499 0-2.544 2.069-4.613 4.615-4.613 2.545 0 4.614 2.069 4.615 4.613 0 2.545-2.07 4.615-4.615 4.615zm7.398-13.978c-2.083-2.085-4.854-3.234-7.801-3.235-6.079 0-11.025 4.945-11.027 11.026-.001 1.944.509 3.843 1.476 5.518l-1.567 5.727 5.86-1.537c1.614.88 3.427 1.344 5.258 1.345h.005c6.077 0 11.025-4.945 11.027-11.026.001-2.946-1.147-5.717-3.231-7.801z" />
+                          </svg>
+                          <span>Share on WhatsApp</span>
+                        </a>
+
+                        <a
+                          href={`mailto:?subject=${encodeURIComponent(
+                            'Join me on Assistance'
+                          )}&body=${encodeURIComponent(
+                            `Hi!\n\nI'm using Assistance to connect with friends, share posts, and chat. Join me using my invite link:\n\n${window.location.origin}/?invite=${encodeURIComponent(
+                              loggedInUser || 'friend'
+                            )}\n\nLooking forward to seeing you there!`
+                          )}`}
+                          className="social-share-btn email"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                          </svg>
+                          <span>Share via Email</span>
+                        </a>
+                      </div>
+
+                      {/* Invite Message Preview */}
+                      <div className="social-invite-preview-box">
+                        <span className="social-invite-preview-label">Sample Invite Message:</span>
+                        <p className="social-invite-preview-text">
+                          &quot;Hey! Connect with me on Assistance to chat, share updates, and stay in touch. Join here: {window.location.origin}/?invite={loggedInUser || 'friend'}&quot;
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MODAL: MUTUAL FRIENDS VIEWER */}
+                {mutualFriendsModalUser && (
+                  <div
+                    className="social-modal-overlay"
+                    onClick={() => setMutualFriendsModalUser(null)}
+                    role="dialog"
+                    aria-modal="true"
+                  >
+                    <div
+                      className="social-modal-content"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="social-modal-header">
+                        <div className="social-modal-title-col">
+                          <h3 className="social-modal-title">Mutual Friends</h3>
+                          <p className="social-modal-subtitle">
+                            Friends you and @{mutualFriendsModalUser.username} have in common
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="social-modal-close"
+                          onClick={() => setMutualFriendsModalUser(null)}
+                          aria-label="Close mutual friends modal"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="social-modal-body">
+                        {getMutualFriends(mutualFriendsModalUser).length === 0 ? (
+                          <p className="social-list-empty-note">No mutual friends found.</p>
+                        ) : (
+                          <div className="social-mutual-friends-list">
+                            {getMutualFriends(mutualFriendsModalUser).map((mutualUsername) => {
+                              const uData = discoveryUsers.find(
+                                (u) => (u.username || '').toLowerCase() === mutualUsername.toLowerCase()
+                              );
+
+                              return (
+                                <div key={mutualUsername} className="social-mutual-user-row">
+                                  <div
+                                    className="contact-avatar small"
+                                    style={{
+                                      backgroundColor: uData?.avatar
+                                        ? 'transparent'
+                                        : getAvatarColor(uData?.displayName || mutualUsername),
+                                    }}
+                                  >
+                                    {uData?.avatar ? (
+                                      <img
+                                        src={uData.avatar}
+                                        alt={uData.displayName || mutualUsername}
+                                        className="contact-avatar-img"
+                                      />
+                                    ) : (
+                                      <span>{getInitials(uData?.displayName || mutualUsername)}</span>
+                                    )}
+                                  </div>
+                                  <div className="social-mutual-user-info">
+                                    <span className="social-mutual-name">
+                                      {uData?.displayName || mutualUsername}
+                                    </span>
+                                    <span className="social-mutual-username">@{mutualUsername}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="social-btn social-btn-subtle"
+                                    onClick={() => {
+                                      setMutualFriendsModalUser(null);
+                                      handleOpenUserProfile(mutualUsername);
+                                    }}
+                                  >
+                                    View
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="social-modal-footer">
+                        <button
+                          type="button"
+                          className="social-btn social-btn-primary"
+                          onClick={() => setMutualFriendsModalUser(null)}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'search-and-discovery' ? (
@@ -6723,10 +8480,58 @@ function App() {
                     <h1 className="heading contacts-heading" id="search-discovery-heading">
                       Search and Discovery
                     </h1>
+                    <p className="discovery-subtitle">
+                      Find people, explore profiles, and discover posts across the community
+                    </p>
                   </div>
                 </div>
 
-                <div className="contacts-search-box">
+                {/* Discovery Tabs: People vs Search Posts */}
+                <div className="discovery-tabs-bar" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="discovery-tab-people"
+                    aria-selected={discoveryTab === 'people'}
+                    className={`discovery-tab-btn ${discoveryTab === 'people' ? 'active' : ''}`}
+                    onClick={() => setDiscoveryTab('people')}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>People</span>
+                    <span className="discovery-tab-count">
+                      {discoverySearchQuery.trim() ? filteredDiscoveryUsers.length : discoveryUsers.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="discovery-tab-posts"
+                    aria-selected={discoveryTab === 'posts'}
+                    className={`discovery-tab-btn ${discoveryTab === 'posts' ? 'active' : ''}`}
+                    onClick={() => setDiscoveryTab('posts')}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span>Search Posts</span>
+                    <span className="discovery-tab-count">
+                      {discoverySearchQuery.trim() ? filteredDiscoveryPosts.length : posts.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Unified Search Input Box */}
+                <div className="contacts-search-box discovery-search-box">
                   <svg
                     className="contacts-search-icon"
                     width="18"
@@ -6745,11 +8550,18 @@ function App() {
                     type="text"
                     id="discovery-search-input"
                     className="contacts-search-input"
-                    placeholder="Search registered users..."
+                    placeholder={
+                      discoveryTab === 'people'
+                        ? 'Search registered users by name, @username, or email...'
+                        : 'Search posts by keyword, content, or @username...'
+                    }
                     value={discoverySearchQuery}
                     onChange={(e) => setDiscoverySearchQuery(e.target.value)}
-                    aria-label="Search registered users"
+                    aria-label={discoveryTab === 'people' ? 'Search registered users' : 'Search posts'}
                   />
+                  {isSearchingBackendPosts && (
+                    <span className="discovery-search-spinner" title="Searching..." />
+                  )}
                   {discoverySearchQuery && (
                     <button
                       type="button"
@@ -6762,103 +8574,447 @@ function App() {
                   )}
                 </div>
 
-                <div className="contacts-list" id="discovery-users-list">
-                  {isLoadingDiscoveryUsers && discoveryUsers.length === 0 ? (
-                    <div className="contacts-empty-state">
-                      <p className="contacts-empty-text">Loading registered users...</p>
-                    </div>
-                  ) : filteredDiscoveryUsers.length === 0 ? (
-                    <div className="contacts-empty-state">
-                      <p className="contacts-empty-text">No registered users found.</p>
-                    </div>
-                  ) : (
-                    filteredDiscoveryUsers.map((user) => (
-                      <div
-                        key={user.id || user.username}
-                        className="contact-card discovery-user-card"
-                        onClick={() => handleOpenUserProfile(user)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleOpenUserProfile(user);
-                          }
-                        }}
-                      >
-                        <div className="contact-card-left">
-                          <div
-                            className="contact-avatar"
-                            style={{
-                              backgroundColor: user.avatar
-                                ? 'transparent'
-                                : getAvatarColor(user.displayName || user.username),
-                            }}
-                          >
-                            {user.avatar ? (
-                              <img
-                                src={user.avatar}
-                                alt={user.displayName || user.username}
-                                className="contact-avatar-img"
-                              />
-                            ) : (
-                              <span>{getInitials(user.displayName || user.username)}</span>
-                            )}
-                          </div>
-
-                          <div className="contact-info">
-                            <div className="contact-name-row">
-                              <span className="contact-name">
-                                {user.displayName || user.username}
-                              </span>
-                              <span className="contact-username">@{user.username}</span>
-                              {loggedInUser &&
-                                user.username.toLowerCase() === loggedInUser.toLowerCase() && (
-                                  <span
-                                    className="contact-tab-badge secondary"
-                                    style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}
-                                  >
-                                    You
-                                  </span>
-                                )}
-                            </div>
-                            {user.status && (
-                              <div className="contact-status" title={user.status}>
-                                {user.status}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="contact-card-actions">
+                {/* Tab 1: People List */}
+                {discoveryTab === 'people' ? (
+                  <div className="contacts-list" id="discovery-users-list">
+                    {isLoadingDiscoveryUsers && discoveryUsers.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <p className="contacts-empty-text">Loading registered users...</p>
+                      </div>
+                    ) : filteredDiscoveryUsers.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <p className="contacts-empty-text">No registered users found matching "{discoverySearchQuery}".</p>
+                        {discoverySearchQuery && (
                           <button
                             type="button"
-                            className="discovery-view-profile-btn"
-                            title={`Open ${user.displayName || user.username}'s home page`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenUserProfile(user);
-                            }}
+                            className="discovery-clear-filter-btn"
+                            onClick={() => setDiscoverySearchQuery('')}
                           >
-                            <span>Home page</span>
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
+                            Clear search
                           </button>
-                        </div>
+                        )}
                       </div>
-                    ))
-                  )}
-                </div>
+                    ) : (
+                      filteredDiscoveryUsers.map((user) => (
+                        <div
+                          key={user.id || user.username}
+                          className="contact-card discovery-user-card"
+                          onClick={() => handleOpenUserProfile(user)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenUserProfile(user);
+                            }
+                          }}
+                        >
+                          <div className="contact-card-left">
+                            <div
+                              className="contact-avatar"
+                              style={{
+                                backgroundColor: user.avatar
+                                  ? 'transparent'
+                                  : getAvatarColor(user.displayName || user.username),
+                              }}
+                            >
+                              {user.avatar ? (
+                                <img
+                                  src={user.avatar}
+                                  alt={user.displayName || user.username}
+                                  className="contact-avatar-img"
+                                />
+                              ) : (
+                                <span>{getInitials(user.displayName || user.username)}</span>
+                              )}
+                            </div>
+
+                            <div className="contact-info">
+                              <div className="contact-name-row">
+                                <span className="contact-name">
+                                  {user.displayName || user.username}
+                                </span>
+                                <span className="contact-username">@{user.username}</span>
+                                {loggedInUser &&
+                                  user.username.toLowerCase() === loggedInUser.toLowerCase() && (
+                                    <span
+                                      className="contact-tab-badge secondary"
+                                      style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}
+                                    >
+                                      You
+                                    </span>
+                                  )}
+                              </div>
+                              {user.status && (
+                                <div className="contact-status" title={user.status}>
+                                  {user.status}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="contact-card-actions">
+                            <button
+                              type="button"
+                              className="discovery-view-profile-btn"
+                              title={`Open ${user.displayName || user.username}'s home page`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenUserProfile(user);
+                              }}
+                            >
+                              <span>Home page</span>
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  /* Tab 2: Search Posts */
+                  <div className="discovery-posts-space" id="discovery-posts-space">
+                    <div className="discovery-search-status">
+                      <span>
+                        {discoverySearchQuery.trim()
+                          ? `Found ${filteredDiscoveryPosts.length} post${filteredDiscoveryPosts.length === 1 ? '' : 's'} matching "${discoverySearchQuery}"`
+                          : `Discovering recent posts (${filteredDiscoveryPosts.length})`}
+                      </span>
+                      {discoverySearchQuery.trim() && (
+                        <button
+                          type="button"
+                          className="discovery-clear-text-btn"
+                          onClick={() => setDiscoverySearchQuery('')}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="discovery-posts-list" id="discovery-posts-list">
+                      {filteredDiscoveryPosts.length === 0 ? (
+                        <div className="contacts-empty-state discovery-empty-posts">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="1.5">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                          <p className="contacts-empty-text">
+                            {discoverySearchQuery.trim()
+                              ? `No posts found matching "${discoverySearchQuery}".`
+                              : 'No posts shared yet across Assistance.'}
+                          </p>
+                          {discoverySearchQuery && (
+                            <button
+                              type="button"
+                              className="discovery-clear-filter-btn"
+                              onClick={() => setDiscoverySearchQuery('')}
+                            >
+                              Clear search
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        filteredDiscoveryPosts.map((post) => {
+                          const hasLiked = (post.likes || []).includes(String(loggedInUser).toLowerCase());
+                          const isPostOwner =
+                            loggedInUser &&
+                            String(post.author || '').toLowerCase() === String(loggedInUser).toLowerCase();
+
+                          const isVideo = Boolean(
+                            post.video ||
+                            post.mediaType === 'video' ||
+                            (post.media && (post.media.startsWith('data:video') || post.media.endsWith('.mp4') || post.media.endsWith('.webm') || post.media.endsWith('.mov') || post.media.includes('/video/')))
+                          );
+                          const videoSrc = post.video || (isVideo ? post.media : null);
+                          const imageSrc = !isVideo ? (post.image || post.media) : null;
+
+                          return (
+                            <div key={post.id} className="post-card discovery-post-card">
+                              {/* Post Header */}
+                              <div className="post-header">
+                                <div
+                                  className="post-author-wrap"
+                                  onClick={() =>
+                                    handleOpenUserProfile({
+                                      username: post.author,
+                                      displayName: post.authorName || post.author,
+                                      avatar: post.authorAvatar,
+                                    })
+                                  }
+                                  style={{ cursor: 'pointer' }}
+                                  title={`Open ${post.authorName || post.author}'s home page`}
+                                >
+                                  <div
+                                    className="post-author-avatar"
+                                    style={{
+                                      backgroundColor: post.authorAvatar
+                                        ? 'transparent'
+                                        : getAvatarColor(post.authorName || post.author || 'User'),
+                                    }}
+                                  >
+                                    {post.authorAvatar ? (
+                                      <img
+                                        src={post.authorAvatar}
+                                        alt={post.authorName || post.author}
+                                      />
+                                    ) : (
+                                      <span>{getInitials(post.authorName || post.author || 'User')}</span>
+                                    )}
+                                  </div>
+
+                                  <div className="post-author-meta">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span className="post-author">
+                                        {post.authorName || post.author}
+                                      </span>
+                                      {loggedInUser &&
+                                        String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
+                                          <span
+                                            className="contact-tab-badge secondary"
+                                            style={{ fontSize: '0.65rem', padding: '0.05rem 0.35rem' }}
+                                          >
+                                            You
+                                          </span>
+                                        )}
+                                    </div>
+                                    <span className="post-handle">@{post.author}</span>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span className="post-time">{post.time}</span>
+                                  <button
+                                    type="button"
+                                    className="discovery-view-profile-btn"
+                                    style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+                                    title={`Open ${post.authorName || post.author}'s home page`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenUserProfile({
+                                        username: post.author,
+                                        displayName: post.authorName || post.author,
+                                        avatar: post.authorAvatar,
+                                      });
+                                    }}
+                                  >
+                                    <span>Home page</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Post Content */}
+                              {post.content && <p className="post-content">{post.content}</p>}
+
+                              {/* Post Media Attachment */}
+                              {isVideo && videoSrc ? (
+                                <div className="post-media-video-wrap">
+                                  <video
+                                    src={videoSrc}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    className="post-media-video"
+                                  />
+                                </div>
+                              ) : imageSrc ? (
+                                <div
+                                  className="post-media-wrap"
+                                  onClick={() => setSelectedPostImageModal(imageSrc)}
+                                  title="Click to view full image"
+                                >
+                                  <img
+                                    src={imageSrc}
+                                    alt="Post attachment"
+                                    className="post-media-image"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ) : null}
+
+                              {/* Post Footer */}
+                              <div className="post-footer">
+                                <button
+                                  type="button"
+                                  className={`post-action-btn like-btn ${hasLiked ? 'liked' : ''}`}
+                                  onClick={() => handleLikePost(post.id)}
+                                  title="Like post"
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill={hasLiked ? 'currentColor' : 'none'}
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                  </svg>
+                                  <span>{(post.likes || []).length > 0 ? (post.likes || []).length : 'Like'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`post-action-btn comment-btn ${openCommentsPosts[post.id] ? 'active' : ''}`}
+                                  onClick={() => toggleComments(post.id)}
+                                  title="Comments"
+                                  aria-expanded={Boolean(openCommentsPosts[post.id])}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                  </svg>
+                                  <span>{(post.comments || []).length > 0 ? (post.comments || []).length : 'Comment'}</span>
+                                </button>
+
+                                {isPostOwner && (
+                                  <button
+                                    type="button"
+                                    className="post-action-btn delete-btn"
+                                    onClick={() => handleDeletePost(post.id)}
+                                    title="Delete post"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="3 6 5 6 21 6"></polyline>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    <span>Delete</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Inline Comment Section */}
+                              {openCommentsPosts[post.id] && (
+                                <div className="post-comments-section" id={`discovery-comments-${post.id}`}>
+                                  <form
+                                    className="post-comment-form"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      handleAddComment(post.id);
+                                    }}
+                                  >
+                                    <div
+                                      className="post-comment-input-avatar"
+                                      style={{
+                                        backgroundColor: profilePicture ? 'transparent' : getAvatarColor(loggedInUser || 'User'),
+                                      }}
+                                    >
+                                      {profilePicture ? (
+                                        <img src={profilePicture} alt={loggedInUser || 'User'} />
+                                      ) : (
+                                        <span>{getInitials(loggedInUser || 'User')}</span>
+                                      )}
+                                    </div>
+                                    <div className="post-comment-input-wrap">
+                                      <input
+                                        type="text"
+                                        className="post-comment-input"
+                                        placeholder="Write a comment..."
+                                        value={commentInputs[post.id] || ''}
+                                        onChange={(e) =>
+                                          setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }))
+                                        }
+                                        maxLength={500}
+                                      />
+                                      <button
+                                        type="submit"
+                                        className="post-comment-submit-btn"
+                                        disabled={
+                                          !(commentInputs[post.id] || '').trim() ||
+                                          submittingCommentPostIds[post.id]
+                                        }
+                                        title="Post comment"
+                                      >
+                                        {submittingCommentPostIds[post.id] ? (
+                                          <span className="post-comment-spinner" />
+                                        ) : (
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                          </svg>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </form>
+
+                                  <div className="post-comments-list">
+                                    {(!post.comments || post.comments.length === 0) ? (
+                                      <div className="post-no-comments">
+                                        <span>No comments yet.</span>
+                                      </div>
+                                    ) : (
+                                      post.comments.map((comment) => {
+                                        const cId = comment.id || comment._id;
+                                        return (
+                                          <div key={cId} className="post-comment-item">
+                                            <div
+                                              className="post-comment-avatar"
+                                              onClick={() =>
+                                                handleOpenUserProfile({
+                                                  username: comment.author,
+                                                  displayName: comment.authorName || comment.author,
+                                                  avatar: comment.authorAvatar,
+                                                })
+                                              }
+                                              style={{
+                                                cursor: 'pointer',
+                                                backgroundColor: comment.authorAvatar
+                                                  ? 'transparent'
+                                                  : getAvatarColor(comment.authorName || comment.author || 'User'),
+                                              }}
+                                              title={`Open ${comment.authorName || comment.author}'s home page`}
+                                            >
+                                              {comment.authorAvatar ? (
+                                                <img src={comment.authorAvatar} alt={comment.authorName || comment.author} />
+                                              ) : (
+                                                <span>{getInitials(comment.authorName || comment.author || 'User')}</span>
+                                              )}
+                                            </div>
+                                            <div className="post-comment-content-wrap">
+                                              <div className="post-comment-bubble">
+                                                <span
+                                                  className="post-comment-author"
+                                                  onClick={() =>
+                                                    handleOpenUserProfile({
+                                                      username: comment.author,
+                                                      displayName: comment.authorName || comment.author,
+                                                      avatar: comment.authorAvatar,
+                                                    })
+                                                  }
+                                                  style={{ cursor: 'pointer' }}
+                                                >
+                                                  {comment.authorName || comment.author}
+                                                </span>
+                                                <p className="post-comment-text">{comment.content}</p>
+                                              </div>
+                                              <span className="post-comment-time">{comment.time}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'user-profile' ? (

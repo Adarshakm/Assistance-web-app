@@ -372,7 +372,7 @@ router.get('/profile/:username', async (req, res) => {
       const user = await User.findOne({
         username: new RegExp('^' + escapeRegex(cleanUsername) + '$', 'i'),
       })
-        .select('username avatar coverPhoto displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived friends createdAt')
+        .select('username avatar coverPhoto displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived friends favoriteFriends friendLists createdAt')
         .lean();
       if (user) {
         user.followers = Array.isArray(user.followers) ? user.followers : [];
@@ -380,6 +380,8 @@ router.get('/profile/:username', async (req, res) => {
         user.friendRequestsSent = Array.isArray(user.friendRequestsSent) ? user.friendRequestsSent : [];
         user.friendRequestsReceived = Array.isArray(user.friendRequestsReceived) ? user.friendRequestsReceived : [];
         user.friends = Array.isArray(user.friends) ? user.friends : [];
+        user.favoriteFriends = Array.isArray(user.favoriteFriends) ? user.favoriteFriends : [];
+        user.friendLists = Array.isArray(user.friendLists) ? user.friendLists : [];
         return res.status(200).json({ success: true, user });
       }
     }
@@ -402,6 +404,8 @@ router.get('/profile/:username', async (req, res) => {
         friendRequestsSent: [],
         friendRequestsReceived: [],
         friends: [],
+        favoriteFriends: [],
+        friendLists: [],
       },
     });
   } catch (error) {
@@ -670,6 +674,159 @@ router.post('/reject-friend-request', async (req, res) => {
   }
 });
 
+// POST /api/users/remove-friend (Unfriend)
+router.post('/remove-friend', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      await User.findOneAndUpdate(
+        { username: cleanUser },
+        {
+          $pull: {
+            friends: cleanTarget,
+            favoriteFriends: cleanTarget,
+            'friendLists.$[].members': cleanTarget,
+          },
+        }
+      );
+      await User.findOneAndUpdate(
+        { username: cleanTarget },
+        {
+          $pull: {
+            friends: cleanUser,
+            favoriteFriends: cleanUser,
+            'friendLists.$[].members': cleanUser,
+          },
+        }
+      );
+    }
+    return res.status(200).json({ success: true, user: cleanUser, target: cleanTarget });
+  } catch (error) {
+    console.error('Remove friend error:', error);
+    res.status(500).json({ success: false, message: 'Server error removing friend' });
+  }
+});
+
+// POST /api/users/toggle-favorite-friend
+router.post('/toggle-favorite-friend', async (req, res) => {
+  try {
+    const { username, targetUsername } = req.body;
+    if (!username || !targetUsername) {
+      return res.status(400).json({ success: false, message: 'Username and targetUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanTarget = targetUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findOne({ username: cleanUser });
+      if (user) {
+        const favs = Array.isArray(user.favoriteFriends) ? user.favoriteFriends : [];
+        const exists = favs.includes(cleanTarget);
+        if (exists) {
+          user.favoriteFriends = favs.filter((f) => f !== cleanTarget);
+        } else {
+          user.favoriteFriends.push(cleanTarget);
+        }
+        await user.save();
+        return res.status(200).json({ success: true, isFavorite: !exists, favoriteFriends: user.favoriteFriends });
+      }
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Toggle favorite friend error:', error);
+    res.status(500).json({ success: false, message: 'Server error toggling favorite friend' });
+  }
+});
+
+// POST /api/users/friend-lists/create
+router.post('/friend-lists/create', async (req, res) => {
+  try {
+    const { username, name } = req.body;
+    if (!username || !name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Username and list name are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanName = name.trim();
+    const newList = {
+      id: new mongoose.Types.ObjectId().toString(),
+      name: cleanName,
+      members: [],
+    };
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $push: { friendLists: newList } },
+        { new: true }
+      );
+      return res.status(200).json({ success: true, friendLists: user ? user.friendLists : [newList], list: newList });
+    }
+    return res.status(200).json({ success: true, list: newList });
+  } catch (error) {
+    console.error('Create friend list error:', error);
+    res.status(500).json({ success: false, message: 'Server error creating friend list' });
+  }
+});
+
+// POST /api/users/friend-lists/delete
+router.post('/friend-lists/delete', async (req, res) => {
+  try {
+    const { username, listId } = req.body;
+    if (!username || !listId) {
+      return res.status(400).json({ success: false, message: 'Username and listId are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findOneAndUpdate(
+        { username: cleanUser },
+        { $pull: { friendLists: { id: listId } } },
+        { new: true }
+      );
+      return res.status(200).json({ success: true, friendLists: user ? user.friendLists : [] });
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete friend list error:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting friend list' });
+  }
+});
+
+// POST /api/users/friend-lists/toggle-member
+router.post('/friend-lists/toggle-member', async (req, res) => {
+  try {
+    const { username, listId, memberUsername } = req.body;
+    if (!username || !listId || !memberUsername) {
+      return res.status(400).json({ success: false, message: 'Username, listId and memberUsername are required' });
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanMember = memberUsername.trim().toLowerCase();
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findOne({ username: cleanUser });
+      if (user && Array.isArray(user.friendLists)) {
+        const list = user.friendLists.find((l) => l.id === listId);
+        if (list) {
+          const members = Array.isArray(list.members) ? list.members : [];
+          const exists = members.includes(cleanMember);
+          if (exists) {
+            list.members = members.filter((m) => m !== cleanMember);
+          } else {
+            list.members.push(cleanMember);
+          }
+          await user.save();
+          return res.status(200).json({ success: true, friendLists: user.friendLists });
+        }
+      }
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Toggle list member error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating friend list member' });
+  }
+});
+
 // POST /api/users/update-about
 router.post('/update-about', async (req, res) => {
   try {
@@ -827,7 +984,7 @@ router.get('/all', async (req, res) => {
   try {
     let users = [];
     if (mongoose.connection.readyState === 1) {
-      users = await User.find({}, 'username displayName email phone avatar status createdAt')
+      users = await User.find({}, 'username displayName email phone avatar status createdAt followers following friends')
         .sort({ createdAt: -1 })
         .lean();
     }
@@ -843,6 +1000,9 @@ router.get('/all', async (req, res) => {
         avatar: u.avatar || null,
         status: u.status || '',
         createdAt: u.createdAt,
+        followers: Array.isArray(u.followers) ? u.followers : [],
+        following: Array.isArray(u.following) ? u.following : [],
+        friends: Array.isArray(u.friends) ? u.friends : [],
       }));
 
     return res.status(200).json({

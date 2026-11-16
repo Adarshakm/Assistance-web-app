@@ -8,14 +8,13 @@ const connectDB = async () => {
   try {
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/mern_starter';
     const conn = await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 20000,
       socketTimeoutMS: 45000,
-      connectTimeoutMS: 15000,
-      maxIdleTimeMS: 20000, // Replaces idle connections before Atlas/firewall drops them
+      connectTimeoutMS: 20000,
+      maxIdleTimeMS: 30000,
       heartbeatFrequencyMS: 10000,
       maxPoolSize: 15,
       minPoolSize: 1,
-      family: 4, // Prefer IPv4 for mobile network compatibility
     });
     console.log(`[MongoDB] Connected: ${conn.connection.host}`);
   } catch (error) {

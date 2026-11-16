@@ -103,6 +103,32 @@ const userSchema = new mongoose.Schema(
         lowercase: true,
       },
     ],
+    favoriteFriends: [
+      {
+        type: String,
+        trim: true,
+        lowercase: true,
+      },
+    ],
+    friendLists: [
+      {
+        id: {
+          type: String,
+          default: () => new mongoose.Types.ObjectId().toString(),
+        },
+        name: {
+          type: String,
+          trim: true,
+        },
+        members: [
+          {
+            type: String,
+            trim: true,
+            lowercase: true,
+          },
+        ],
+      },
+    ],
     password: {
       type: String,
     },
