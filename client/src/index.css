@@ -7071,51 +7071,299 @@ body,
   color: #ffffff;
   font-weight: 600;
   text-align: right;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   User Home Page / Profile View - Responsive Mobile Rules
+   ========================================================================== */
+@media (max-width: 768px) {
+  .user-profile-space {
+    padding: 0.75rem 0.5rem 3rem 0.5rem;
+  }
+
+  .user-profile-container {
+    max-width: 100%;
+    border-radius: 14px;
+  }
+
+  .profile-home-cover {
+    height: 170px;
+  }
+
+  .profile-home-media-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
 }
 
 @media (max-width: 640px) {
   .user-profile-space {
-    padding: 0.5rem 0.25rem 2.5rem 0.25rem;
+    padding: 0 0 3.5rem 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    min-height: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 
   .user-profile-container {
-    border-radius: 12px;
-    border-left: none;
-    border-right: none;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .profile-home-topbar {
+    padding: 0.55rem 0.75rem;
+    gap: 0.65rem;
+    position: sticky;
+    top: 0;
+    z-index: 45;
+  }
+
+  .profile-home-back-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .profile-home-topbar-title {
+    font-size: 1rem;
+  }
+
+  .profile-home-topbar-subtitle {
+    font-size: 0.72rem;
   }
 
   .profile-home-cover {
-    height: 150px;
+    height: 140px;
   }
 
   .profile-home-avatar {
-    width: 76px;
-    height: 76px;
-    font-size: 1.75rem;
+    width: 74px;
+    height: 74px;
+    font-size: 1.65rem;
+    border-width: 3px;
   }
 
   .profile-home-header {
-    margin-top: -38px;
-    padding: 0 1rem;
+    margin-top: -37px;
+    padding: 0 0.875rem;
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.6rem;
   }
 
   .profile-home-actions {
     width: 100%;
-    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+  }
+
+  .profile-home-actions .profile-home-btn {
+    flex: 1 1 auto;
+    min-width: 90px;
+    height: 36px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .profile-home-icon-btn {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    box-sizing: border-box;
   }
 
   .profile-home-identity {
-    padding: 0.75rem 1rem 1rem 1rem;
+    padding: 0.65rem 0.875rem 1rem 0.875rem;
+  }
+
+  .profile-home-alert {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.65rem;
   }
 
   .profile-home-name {
     font-size: 1.25rem;
   }
 
+  .profile-home-handle {
+    font-size: 0.825rem;
+  }
+
+  .profile-home-bio {
+    font-size: 0.875rem;
+    line-height: 1.45;
+    margin-top: 0.5rem;
+  }
+
+  .profile-home-meta-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
+  }
+
+  .profile-home-meta-item {
+    font-size: 0.8rem;
+    gap: 0.4rem;
+    max-width: 100%;
+  }
+
+  .profile-home-counts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    margin-top: 0.85rem;
+    padding: 0.65rem 0.25rem;
+    background: #0d0d0d;
+    border: 1px solid #1f1f1f;
+    border-radius: 10px;
+  }
+
+  .profile-home-count-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    color: #9ca3af;
+  }
+
+  .profile-home-count-item strong {
+    font-size: 1rem;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .profile-home-tabs {
+    width: 100%;
+  }
+
+  .profile-home-tab {
+    flex: 1;
+    padding: 0.75rem 0.35rem;
+    font-size: 0.825rem;
+    gap: 0.35rem;
+    justify-content: center;
+  }
+
+  .profile-home-tab-badge {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.68rem;
+  }
+
+  .profile-home-tab-content {
+    padding: 0.75rem 0.5rem;
+  }
+
   .profile-home-media-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+  }
+
+  .profile-home-media-grid-item {
+    border-radius: 4px;
+  }
+
+  .profile-home-about-card {
+    padding: 0.85rem;
+    border-radius: 10px;
+  }
+
+  .profile-home-about-heading {
+    font-size: 0.875rem;
+  }
+
+  .profile-home-about-text {
+    font-size: 0.875rem;
+  }
+
+  .profile-home-info-row {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    padding-bottom: 0.45rem;
+    font-size: 0.825rem;
+  }
+
+  .profile-home-posts-feed .post-card {
+    border-radius: 10px;
+    padding: 0.875rem;
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .profile-home-cover {
+    height: 120px;
+  }
+
+  .profile-home-avatar {
+    width: 66px;
+    height: 66px;
+    font-size: 1.45rem;
+    margin-top: -33px;
+  }
+
+  .profile-home-header {
+    margin-top: -33px;
+    padding: 0 0.75rem;
+  }
+
+  .profile-home-actions .profile-home-btn {
+    min-width: 78px;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .profile-home-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .profile-home-identity {
+    padding: 0.55rem 0.75rem 0.85rem 0.75rem;
+  }
+
+  .profile-home-name {
+    font-size: 1.15rem;
+  }
+
+  .profile-home-counts {
+    padding: 0.5rem 0.2rem;
+    gap: 0.2rem;
+  }
+
+  .profile-home-count-item {
+    font-size: 0.68rem;
+  }
+
+  .profile-home-count-item strong {
+    font-size: 0.925rem;
+  }
+
+  .profile-home-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .profile-home-info-val {
+    text-align: left;
   }
 }
