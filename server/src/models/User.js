@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    coverPhoto: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     status: {
       type: String,
       trim: true,

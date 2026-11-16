@@ -58,6 +58,13 @@ function App() {
       return 'search-and-discovery';
     }
     if (
+      window.location.pathname === '/user-profile' ||
+      window.location.hash === '#user-profile' ||
+      window.location.pathname.startsWith('/user/')
+    ) {
+      return 'user-profile';
+    }
+    if (
       window.location.pathname === '/privacy' ||
       window.location.hash === '#privacy' ||
       window.location.pathname === '/privacy-security' ||
@@ -276,6 +283,8 @@ function App() {
         ? '/social-connections'
         : view === 'search-and-discovery'
         ? '/search-and-discovery'
+        : view === 'user-profile'
+        ? (selectedProfileUser?.username ? `/user/${selectedProfileUser.username}` : '/user-profile')
         : view === 'privacy'
         ? '/privacy-security'
         : view === 'whats-happening'
@@ -374,6 +383,12 @@ function App() {
         window.location.hash === '#search'
       ) {
         setCurrentView('search-and-discovery');
+      } else if (
+        window.location.pathname === '/user-profile' ||
+        window.location.hash === '#user-profile' ||
+        window.location.pathname.startsWith('/user/')
+      ) {
+        setCurrentView('user-profile');
       } else if (
         window.location.pathname === '/privacy' ||
         window.location.hash === '#privacy' ||
@@ -765,6 +780,14 @@ function App() {
       return [];
     }
   });
+
+  // Other user's Home page / Profile view state
+  const [selectedProfileUser, setSelectedProfileUser] = useState(null);
+  const [isLoadingUserProfile, setIsLoadingUserProfile] = useState(false);
+  const [profileActiveTab, setProfileActiveTab] = useState('posts');
+  const [profilePreviousView, setProfilePreviousView] = useState('search-and-discovery');
+  const [profileUserPosts, setProfileUserPosts] = useState([]);
+  const [isLoadingProfilePosts, setIsLoadingProfilePosts] = useState(false);
 
   // Effective friends list: explicit friends from accepted requests + mutual follows
   const effectiveFriendsList = useMemo(() => {
@@ -1714,6 +1737,95 @@ function App() {
     }
   };
 
+  const handleOpenUserProfile = async (targetUser) => {
+    if (!targetUser) return;
+
+    let userObj = typeof targetUser === 'string'
+      ? { username: targetUser.trim(), displayName: targetUser.trim() }
+      : { ...targetUser };
+
+    if (!userObj.username) return;
+
+    const cleanUsername = String(userObj.username).trim();
+
+    // Preserve previous view so Back button returns accurately
+    if (currentView !== 'user-profile') {
+      setProfilePreviousView(currentView || 'search-and-discovery');
+    }
+
+    // Set initial profile user right away (0ms instant display)
+    setSelectedProfileUser(userObj);
+    setProfileActiveTab('posts');
+    navigateTo('user-profile');
+    setIsLoadingUserProfile(true);
+    setIsLoadingProfilePosts(true);
+
+    // Initial filter from local posts for instant display
+    const localFiltered = posts.filter(
+      (p) => String(p.author || '').toLowerCase() === cleanUsername.toLowerCase()
+    );
+    setProfileUserPosts(localFiltered);
+
+    // 1. Fetch full profile info from /api/users/profile/:username
+    try {
+      const res = await fetch(`/api/users/profile/${encodeURIComponent(cleanUsername)}`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.user) {
+          const u = data.user;
+          const formatField = (val) => {
+            if (!val) return '';
+            if (typeof val === 'string') return val.trim();
+            if (typeof val === 'object') {
+              return Object.values(val).filter((v) => typeof v === 'string' && v.trim().length > 0).join(' - ');
+            }
+            return String(val);
+          };
+          setSelectedProfileUser((prev) => ({
+            ...prev,
+            ...u,
+            education: formatField(u.education),
+            employment: formatField(u.employment),
+            location: formatField(u.location),
+            website: formatField(u.website),
+            skills: formatField(u.skills),
+            interests: formatField(u.interests),
+            displayName: u.displayName || userObj.displayName || u.username,
+            avatar: u.avatar || userObj.avatar,
+            coverPhoto: u.coverPhoto || userObj.coverPhoto,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching user profile:', err);
+    } finally {
+      setIsLoadingUserProfile(false);
+    }
+
+    // 2. Fetch posts authored by this user from /api/posts?authors=...
+    try {
+      const postRes = await fetch(`/api/posts?authors=${encodeURIComponent(cleanUsername)}`, {
+        cache: 'no-store',
+      });
+      if (postRes.ok) {
+        const postData = await postRes.json();
+        if (postData && Array.isArray(postData.posts)) {
+          setProfileUserPosts(postData.posts);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching user posts:', err);
+    } finally {
+      setIsLoadingProfilePosts(false);
+    }
+  };
+
+  const handleBackFromProfile = () => {
+    navigateTo(profilePreviousView || 'search-and-discovery');
+  };
+
   const handleSendFriendRequest = async (targetParam, e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (targetParam && targetParam.preventDefault) {
@@ -2054,24 +2166,25 @@ function App() {
     if (!loggedInUser || !postId) return;
     const cleanUser = String(loggedInUser).trim().toLowerCase();
 
-    // Optimistic like toggle
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const likesArr = Array.isArray(p.likes) ? p.likes : [];
-          const hasLiked = likesArr.includes(cleanUser);
-          const updatedLikes = hasLiked
-            ? likesArr.filter((u) => u !== cleanUser)
-            : [...likesArr, cleanUser];
-          return {
-            ...p,
-            likes: updatedLikes,
-            likesCount: updatedLikes.length,
-          };
-        }
-        return p;
-      })
-    );
+    const updateLikes = (p) => {
+      if (p.id === postId) {
+        const likesArr = Array.isArray(p.likes) ? p.likes : [];
+        const hasLiked = likesArr.includes(cleanUser);
+        const updatedLikes = hasLiked
+          ? likesArr.filter((u) => u !== cleanUser)
+          : [...likesArr, cleanUser];
+        return {
+          ...p,
+          likes: updatedLikes,
+          likesCount: updatedLikes.length,
+        };
+      }
+      return p;
+    };
+
+    // Optimistic like toggle in feed and profile feed
+    setPosts((prev) => prev.map(updateLikes));
+    setProfileUserPosts((prev) => prev.map(updateLikes));
 
     try {
       await fetch(`/api/posts/${postId}/like`, {
@@ -2087,6 +2200,7 @@ function App() {
   const handleDeletePost = async (postId) => {
     if (!loggedInUser || !postId) return;
     setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setProfileUserPosts((prev) => prev.filter((p) => p.id !== postId));
 
     try {
       await fetch(`/api/posts/${postId}?user=${encodeURIComponent(loggedInUser)}`, {
@@ -2124,19 +2238,19 @@ function App() {
     };
 
     // Optimistically add comment to posts state
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const prevComments = Array.isArray(p.comments) ? p.comments : [];
-          return {
-            ...p,
-            comments: [...prevComments, newCommentObj],
-            commentsCount: prevComments.length + 1,
-          };
-        }
-        return p;
-      })
-    );
+    const addCommentToPost = (p) => {
+      if (p.id === postId) {
+        const prevComments = Array.isArray(p.comments) ? p.comments : [];
+        return {
+          ...p,
+          comments: [...prevComments, newCommentObj],
+          commentsCount: prevComments.length + 1,
+        };
+      }
+      return p;
+    };
+    setPosts((prev) => prev.map(addCommentToPost));
+    setProfileUserPosts((prev) => prev.map(addCommentToPost));
 
     // Clear input for this post immediately
     setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
@@ -2157,43 +2271,25 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && data.comment) {
-          setPosts((prev) =>
-            prev.map((p) => {
-              if (p.id === postId) {
-                const updatedComments = (p.comments || []).map((c) =>
-                  c.id === tempCommentId ? data.comment : c
-                );
-                return {
-                  ...p,
-                  comments: updatedComments,
-                  commentsCount: data.commentsCount || updatedComments.length,
-                };
-              }
-              return p;
-            })
-          );
-        }
-      } else {
-        // Rollback optimistic comment on failure
-        setPosts((prev) =>
-          prev.map((p) => {
+          const replaceTempComment = (p) => {
             if (p.id === postId) {
-              const rolledBack = (p.comments || []).filter((c) => c.id !== tempCommentId);
+              const updatedComments = (p.comments || []).map((c) =>
+                c.id === tempCommentId ? data.comment : c
+              );
               return {
                 ...p,
-                comments: rolledBack,
-                commentsCount: rolledBack.length,
+                comments: updatedComments,
+                commentsCount: data.commentsCount || updatedComments.length,
               };
             }
             return p;
-          })
-        );
-      }
-    } catch (err) {
-      console.error('[Add Comment Error]:', err);
-      // Rollback on network failure
-      setPosts((prev) =>
-        prev.map((p) => {
+          };
+          setPosts((prev) => prev.map(replaceTempComment));
+          setProfileUserPosts((prev) => prev.map(replaceTempComment));
+        }
+      } else {
+        // Rollback optimistic comment on failure
+        const rollbackTempComment = (p) => {
           if (p.id === postId) {
             const rolledBack = (p.comments || []).filter((c) => c.id !== tempCommentId);
             return {
@@ -2203,8 +2299,26 @@ function App() {
             };
           }
           return p;
-        })
-      );
+        };
+        setPosts((prev) => prev.map(rollbackTempComment));
+        setProfileUserPosts((prev) => prev.map(rollbackTempComment));
+      }
+    } catch (err) {
+      console.error('[Add Comment Error]:', err);
+      // Rollback on network failure
+      const rollbackTempComment = (p) => {
+        if (p.id === postId) {
+          const rolledBack = (p.comments || []).filter((c) => c.id !== tempCommentId);
+          return {
+            ...p,
+            comments: rolledBack,
+            commentsCount: rolledBack.length,
+          };
+        }
+        return p;
+      };
+      setPosts((prev) => prev.map(rollbackTempComment));
+      setProfileUserPosts((prev) => prev.map(rollbackTempComment));
     } finally {
       setSubmittingCommentPostIds((prev) => ({ ...prev, [postId]: false }));
     }
@@ -2217,20 +2331,20 @@ function App() {
 
     // Keep reference in case rollback is needed
     let previousComments = [];
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          previousComments = p.comments || [];
-          const updated = previousComments.filter((c) => (c.id || c._id) !== commentId);
-          return {
-            ...p,
-            comments: updated,
-            commentsCount: updated.length,
-          };
-        }
-        return p;
-      })
-    );
+    const removeCommentFromPost = (p) => {
+      if (p.id === postId) {
+        previousComments = p.comments || [];
+        const updated = previousComments.filter((c) => (c.id || c._id) !== commentId);
+        return {
+          ...p,
+          comments: updated,
+          commentsCount: updated.length,
+        };
+      }
+      return p;
+    };
+    setPosts((prev) => prev.map(removeCommentFromPost));
+    setProfileUserPosts((prev) => prev.map(removeCommentFromPost));
 
     try {
       const res = await fetch(
@@ -2239,15 +2353,17 @@ function App() {
       );
       if (!res.ok) {
         // Rollback if delete rejected
-        setPosts((prev) =>
-          prev.map((p) => (p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p))
-        );
+        const rollbackDeletedComment = (p) =>
+          p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p;
+        setPosts((prev) => prev.map(rollbackDeletedComment));
+        setProfileUserPosts((prev) => prev.map(rollbackDeletedComment));
       }
     } catch (err) {
       console.error('[Delete Comment Error]:', err);
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p))
-      );
+      const rollbackDeletedComment = (p) =>
+        p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p;
+      setPosts((prev) => prev.map(rollbackDeletedComment));
+      setProfileUserPosts((prev) => prev.map(rollbackDeletedComment));
     } finally {
       setDeletingCommentIds((prev) => ({ ...prev, [commentId]: false }));
     }
@@ -2301,22 +2417,21 @@ function App() {
       const data = await res.json().catch(() => null);
 
       if (res.ok && data && data.success && data.post) {
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId
-              ? {
-                  ...p,
-                  content: data.post.content,
-                  media: data.post.media,
-                  image: data.post.image || '',
-                  video: data.post.video || '',
-                  mediaType: data.post.mediaType || mediaType,
-                  isEdited: true,
-                  editedAt: data.post.editedAt || new Date().toISOString(),
-                }
-              : p
-          )
-        );
+        const updateEdited = (p) =>
+          p.id === postId
+            ? {
+                ...p,
+                content: data.post.content,
+                media: data.post.media,
+                image: data.post.image || '',
+                video: data.post.video || '',
+                mediaType: data.post.mediaType || mediaType,
+                isEdited: true,
+                editedAt: data.post.editedAt || new Date().toISOString(),
+              }
+            : p;
+        setPosts((prev) => prev.map(updateEdited));
+        setProfileUserPosts((prev) => prev.map(updateEdited));
         try {
           const currentPosts = JSON.parse(localStorage.getItem('assistance_posts') || '[]');
           const updated = currentPosts.map((p) =>
@@ -3792,6 +3907,7 @@ function App() {
     currentView === 'account' ||
     currentView === 'contacts' ||
     currentView === 'profile' ||
+    currentView === 'user-profile' ||
     currentView === 'social' ||
     currentView === 'search-and-discovery' ||
     currentView === 'privacy' ||
@@ -6119,7 +6235,16 @@ function App() {
                     filteredDiscoveryUsers.map((user) => (
                       <div
                         key={user.id || user.username}
-                        className="contact-card"
+                        className="contact-card discovery-user-card"
+                        onClick={() => handleOpenUserProfile(user)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleOpenUserProfile(user);
+                          }
+                        }}
                       >
                         <div className="contact-card-left">
                           <div
@@ -6147,13 +6272,1074 @@ function App() {
                                 {user.displayName || user.username}
                               </span>
                               <span className="contact-username">@{user.username}</span>
+                              {loggedInUser &&
+                                user.username.toLowerCase() === loggedInUser.toLowerCase() && (
+                                  <span
+                                    className="contact-tab-badge secondary"
+                                    style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}
+                                  >
+                                    You
+                                  </span>
+                                )}
                             </div>
+                            {user.status && (
+                              <div className="contact-status" title={user.status}>
+                                {user.status}
+                              </div>
+                            )}
                           </div>
+                        </div>
+
+                        <div className="contact-card-actions">
+                          <button
+                            type="button"
+                            className="discovery-view-profile-btn"
+                            title={`Open ${user.displayName || user.username}'s home page`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenUserProfile(user);
+                            }}
+                          >
+                            <span>Home page</span>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))
                   )}
                 </div>
+              </div>
+            </div>
+          ) : currentView === 'user-profile' ? (
+            <div className="user-profile-space" id="user-profile-space">
+              <div className="user-profile-container" id="user-profile-container">
+                {/* Back Topbar */}
+                <div className="profile-home-topbar">
+                  <button
+                    type="button"
+                    className="profile-home-back-btn"
+                    onClick={handleBackFromProfile}
+                    title="Back"
+                    aria-label="Back"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="19" y1="12" x2="5" y2="12"></line>
+                      <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Back</span>
+                  </button>
+                  <div className="profile-home-topbar-info">
+                    <h2 className="profile-home-topbar-title">
+                      {selectedProfileUser?.displayName || selectedProfileUser?.username || 'Profile'}
+                    </h2>
+                    <span className="profile-home-topbar-subtitle">
+                      {profileUserPosts.length} {profileUserPosts.length === 1 ? 'post' : 'posts'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cover Banner */}
+                <div className="profile-home-cover">
+                  {selectedProfileUser?.coverPhoto ? (
+                    <img
+                      src={selectedProfileUser.coverPhoto}
+                      alt="Cover"
+                      className="profile-home-cover-img"
+                    />
+                  ) : (
+                    <div className="profile-home-cover-placeholder">
+                      <div className="profile-home-cover-gradient"></div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Profile Header (Avatar + Action buttons) */}
+                <div className="profile-home-header">
+                  <div className="profile-home-avatar-wrap">
+                    <div
+                      className="profile-home-avatar"
+                      style={{
+                        backgroundColor: selectedProfileUser?.avatar
+                          ? 'transparent'
+                          : getAvatarColor(
+                              selectedProfileUser?.displayName ||
+                                selectedProfileUser?.username ||
+                                'User'
+                            ),
+                      }}
+                    >
+                      {selectedProfileUser?.avatar ? (
+                        <img
+                          src={selectedProfileUser.avatar}
+                          alt={selectedProfileUser.displayName || selectedProfileUser.username}
+                          className="profile-home-avatar-img"
+                        />
+                      ) : (
+                        <span>
+                          {getInitials(
+                            selectedProfileUser?.displayName ||
+                              selectedProfileUser?.username ||
+                              'User'
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="profile-home-actions">
+                    {loggedInUser &&
+                    String(selectedProfileUser?.username || '').toLowerCase() ===
+                      String(loggedInUser).toLowerCase() ? (
+                      <button
+                        type="button"
+                        className="profile-home-btn edit-btn"
+                        onClick={() => navigateTo('profile')}
+                      >
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                        </svg>
+                        <span>Edit Profile</span>
+                      </button>
+                    ) : (
+                      <>
+                        {followingList.some(
+                          (u) =>
+                            u.toLowerCase() ===
+                            String(selectedProfileUser?.username || '').toLowerCase()
+                        ) ? (
+                          <button
+                            type="button"
+                            className="profile-home-btn following-btn"
+                            title="Click to unfollow"
+                            onClick={() => {
+                              if (!selectedProfileUser?.username) return;
+                              handleUnfollowUser(selectedProfileUser.username);
+                              setSelectedProfileUser((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      followers: (prev.followers || []).filter(
+                                        (f) =>
+                                          f.toLowerCase() !==
+                                          String(loggedInUser || '').toLowerCase()
+                                      ),
+                                    }
+                                  : prev
+                              );
+                            }}
+                          >
+                            <span>Following</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="profile-home-btn follow-btn"
+                            onClick={() => {
+                              if (!selectedProfileUser?.username) return;
+                              handleFollowUser(selectedProfileUser.username);
+                              setSelectedProfileUser((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      followers: [
+                                        ...(prev.followers || []),
+                                        String(loggedInUser || '').toLowerCase(),
+                                      ],
+                                    }
+                                  : prev
+                              );
+                            }}
+                          >
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span>Follow</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          className="profile-home-btn message-btn"
+                          title={`Message ${selectedProfileUser?.displayName || selectedProfileUser?.username}`}
+                          onClick={() => handleOpenChatWithContact(selectedProfileUser)}
+                        >
+                          <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                          </svg>
+                          <span>Message</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="profile-home-icon-btn"
+                          title="Voice Call"
+                          onClick={() => handleStartCall('voice', selectedProfileUser)}
+                        >
+                          <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="profile-home-icon-btn"
+                          title="Video Call"
+                          onClick={() => handleStartCall('video', selectedProfileUser)}
+                        >
+                          <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Identity info */}
+                <div className="profile-home-identity">
+                  <div className="profile-home-name-row">
+                    <h1 className="profile-home-name">
+                      {selectedProfileUser?.displayName || selectedProfileUser?.username}
+                    </h1>
+                    <span className="profile-home-badge" title="Registered User">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                    </span>
+                    {loggedInUser &&
+                      String(selectedProfileUser?.username || '').toLowerCase() ===
+                        String(loggedInUser).toLowerCase() && (
+                        <span
+                          className="contact-tab-badge secondary"
+                          style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}
+                        >
+                          You
+                        </span>
+                      )}
+                  </div>
+                  <span className="profile-home-handle">@{selectedProfileUser?.username}</span>
+
+                  {selectedProfileUser?.status && (
+                    <p className="profile-home-bio">{selectedProfileUser.status}</p>
+                  )}
+
+                  <div className="profile-home-meta-grid">
+                    {selectedProfileUser?.location && (
+                      <div className="profile-home-meta-item">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                          <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        <span>{selectedProfileUser.location}</span>
+                      </div>
+                    )}
+
+                    {selectedProfileUser?.website && (
+                      <div className="profile-home-meta-item">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="2" y1="12" x2="22" y2="12"></line>
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                        <a
+                          href={
+                            selectedProfileUser.website.startsWith('http')
+                              ? selectedProfileUser.website
+                              : `https://${selectedProfileUser.website}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="profile-home-link"
+                        >
+                          {selectedProfileUser.website}
+                        </a>
+                      </div>
+                    )}
+
+                    {selectedProfileUser?.education && (
+                      <div className="profile-home-meta-item">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                          <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                        </svg>
+                        <span>{selectedProfileUser.education}</span>
+                      </div>
+                    )}
+
+                    {selectedProfileUser?.employment && (
+                      <div className="profile-home-meta-item">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                        <span>{selectedProfileUser.employment}</span>
+                      </div>
+                    )}
+
+                    {selectedProfileUser?.createdAt && (
+                      <div className="profile-home-meta-item">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                          <line x1="16" y1="2" x2="16" y2="6"></line>
+                          <line x1="8" y1="2" x2="8" y2="6"></line>
+                          <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span>
+                          Joined{' '}
+                          {new Date(selectedProfileUser.createdAt).toLocaleDateString('en-US', {
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="profile-home-counts">
+                    <div className="profile-home-count-item">
+                      <strong>{(selectedProfileUser?.following || []).length}</strong>
+                      <span>Following</span>
+                    </div>
+                    <div className="profile-home-count-item">
+                      <strong>{(selectedProfileUser?.followers || []).length}</strong>
+                      <span>Followers</span>
+                    </div>
+                    <div className="profile-home-count-item">
+                      <strong>{profileUserPosts.length}</strong>
+                      <span>Posts</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tabs Header */}
+                <div className="profile-home-tabs">
+                  <button
+                    type="button"
+                    className={`profile-home-tab ${profileActiveTab === 'posts' ? 'active' : ''}`}
+                    onClick={() => setProfileActiveTab('posts')}
+                  >
+                    <span>Posts</span>
+                    <span className="profile-home-tab-badge">{profileUserPosts.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-home-tab ${profileActiveTab === 'media' ? 'active' : ''}`}
+                    onClick={() => setProfileActiveTab('media')}
+                  >
+                    <span>Media</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-home-tab ${profileActiveTab === 'about' ? 'active' : ''}`}
+                    onClick={() => setProfileActiveTab('about')}
+                  >
+                    <span>About</span>
+                  </button>
+                </div>
+
+                {/* Tab Contents */}
+                <div className="profile-home-tab-content">
+                  {profileActiveTab === 'posts' && (
+                    <div className="profile-home-posts-feed">
+                      {isLoadingProfilePosts && profileUserPosts.length === 0 ? (
+                        <div className="profile-home-loading">
+                          <p>Loading posts...</p>
+                        </div>
+                      ) : profileUserPosts.length === 0 ? (
+                        <div className="profile-home-empty">
+                          <svg
+                            width="42"
+                            height="42"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#525252"
+                            strokeWidth="1.5"
+                          >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                          </svg>
+                          <h3 className="profile-home-empty-title">No posts yet</h3>
+                          <p className="profile-home-empty-text">
+                            When @{selectedProfileUser?.username} posts updates, photos, or videos, they will appear here.
+                          </p>
+                        </div>
+                      ) : (
+                        profileUserPosts.map((post) => {
+                          const isPostOwner =
+                            loggedInUser &&
+                            String(post.author || '').toLowerCase() ===
+                              String(loggedInUser).toLowerCase();
+                          const hasLiked =
+                            loggedInUser &&
+                            (post.likes || []).includes(String(loggedInUser).toLowerCase());
+                          const isCommentsOpen = Boolean(openCommentsPosts[post.id]);
+                          const isVideo = Boolean(
+                            post.video ||
+                              post.mediaType === 'video' ||
+                              (post.media &&
+                                (post.media.startsWith('data:video') ||
+                                  post.media.endsWith('.mp4') ||
+                                  post.media.endsWith('.webm') ||
+                                  post.media.endsWith('.mov') ||
+                                  post.media.includes('/video/')))
+                          );
+                          const videoSrc = post.video || (isVideo ? post.media : null);
+                          const imageSrc = !isVideo ? post.image || post.media : null;
+
+                          return (
+                            <article key={post.id} className="post-card">
+                              <div className="post-header">
+                                <div className="post-author-wrap">
+                                  <div
+                                    className="post-author-avatar"
+                                    style={{
+                                      backgroundColor: post.authorAvatar
+                                        ? 'transparent'
+                                        : getAvatarColor(
+                                            post.authorName || post.author || 'User'
+                                          ),
+                                    }}
+                                  >
+                                    {post.authorAvatar ? (
+                                      <img
+                                        src={post.authorAvatar}
+                                        alt={post.authorName || post.author}
+                                      />
+                                    ) : (
+                                      <span>
+                                        {getInitials(post.authorName || post.author || 'User')}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="post-author-meta">
+                                    <span className="post-author">
+                                      {post.authorName || post.author || 'User'}
+                                    </span>
+                                    <span className="post-handle">@{post.author || 'user'}</span>
+                                  </div>
+                                </div>
+                                <span className="post-time">{post.time || post.timestamp}</span>
+                              </div>
+
+                              {post.content && <p className="post-content">{post.content}</p>}
+
+                              {isVideo && videoSrc && (
+                                <div className="post-media-video-wrap">
+                                  <video
+                                    src={videoSrc}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    className="post-media-video"
+                                  />
+                                </div>
+                              )}
+
+                              {imageSrc && (
+                                <div
+                                  className="post-media-wrap"
+                                  onClick={() => setSelectedPostImageModal(imageSrc)}
+                                  title="Click to view full image"
+                                >
+                                  <img
+                                    src={imageSrc}
+                                    alt="Post attachment"
+                                    className="post-media-image"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="post-footer">
+                                <button
+                                  type="button"
+                                  className={`post-action-btn like-btn ${hasLiked ? 'liked' : ''}`}
+                                  onClick={() => handleLikePost(post.id)}
+                                  title="Like post"
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill={hasLiked ? 'currentColor' : 'none'}
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                  </svg>
+                                  <span>{(post.likes || []).length}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`post-action-btn comment-btn ${isCommentsOpen ? 'active' : ''}`}
+                                  onClick={() => toggleComments(post.id)}
+                                  title="Comments"
+                                  aria-expanded={isCommentsOpen}
+                                >
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                  <span>
+                                    {post.commentsCount ?? (post.comments || []).length}
+                                  </span>
+                                </button>
+
+                                {isPostOwner && (
+                                  <button
+                                    type="button"
+                                    className="post-action-btn delete-btn"
+                                    onClick={() => handleDeletePost(post.id)}
+                                    title="Delete post"
+                                  >
+                                    <svg
+                                      width="15"
+                                      height="15"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <polyline points="3 6 5 6 21 6"></polyline>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    <span>Delete</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              {isCommentsOpen && (
+                                <div className="post-comments-section">
+                                  {loggedInUser && (
+                                    <form
+                                      className="post-comment-form"
+                                      onSubmit={(e) => {
+                                        e.preventDefault();
+                                        handleAddComment(post.id);
+                                      }}
+                                    >
+                                      <div
+                                        className="post-comment-input-avatar"
+                                        style={{
+                                          backgroundColor: profilePicture
+                                            ? 'transparent'
+                                            : getAvatarColor(loggedInUser),
+                                        }}
+                                      >
+                                        {profilePicture ? (
+                                          <img src={profilePicture} alt={loggedInUser} />
+                                        ) : (
+                                          <span>{getInitials(loggedInUser)}</span>
+                                        )}
+                                      </div>
+                                      <div className="post-comment-input-wrap">
+                                        <input
+                                          type="text"
+                                          className="post-comment-input"
+                                          placeholder="Write a comment..."
+                                          value={commentInputs[post.id] || ''}
+                                          onChange={(e) =>
+                                            setCommentInputs((prev) => ({
+                                              ...prev,
+                                              [post.id]: e.target.value,
+                                            }))
+                                          }
+                                        />
+                                        <button
+                                          type="submit"
+                                          className="post-comment-submit-btn"
+                                          disabled={
+                                            !(commentInputs[post.id] || '').trim() ||
+                                            submittingCommentPostIds[post.id]
+                                          }
+                                        >
+                                          {submittingCommentPostIds[post.id] ? (
+                                            <span className="post-comment-spinner" />
+                                          ) : (
+                                            <svg
+                                              width="14"
+                                              height="14"
+                                              viewBox="0 0 24 24"
+                                              fill="none"
+                                              stroke="currentColor"
+                                              strokeWidth="2.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            >
+                                              <line x1="22" y1="2" x2="11" y2="13"></line>
+                                              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                            </svg>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                  <div className="post-comments-list">
+                                    {(!post.comments || post.comments.length === 0) ? (
+                                      <div className="post-no-comments">
+                                        <span>No comments yet.</span>
+                                      </div>
+                                    ) : (
+                                      post.comments.map((comment) => {
+                                        const cId = comment.id || comment._id;
+                                        const isCommentAuthor =
+                                          loggedInUser &&
+                                          String(comment.author || '').toLowerCase() ===
+                                            String(loggedInUser).toLowerCase();
+                                        const canDelete = isCommentAuthor || isPostOwner;
+
+                                        return (
+                                          <div key={cId} className="post-comment-item">
+                                            <div
+                                              className="post-comment-avatar"
+                                              style={{
+                                                backgroundColor: comment.authorAvatar
+                                                  ? 'transparent'
+                                                  : getAvatarColor(
+                                                      comment.authorName ||
+                                                        comment.author ||
+                                                        'User'
+                                                    ),
+                                              }}
+                                            >
+                                              {comment.authorAvatar ? (
+                                                <img
+                                                  src={comment.authorAvatar}
+                                                  alt={comment.authorName || comment.author}
+                                                />
+                                              ) : (
+                                                <span>
+                                                  {getInitials(
+                                                    comment.authorName ||
+                                                      comment.author ||
+                                                      'User'
+                                                  )}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="post-comment-body">
+                                              <div className="post-comment-header">
+                                                <div className="post-comment-author-info">
+                                                  <span className="post-comment-author">
+                                                    {comment.authorName ||
+                                                      comment.author ||
+                                                      'User'}
+                                                  </span>
+                                                  <span className="post-comment-handle">
+                                                    @{comment.author || 'user'}
+                                                  </span>
+                                                  <span className="post-comment-time">
+                                                    {comment.time ||
+                                                      (comment.createdAt
+                                                        ? new Date(
+                                                            comment.createdAt
+                                                          ).toLocaleTimeString([], {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                          })
+                                                        : '')}
+                                                  </span>
+                                                </div>
+                                                {canDelete && (
+                                                  <button
+                                                    type="button"
+                                                    className="post-comment-delete-btn"
+                                                    onClick={() =>
+                                                      handleDeleteComment(post.id, cId)
+                                                    }
+                                                    disabled={deletingCommentIds[cId]}
+                                                    title="Delete comment"
+                                                  >
+                                                    <svg
+                                                      width="12"
+                                                      height="12"
+                                                      viewBox="0 0 24 24"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      strokeWidth="2"
+                                                    >
+                                                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                  </button>
+                                                )}
+                                              </div>
+                                              <p className="post-comment-content">
+                                                {comment.content}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {profileActiveTab === 'media' && (
+                    <div className="profile-home-media-gallery">
+                      {(() => {
+                        const mediaItems = profileUserPosts.filter((p) => {
+                          const isVid = Boolean(
+                            p.video ||
+                              p.mediaType === 'video' ||
+                              (p.media &&
+                                (p.media.startsWith('data:video') ||
+                                  p.media.endsWith('.mp4') ||
+                                  p.media.endsWith('.webm') ||
+                                  p.media.endsWith('.mov') ||
+                                  p.media.includes('/video/')))
+                          );
+                          const vidSrc = p.video || (isVid ? p.media : null);
+                          const imgSrc = !isVid ? p.image || p.media : null;
+                          return Boolean(vidSrc || imgSrc);
+                        });
+
+                        if (mediaItems.length === 0) {
+                          return (
+                            <div className="profile-home-empty">
+                              <svg
+                                width="40"
+                                height="40"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#525252"
+                                strokeWidth="1.5"
+                              >
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                              </svg>
+                              <h3 className="profile-home-empty-title">No media yet</h3>
+                              <p className="profile-home-empty-text">
+                                Photos and videos posted by @{selectedProfileUser?.username} will appear here.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="profile-home-media-grid">
+                            {mediaItems.map((post) => {
+                              const isVid = Boolean(
+                                post.video ||
+                                  post.mediaType === 'video' ||
+                                  (post.media &&
+                                    (post.media.startsWith('data:video') ||
+                                      post.media.endsWith('.mp4') ||
+                                      post.media.endsWith('.webm') ||
+                                      post.media.endsWith('.mov') ||
+                                      post.media.includes('/video/')))
+                              );
+                              const vidSrc = post.video || (isVid ? post.media : null);
+                              const imgSrc = !isVid ? post.image || post.media : null;
+
+                              if (isVid && vidSrc) {
+                                return (
+                                  <div key={post.id} className="profile-home-media-grid-item video">
+                                    <video
+                                      src={vidSrc}
+                                      controls
+                                      playsInline
+                                      preload="metadata"
+                                      className="profile-home-media-thumb"
+                                    />
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div
+                                  key={post.id}
+                                  className="profile-home-media-grid-item"
+                                  onClick={() => setSelectedPostImageModal(imgSrc)}
+                                  title="Click to expand"
+                                >
+                                  <img
+                                    src={imgSrc}
+                                    alt="Media preview"
+                                    className="profile-home-media-thumb"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {profileActiveTab === 'about' && (
+                    <div className="profile-home-about-details">
+                      <div className="profile-home-about-card">
+                        <h4 className="profile-home-about-heading">About</h4>
+                        <p className="profile-home-about-text">
+                          {selectedProfileUser?.status || 'No bio provided yet.'}
+                        </p>
+                      </div>
+
+                      {(selectedProfileUser?.skills || selectedProfileUser?.interests) && (
+                        <div className="profile-home-about-card">
+                          {selectedProfileUser?.skills && (
+                            <div className="profile-home-badge-section">
+                              <h4 className="profile-home-about-heading">Skills</h4>
+                              <div className="profile-home-tags">
+                                {selectedProfileUser.skills.split(',').map((skill, idx) => {
+                                  const trimmed = skill.trim();
+                                  if (!trimmed) return null;
+                                  return (
+                                    <span key={idx} className="profile-home-tag skill">
+                                      {trimmed}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {selectedProfileUser?.interests && (
+                            <div className="profile-home-badge-section" style={{ marginTop: '1rem' }}>
+                              <h4 className="profile-home-about-heading">Interests</h4>
+                              <div className="profile-home-tags">
+                                {selectedProfileUser.interests.split(',').map((interest, idx) => {
+                                  const trimmed = interest.trim();
+                                  if (!trimmed) return null;
+                                  return (
+                                    <span key={idx} className="profile-home-tag interest">
+                                      {trimmed}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="profile-home-about-card">
+                        <h4 className="profile-home-about-heading">Profile Details</h4>
+                        <div className="profile-home-info-list">
+                          <div className="profile-home-info-row">
+                            <span className="profile-home-info-label">Display Name</span>
+                            <span className="profile-home-info-val">
+                              {selectedProfileUser?.displayName || selectedProfileUser?.username}
+                            </span>
+                          </div>
+                          <div className="profile-home-info-row">
+                            <span className="profile-home-info-label">Username</span>
+                            <span className="profile-home-info-val">
+                              @{selectedProfileUser?.username}
+                            </span>
+                          </div>
+                          {selectedProfileUser?.location && (
+                            <div className="profile-home-info-row">
+                              <span className="profile-home-info-label">Location</span>
+                              <span className="profile-home-info-val">
+                                {selectedProfileUser.location}
+                              </span>
+                            </div>
+                          )}
+                          {selectedProfileUser?.website && (
+                            <div className="profile-home-info-row">
+                              <span className="profile-home-info-label">Website</span>
+                              <a
+                                href={
+                                  selectedProfileUser.website.startsWith('http')
+                                    ? selectedProfileUser.website
+                                    : `https://${selectedProfileUser.website}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="profile-home-info-val profile-home-link"
+                              >
+                                {selectedProfileUser.website}
+                              </a>
+                            </div>
+                          )}
+                          {selectedProfileUser?.education && (
+                            <div className="profile-home-info-row">
+                              <span className="profile-home-info-label">Education</span>
+                              <span className="profile-home-info-val">
+                                {selectedProfileUser.education}
+                              </span>
+                            </div>
+                          )}
+                          {selectedProfileUser?.employment && (
+                            <div className="profile-home-info-row">
+                              <span className="profile-home-info-label">Employment</span>
+                              <span className="profile-home-info-val">
+                                {selectedProfileUser.employment}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Post Image Lightbox in Profile */}
+                {selectedPostImageModal && (
+                  <div
+                    className="post-image-modal-backdrop"
+                    onClick={() => setSelectedPostImageModal(null)}
+                  >
+                    <div
+                      className="post-image-modal-content"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className="post-image-modal-close-btn"
+                        onClick={() => setSelectedPostImageModal(null)}
+                        title="Close image"
+                        aria-label="Close image"
+                      >
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                      <img
+                        src={selectedPostImageModal}
+                        alt="Enlarged view"
+                        className="post-image-modal-img"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'privacy' ? (
@@ -6551,7 +7737,12 @@ function App() {
                         displayedPosts.map((post) => (
                           <article key={post.id} className="post-card">
                             <div className="post-header">
-                              <div className="post-author-wrap">
+                              <div
+                                className="post-author-wrap"
+                                onClick={() => handleOpenUserProfile(post.author)}
+                                style={{ cursor: 'pointer' }}
+                                title={`Open ${post.authorName || post.author}'s home page`}
+                              >
                                 <div
                                   className="post-author-avatar"
                                   style={{
@@ -6891,11 +8082,14 @@ function App() {
                                         <div key={cId} className="post-comment-item">
                                           <div
                                             className="post-comment-avatar"
+                                            onClick={() => handleOpenUserProfile(comment.author)}
                                             style={{
+                                              cursor: 'pointer',
                                               backgroundColor: comment.authorAvatar
                                                 ? 'transparent'
                                                 : getAvatarColor(comment.authorName || comment.author || 'User'),
                                             }}
+                                            title={`Open ${comment.authorName || comment.author}'s home page`}
                                           >
                                             {comment.authorAvatar ? (
                                               <img src={comment.authorAvatar} alt={comment.authorName || comment.author} />
@@ -6905,7 +8099,12 @@ function App() {
                                           </div>
                                           <div className="post-comment-body">
                                             <div className="post-comment-header">
-                                              <div className="post-comment-author-info">
+                                              <div
+                                                className="post-comment-author-info"
+                                                onClick={() => handleOpenUserProfile(comment.author)}
+                                                style={{ cursor: 'pointer' }}
+                                                title={`Open ${comment.authorName || comment.author}'s home page`}
+                                              >
                                                 <span className="post-comment-author">
                                                   {comment.authorName || comment.author || 'User'}
                                                 </span>

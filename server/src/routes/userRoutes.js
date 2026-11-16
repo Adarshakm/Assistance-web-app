@@ -369,7 +369,11 @@ router.get('/profile/:username', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     if (mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ username: cleanUsername }).select('username avatar displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived friends').lean();
+      const user = await User.findOne({
+        username: new RegExp('^' + escapeRegex(cleanUsername) + '$', 'i'),
+      })
+        .select('username avatar coverPhoto displayName status location website education employment skills interests followers following friendRequestsSent friendRequestsReceived friends createdAt')
+        .lean();
       if (user) {
         user.followers = Array.isArray(user.followers) ? user.followers : [];
         user.following = Array.isArray(user.following) ? user.following : [];
@@ -381,7 +385,24 @@ router.get('/profile/:username', async (req, res) => {
     }
     return res.status(200).json({
       success: true,
-      user: { username: cleanUsername, avatar: null, status: 'Hey there! I am using Assistance', location: '', website: '', education: '', employment: '', skills: '', interests: '', followers: [], following: [], friendRequestsSent: [], friendRequestsReceived: [], friends: [] },
+      user: {
+        username: cleanUsername,
+        avatar: null,
+        coverPhoto: null,
+        displayName: cleanUsername,
+        status: 'Hey there! I am using Assistance',
+        location: '',
+        website: '',
+        education: '',
+        employment: '',
+        skills: '',
+        interests: '',
+        followers: [],
+        following: [],
+        friendRequestsSent: [],
+        friendRequestsReceived: [],
+        friends: [],
+      },
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -392,12 +413,13 @@ router.get('/profile/:username', async (req, res) => {
 // POST /api/users/update-profile-info
 router.post('/update-profile-info', async (req, res) => {
   try {
-    const { username, location, website, education, employment, skills, interests, followers, following } = req.body;
+    const { username, coverPhoto, location, website, education, employment, skills, interests, followers, following } = req.body;
     if (!username || !username.trim()) {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     const cleanUsername = username.trim().toLowerCase();
     const updateFields = {};
+    if (coverPhoto !== undefined) updateFields.coverPhoto = String(coverPhoto).trim();
     if (location !== undefined) updateFields.location = String(location).trim();
     if (website !== undefined) updateFields.website = String(website).trim();
     if (education !== undefined) updateFields.education = String(education).trim();
