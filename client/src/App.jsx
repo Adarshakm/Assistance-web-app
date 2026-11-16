@@ -1013,7 +1013,7 @@ function App() {
           localStorage.removeItem('assistance_chat_history');
         } catch {}
         setFeedback({ type: 'success', text: data.message || 'Registered successfully!' });
-        navigateTo('blank');
+        navigateTo('whats-happening');
       } else {
         setFeedback({ type: 'error', text: data.message || 'Registration failed' });
       }
@@ -1043,6 +1043,8 @@ function App() {
     }
 
     setIsLoggingIn(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
       const response = await fetch('/api/users/login', {
@@ -1053,8 +1055,10 @@ function App() {
           contact: trimmedContact,
           password: trimmedPassword,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await response.json();
 
       if (response.ok) {
@@ -1074,13 +1078,19 @@ function App() {
           }
         } catch {}
         setLoginFeedback({ type: 'success', text: data.message || 'Logged in successfully!' });
-        navigateTo('blank');
+        navigateTo('whats-happening');
       } else {
         setLoginFeedback({ type: 'error', text: data.message || 'Login failed. Please check credentials.' });
       }
-    } catch {
-      setLoginFeedback({ type: 'error', text: 'Unable to connect to server. Please try again.' });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        setLoginFeedback({ type: 'error', text: 'Server took too long to respond. Please try again.' });
+      } else {
+        setLoginFeedback({ type: 'error', text: 'Unable to connect to server. Please try again.' });
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsLoggingIn(false);
     }
   };

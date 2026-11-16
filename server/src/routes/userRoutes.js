@@ -186,11 +186,11 @@ router.post('/login', async (req, res) => {
 
       let existingUser = null;
       try {
-        existingUser = await User.findOne({ $or: matchCriteria });
+        existingUser = await User.findOne({ $or: matchCriteria }).maxTimeMS(4000);
       } catch (dbErr) {
         console.warn('[Login DB Query Warning]:', dbErr.message);
         // Retry once on socket or transient network hiccup
-        existingUser = await User.findOne({ $or: matchCriteria });
+        existingUser = await User.findOne({ $or: matchCriteria }).maxTimeMS(4000);
       }
 
       if (!existingUser) {
