@@ -3419,9 +3419,11 @@ body,
    ========================================================================== */
 .profile-space {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100%;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   padding: 1.25rem 1rem 3.5rem 1rem;
   background: transparent;
   color: #ffffff;
@@ -3439,6 +3441,7 @@ body,
   position: relative;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   color: #ffffff;
 }
 
@@ -3447,6 +3450,8 @@ body,
   position: relative;
   width: 100%;
   height: 220px;
+  min-height: 220px;
+  flex-shrink: 0;
   background: #111111;
   overflow: hidden;
   display: flex;
@@ -6045,6 +6050,9 @@ body,
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .workspace-main.chat-main-active {
@@ -6256,58 +6264,90 @@ body,
   }
 
   .profile-space {
-    padding: 0 0 3.5rem 0 !important;
-    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
     width: 100% !important;
-    max-width: 100vw !important;
+    max-width: 100% !important;
     min-height: 100% !important;
+    height: auto !important;
+    padding: 0 0 5rem 0 !important;
+    margin: 0 !important;
     box-sizing: border-box !important;
     overflow-x: hidden !important;
+    overflow-y: visible !important;
   }
 
   .profile-container {
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 100% !important;
+    height: auto !important;
+    flex-shrink: 0 !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     margin: 0 !important;
     box-sizing: border-box !important;
-    overflow-x: hidden !important;
+    overflow: visible !important;
   }
 
   .profile-cover {
-    height: 140px;
+    height: 150px !important;
+    min-height: 150px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .profile-cover-actions {
+    top: 0.65rem !important;
+    right: 0.65rem !important;
+    z-index: 10 !important;
+  }
+
+  .profile-cover-btn {
+    padding: 0.35rem 0.65rem !important;
+    font-size: 0.75rem !important;
   }
 
   .profile-header-row {
-    margin-top: -37px;
-    padding: 0 0.875rem;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
+    margin-top: -38px !important;
+    padding: 0 1rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    gap: 0.5rem !important;
+    position: relative !important;
+    z-index: 10 !important;
+  }
+
+  .profile-avatar-wrapper {
+    flex-shrink: 0 !important;
   }
 
   .profile-avatar-wrapper,
   .profile-avatar-circle {
-    width: 74px;
-    height: 74px;
-    font-size: 1.65rem;
-    border-width: 3px;
+    width: 76px !important;
+    height: 76px !important;
+    font-size: 1.65rem !important;
+    border-width: 3px !important;
   }
 
   .profile-main-actions {
-    width: 100%;
-    display: flex;
-    gap: 0.4rem;
+    display: flex !important;
+    gap: 0.45rem !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
   }
 
   .profile-main-actions .profile-btn {
-    flex: 1;
-    justify-content: center;
-    height: 36px;
-    padding: 0.45rem 0.65rem;
-    font-size: 0.8rem;
+    padding: 0.45rem 0.75rem !important;
+    font-size: 0.8rem !important;
+    height: 34px !important;
+    white-space: nowrap !important;
+    flex: initial !important;
   }
 
   .profile-identity-section {
@@ -6781,6 +6821,34 @@ body,
   .register-btn {
     padding: 0.75rem 1rem;
     font-size: 0.95rem;
+  }
+
+  .profile-cover {
+    height: 135px !important;
+    min-height: 135px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .profile-header-row {
+    margin-top: -34px !important;
+    padding: 0 0.75rem !important;
+  }
+
+  .profile-avatar-wrapper,
+  .profile-avatar-circle {
+    width: 68px !important;
+    height: 68px !important;
+    font-size: 1.45rem !important;
+  }
+
+  .profile-main-actions {
+    gap: 0.35rem !important;
+  }
+
+  .profile-main-actions .profile-btn {
+    padding: 0.38rem 0.6rem !important;
+    font-size: 0.75rem !important;
+    height: 32px !important;
   }
 
   .cover-photo-container {
@@ -7889,5 +7957,30 @@ body,
 
   .profile-home-info-val {
     text-align: left;
+  }
+}
+
+@media (max-width: 360px) {
+  .profile-cover {
+    height: 120px !important;
+    min-height: 120px !important;
+  }
+
+  .profile-header-row {
+    margin-top: -30px !important;
+    padding: 0 0.5rem !important;
+  }
+
+  .profile-avatar-wrapper,
+  .profile-avatar-circle {
+    width: 60px !important;
+    height: 60px !important;
+    font-size: 1.3rem !important;
+  }
+
+  .profile-main-actions .profile-btn {
+    padding: 0.32rem 0.5rem !important;
+    font-size: 0.72rem !important;
+    height: 30px !important;
   }
 }
