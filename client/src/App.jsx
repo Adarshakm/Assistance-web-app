@@ -2,6 +2,173 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import SplashScreen from './components/SplashScreen.jsx';
 import { voiceCallService, callAudioSynthesizer } from './services/voiceCallService.js';
 
+/**
+ * Parse YouTube / Vimeo / external video URLs into embeddable iframe URLs
+ */
+const getVideoEmbedUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const ytMatch = trimmed.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+  );
+  if (ytMatch && ytMatch[1]) {
+    return `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`;
+  }
+  const vimeoMatch = trimmed.match(
+    /vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/([^\/]*)\/videos\/|album\/(\d+)\/video\/|)(\d+)/i
+  );
+  if (vimeoMatch && vimeoMatch[3]) {
+    return `https://player.vimeo.com/video/${vimeoMatch[3]}`;
+  }
+  return null;
+};
+
+/**
+ * Parse combined video title and description
+ */
+const parseVideoContent = (content = '', fallbackTitle = '') => {
+  if (!content) {
+    return { title: fallbackTitle || 'Community Video', desc: '' };
+  }
+  const parts = content.split('\n\n');
+  if (parts.length > 1) {
+    return { title: parts[0].trim(), desc: parts.slice(1).join('\n\n').trim() };
+  }
+  const lines = content.split('\n');
+  if (lines.length > 1 && lines[0].length < 120) {
+    return { title: lines[0].trim(), desc: lines.slice(1).join('\n').trim() };
+  }
+  if (fallbackTitle) {
+    return { title: fallbackTitle, desc: content };
+  }
+  if (content.length > 60) {
+    return { title: content.slice(0, 60) + '...', desc: content };
+  }
+  return { title: content, desc: '' };
+};
+
+const DEFAULT_COMMUNITY_VIDEOS = [
+  {
+    id: 'sample_video_1',
+    author: 'alexchen',
+    authorName: 'Alex Chen',
+    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    content: 'Coastal Aerial Flight in 4K 🌊\n\nSunset drone footage gliding over coastal cliffs and ocean waves. The golden hour breeze was unbelievable! #Nature #Travel #Shorts',
+    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    mediaType: 'video',
+    likes: ['alexchen', 'sophiat', 'marcusv'],
+    likesCount: 38,
+    comments: [
+      {
+        id: 'c_sample_1',
+        author: 'sophiat',
+        authorName: 'Sophia Taylor',
+        authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+        content: 'Breathtaking colors! What camera settings were you using for this?',
+        createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+        time: '3h ago',
+      },
+    ],
+    commentsCount: 1,
+    time: '3h ago',
+    createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+  },
+  {
+    id: 'sample_video_2',
+    author: 'marcusv',
+    authorName: 'Marcus Vance',
+    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    content: 'Full-Stack Architecture & Reactive State 💻\n\nWalkthrough on structuring high-speed responsive web applications with microservices and optimistic mutations. #Tech #Tutorial #Education',
+    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    mediaType: 'video',
+    likes: ['marcusv', 'alexchen', 'dev_sarah'],
+    likesCount: 64,
+    comments: [
+      {
+        id: 'c_sample_2',
+        author: 'dev_sarah',
+        authorName: 'Sarah Jenkins',
+        authorAvatar: '',
+        content: 'Super clean breakdown of state propagation. Thanks for sharing!',
+        createdAt: new Date(Date.now() - 3600000 * 7).toISOString(),
+        time: '7h ago',
+      },
+    ],
+    commentsCount: 1,
+    time: '7h ago',
+    createdAt: new Date(Date.now() - 3600000 * 7).toISOString(),
+  },
+  {
+    id: 'sample_video_3',
+    author: 'sophiat',
+    authorName: 'Sophia Taylor',
+    authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    content: 'Championship Speedrun Highlights 🎮\n\nClutched the final stage in under 90 seconds! Sound on for the reaction at the end. #Gaming #Shorts #Entertainment',
+    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    mediaType: 'video',
+    likes: ['sophiat', 'alexchen'],
+    likesCount: 42,
+    comments: [],
+    commentsCount: 0,
+    time: '1d ago',
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+  },
+  {
+    id: 'sample_video_4',
+    author: 'emilyrose',
+    authorName: 'Emily Rose',
+    authorAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+    content: 'Big Buck Bunny 3D Animated Short Feature 🐇\n\nTimeless open-source animation showcasing fluid 3D character rigging and particle effects. #Shorts #Animation #Cinema',
+    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    mediaType: 'video',
+    likes: ['emilyrose', 'marcusv'],
+    likesCount: 51,
+    comments: [],
+    commentsCount: 0,
+    time: '2d ago',
+    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
+  },
+];
+
+const PRESET_VIDEO_SAMPLES = [
+  {
+    id: 'preset_nature',
+    title: 'Coastal Drone Sunrise',
+    desc: 'Golden hour drone flight over the coast #Nature #Travel #Shorts',
+    category: 'nature',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    label: '🌊 Nature Flight',
+  },
+  {
+    id: 'preset_tech',
+    title: 'Modern Tech & Code Lab',
+    desc: 'Walkthrough of modern full-stack development patterns #Tech #Tutorial #Education',
+    category: 'tech',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    label: '💻 Tech Lab',
+  },
+  {
+    id: 'preset_gaming',
+    title: 'Speedrun Gaming Highlights',
+    desc: 'Epic gaming moments and championship clutch #Gaming #Shorts #Entertainment',
+    category: 'gaming',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    label: '🎮 Gaming Reel',
+  },
+  {
+    id: 'preset_animation',
+    title: 'Big Buck Bunny 3D Short',
+    desc: 'Open-source 3D animated character short #Shorts #Animation #Cinema',
+    category: 'shorts',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    label: '🐇 3D Short',
+  },
+];
+
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     if (
@@ -1034,6 +1201,22 @@ function App() {
   // Video Sharing state
   const uploadVideoRef = useRef(null);
   const [uploadedVideo, setUploadedVideo] = useState(null);
+  const [uploadedVideoMeta, setUploadedVideoMeta] = useState(null); // { name, size, type, isUrl }
+  const [videoSourceTab, setVideoSourceTab] = useState('file'); // 'file' | 'url' | 'presets'
+  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoDescription, setVideoDescription] = useState('');
+  const [videoSharingTab, setVideoSharingTab] = useState('all'); // 'all' | 'trending' | 'my-videos' | 'upload'
+  const [videoCategoryFilter, setVideoCategoryFilter] = useState('all'); // 'all' | 'tech' | 'tutorial' | 'gaming' | 'shorts' | 'music' | 'nature' | 'education' | 'vlog'
+  const [videoSearchQuery, setVideoSearchQuery] = useState('');
+  const [isPublishingVideo, setIsPublishingVideo] = useState(false);
+  const [isUploadingVideoFile, setIsUploadingVideoFile] = useState(false);
+  const [videoShareFeedback, setVideoShareFeedback] = useState(null);
+  const [theaterVideo, setTheaterVideo] = useState(null);
+  const [videoShareCopiedId, setVideoShareCopiedId] = useState(null);
+  const [deleteVideoConfirmId, setDeleteVideoConfirmId] = useState(null);
+  const [sampleVideoInteractions, setSampleVideoInteractions] = useState({});
+  const [openVideoComments, setOpenVideoComments] = useState({});
 
   // Stories state
   const uploadStoryRef = useRef(null);
@@ -3030,10 +3213,323 @@ function App() {
 
   const handleVideoUpload = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      setVideoShareFeedback({
+        type: 'error',
+        text: 'Please select a valid video file (MP4, WebM, MOV, or OGG).',
+      });
+      return;
+    }
+
+    const fileSizeMb = file.size / (1024 * 1024);
+    setIsUploadingVideoFile(true);
+    setVideoShareFeedback(null);
+
+    // Auto title from filename if title empty
+    if (!videoTitle.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      setVideoTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+    }
+
+    // If file is under 20MB, read as DataURL so it persists in DB
+    if (fileSizeMb <= 20) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (result) {
+          setUploadedVideo(result);
+          setUploadedVideoMeta({
+            name: file.name,
+            size: `${fileSizeMb.toFixed(1)} MB`,
+            type: file.type,
+            isUrl: false,
+          });
+        }
+        setIsUploadingVideoFile(false);
+      };
+      reader.onerror = () => {
+        setIsUploadingVideoFile(false);
+        setVideoShareFeedback({ type: 'error', text: 'Error reading video file. Please try another video.' });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Use ObjectURL for preview and advise
       const url = URL.createObjectURL(file);
       setUploadedVideo(url);
+      setUploadedVideoMeta({
+        name: file.name,
+        size: `${fileSizeMb.toFixed(1)} MB (Large File)`,
+        type: file.type,
+        isUrl: false,
+      });
+      setIsUploadingVideoFile(false);
+      setVideoShareFeedback({
+        type: 'error',
+        text: `Video is ${fileSizeMb.toFixed(1)}MB. Note: Cloud storage supports files up to 20MB. For longer videos, you can also paste a direct YouTube or web stream link!`,
+      });
     }
+    setVideoSharingTab('upload');
+  };
+
+  const handleApplyVideoUrl = (e) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const trimmed = videoUrlInput.trim();
+    if (!trimmed) {
+      setVideoShareFeedback({ type: 'error', text: 'Please enter a valid video stream or YouTube/Vimeo URL.' });
+      return;
+    }
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      setVideoShareFeedback({ type: 'error', text: 'Video URL must start with http:// or https://' });
+      return;
+    }
+
+    setUploadedVideo(trimmed);
+    const isYt = trimmed.includes('youtube.com') || trimmed.includes('youtu.be');
+    const isVimeo = trimmed.includes('vimeo.com');
+    setUploadedVideoMeta({
+      name: isYt ? 'YouTube Video Stream' : isVimeo ? 'Vimeo Video Stream' : 'Web Video Stream',
+      size: 'Web Stream',
+      type: 'video/web',
+      isUrl: true,
+    });
+    if (!videoTitle.trim()) {
+      setVideoTitle(isYt ? 'Featured YouTube Video' : isVimeo ? 'Featured Vimeo Stream' : 'Shared Video Clip');
+    }
+    setVideoSharingTab('upload');
+    setVideoShareFeedback({ type: 'success', text: 'Video stream attached successfully!' });
+  };
+
+  const handleSelectVideoPreset = (preset) => {
+    setUploadedVideo(preset.url);
+    setUploadedVideoMeta({
+      name: preset.title,
+      size: 'High Definition',
+      type: 'video/mp4',
+      isUrl: true,
+    });
+    setVideoTitle(preset.title);
+    setVideoDescription(preset.desc);
+    setVideoSharingTab('upload');
+    setVideoShareFeedback({ type: 'success', text: `Loaded "${preset.title}" into composer.` });
+  };
+
+  const handlePublishSharedVideo = async (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (!uploadedVideo) {
+      setVideoShareFeedback({ type: 'error', text: 'Please select or attach a video to share.' });
+      return;
+    }
+    if (isPublishingVideo) return;
+
+    setIsPublishingVideo(true);
+    setVideoShareFeedback(null);
+
+    const safeAvatar =
+      profilePicture && typeof profilePicture === 'string' && profilePicture.length < 50000
+        ? profilePicture
+        : '';
+
+    const titleTrimmed = videoTitle.trim();
+    const descTrimmed = videoDescription.trim();
+    const combinedContent = titleTrimmed
+      ? `${titleTrimmed}\n\n${descTrimmed}`.trim()
+      : descTrimmed || 'Shared a video clip';
+
+    const tempId = `temp_video_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimisticPost = {
+      id: tempId,
+      author: loggedInUser || 'User',
+      authorName: loggedInUser || 'User',
+      authorAvatar: safeAvatar,
+      content: combinedContent,
+      title: titleTrimmed || 'Community Video',
+      media: uploadedVideo,
+      image: '',
+      video: uploadedVideo,
+      mediaType: 'video',
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      time: 'Just now',
+      createdAt: new Date().toISOString(),
+      _localCreatedAt: Date.now(),
+    };
+
+    // Prepend to posts list instantly (0ms UI latency)
+    setPosts((prev) => [optimisticPost, ...prev]);
+
+    const videoPayload = uploadedVideo;
+    const contentPayload = combinedContent;
+
+    // Reset upload composer
+    setUploadedVideo(null);
+    setUploadedVideoMeta(null);
+    setVideoTitle('');
+    setVideoDescription('');
+    setVideoUrlInput('');
+
+    setVideoSharingTab('all');
+    setVideoShareFeedback({ type: 'success', text: 'Your video was shared successfully with the community!' });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    try {
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          author: loggedInUser || 'User',
+          authorName: loggedInUser || 'User',
+          content: contentPayload,
+          media: videoPayload,
+          video: videoPayload,
+          mediaType: 'video',
+          authorAvatar: safeAvatar,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data && data.success && data.post) {
+        const postWithTag = { ...data.post, _localCreatedAt: Date.now() };
+        setPosts((prev) =>
+          prev.map((p) => (p.id === tempId ? postWithTag : p))
+        );
+      } else {
+        setPosts((prev) => prev.filter((p) => p.id !== tempId));
+        const errMsg =
+          (data && (data.error || data.message)) ||
+          `Failed to share video (Server HTTP ${res.status}).`;
+        setVideoShareFeedback({ type: 'error', text: errMsg });
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      setPosts((prev) => prev.filter((p) => p.id !== tempId));
+      if (err.name === 'AbortError') {
+        setVideoShareFeedback({
+          type: 'error',
+          text: 'Sharing timed out. The video file may be too large for direct cloud upload.',
+        });
+      } else {
+        setVideoShareFeedback({
+          type: 'error',
+          text: 'Network error occurred while sharing video. Please try again.',
+        });
+      }
+    } finally {
+      setIsPublishingVideo(false);
+    }
+  };
+
+  const handleLikeVideo = (videoId) => {
+    if (String(videoId).startsWith('sample_')) {
+      setSampleVideoInteractions((prev) => {
+        const current = prev[videoId] || {};
+        const baseVideo = DEFAULT_COMMUNITY_VIDEOS.find((v) => v.id === videoId);
+        const likes = current.likes || (baseVideo ? baseVideo.likes : []);
+        const cleanUser = String(loggedInUser || 'User').trim().toLowerCase();
+        const hasLiked = likes.map((u) => String(u).toLowerCase()).includes(cleanUser);
+        const updatedLikes = hasLiked
+          ? likes.filter((u) => String(u).toLowerCase() !== cleanUser)
+          : [...likes, cleanUser];
+        return {
+          ...prev,
+          [videoId]: {
+            ...current,
+            likes: updatedLikes,
+            likesCount: updatedLikes.length,
+          },
+        };
+      });
+      return;
+    }
+    handleLikePost(videoId);
+  };
+
+  const handleAddVideoComment = async (videoId, e) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const content = (commentInputs[videoId] || '').trim();
+    if (!content) return;
+
+    if (String(videoId).startsWith('sample_')) {
+      const newComment = {
+        id: `c_sub_${Date.now()}`,
+        author: loggedInUser || 'User',
+        authorName: loggedInUser || 'User',
+        authorAvatar: profilePicture || '',
+        content,
+        time: 'Just now',
+        createdAt: new Date().toISOString(),
+      };
+      setSampleVideoInteractions((prev) => {
+        const current = prev[videoId] || {};
+        const baseComments = DEFAULT_COMMUNITY_VIDEOS.find((v) => v.id === videoId)?.comments || [];
+        const comments = current.comments || baseComments;
+        return {
+          ...prev,
+          [videoId]: {
+            ...current,
+            comments: [...comments, newComment],
+            commentsCount: comments.length + 1,
+          },
+        };
+      });
+      setCommentInputs((prev) => ({ ...prev, [videoId]: '' }));
+      return;
+    }
+
+    handleAddComment(videoId);
+  };
+
+  const handleCopyVideoLink = (video) => {
+    const videoUrl = video.video || video.media;
+    if (!videoUrl) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(videoUrl);
+      setVideoShareCopiedId(video.id);
+      setTimeout(() => setVideoShareCopiedId(null), 2500);
+    }
+  };
+
+  const handleDownloadVideo = (video) => {
+    const videoUrl = video.video || video.media;
+    if (!videoUrl) return;
+    try {
+      const a = document.createElement('a');
+      a.href = videoUrl;
+      const cleanTitle = (video.title || 'video').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      a.download = `${cleanTitle}.mp4`;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      window.open(videoUrl, '_blank');
+    }
+  };
+
+  const handleDeleteVideo = (videoId) => {
+    if (String(videoId).startsWith('sample_')) {
+      setSampleVideoInteractions((prev) => ({
+        ...prev,
+        [videoId]: { ...prev[videoId], isDeleted: true },
+      }));
+      setDeleteVideoConfirmId(null);
+      return;
+    }
+    handleDeletePost(videoId);
+    setDeleteVideoConfirmId(null);
   };
 
   const handleStoryUpload = (e) => {
@@ -4777,13 +5273,96 @@ function App() {
     return list;
   }, [allCommunityPhotos, myPhotosPosts, photoSharingTab, photoCategoryFilter, photoSearchQuery]);
 
-  const myVideosPosts = myAuthoredPosts.filter((p) => {
-    return Boolean(
-      p.video ||
-      p.mediaType === 'video' ||
-      (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov') || p.media.includes('/video/')))
+  const allCommunityVideos = useMemo(() => {
+    const realVideos = posts.filter((p) => {
+      return Boolean(
+        p.video ||
+        p.mediaType === 'video' ||
+        (p.media &&
+          (p.media.startsWith('data:video') ||
+            p.media.endsWith('.mp4') ||
+            p.media.endsWith('.webm') ||
+            p.media.endsWith('.mov') ||
+            p.media.includes('/video/') ||
+            p.media.includes('youtube.com') ||
+            p.media.includes('youtu.be') ||
+            p.media.includes('vimeo.com')))
+      );
+    });
+
+    const realIds = new Set(realVideos.map((v) => v.id));
+    const samples = DEFAULT_COMMUNITY_VIDEOS
+      .filter((s) => !realIds.has(s.id) && !sampleVideoInteractions[s.id]?.isDeleted)
+      .map((s) => {
+        const override = sampleVideoInteractions[s.id];
+        if (override) {
+          return {
+            ...s,
+            ...override,
+          };
+        }
+        return s;
+      });
+
+    return [...realVideos, ...samples];
+  }, [posts, sampleVideoInteractions]);
+
+  const myVideosPosts = useMemo(() => {
+    return allCommunityVideos.filter(
+      (p) => String(p.author || '').toLowerCase() === String(loggedInUser || '').toLowerCase()
     );
-  });
+  }, [allCommunityVideos, loggedInUser]);
+
+  const trendingVideos = useMemo(() => {
+    return [...allCommunityVideos].sort((a, b) => {
+      const likesA = (a.likes || []).length || a.likesCount || 0;
+      const likesB = (b.likes || []).length || b.likesCount || 0;
+      const commentsA = (a.comments || []).length || a.commentsCount || 0;
+      const commentsB = (b.comments || []).length || b.commentsCount || 0;
+      return (likesB * 2 + commentsB) - (likesA * 2 + commentsA);
+    });
+  }, [allCommunityVideos]);
+
+  const filteredCommunityVideos = useMemo(() => {
+    let list = allCommunityVideos;
+    if (videoSharingTab === 'trending') {
+      list = trendingVideos;
+    } else if (videoSharingTab === 'my-videos') {
+      list = myVideosPosts;
+    }
+
+    if (videoCategoryFilter !== 'all') {
+      const tag = `#${videoCategoryFilter}`.toLowerCase();
+      list = list.filter((p) => {
+        const content = String(p.content || '').toLowerCase();
+        const title = String(p.title || '').toLowerCase();
+        return (
+          content.includes(tag) ||
+          content.includes(videoCategoryFilter.toLowerCase()) ||
+          title.includes(videoCategoryFilter.toLowerCase())
+        );
+      });
+    }
+
+    if (videoSearchQuery.trim()) {
+      const q = videoSearchQuery.trim().toLowerCase();
+      const cleanQ = q.replace(/^@/, '');
+      list = list.filter((p) => {
+        const content = String(p.content || '').toLowerCase();
+        const title = String(p.title || '').toLowerCase();
+        const author = String(p.author || '').toLowerCase();
+        const authorName = String(p.authorName || '').toLowerCase();
+        return (
+          content.includes(q) ||
+          title.includes(q) ||
+          author.includes(cleanQ) ||
+          authorName.includes(cleanQ)
+        );
+      });
+    }
+
+    return list;
+  }, [allCommunityVideos, trendingVideos, myVideosPosts, videoSharingTab, videoCategoryFilter, videoSearchQuery]);
 
   if (
     currentView === 'messages' ||
@@ -11936,12 +12515,132 @@ function App() {
             </div>
           ) : currentView === 'video-sharing' ? (
             <div className="video-sharing-space" id="video-sharing-space">
-              <div className="video-upload-container" id="video-upload-container">
+              <div className="video-sharing-container" id="video-sharing-container">
+                {/* Header Section */}
+                <div className="video-sharing-header">
+                  <div className="video-sharing-title-col">
+                    <h1 className="video-sharing-heading">Video Sharing & Clips</h1>
+                    <p className="video-sharing-subtitle">
+                      Stream, watch, and share high-definition videos, tutorials, and moments with the community.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="video-share-launch-btn"
+                    id="video-share-launch-btn"
+                    onClick={() => {
+                      setVideoSharingTab('upload');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                    <span>+ Share Video</span>
+                  </button>
+                </div>
+
+                {/* Feedback Notification Alert */}
+                {videoShareFeedback && (
+                  <div
+                    className={`video-feedback-alert ${
+                      videoShareFeedback.type === 'error' ? 'error' : 'success'
+                    }`}
+                  >
+                    <span>{videoShareFeedback.text}</span>
+                    <button
+                      type="button"
+                      className="video-feedback-close"
+                      onClick={() => setVideoShareFeedback(null)}
+                      aria-label="Dismiss feedback"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* Navigation Tabs Bar */}
+                <div className="video-tabs-bar" role="tablist" aria-label="Video sharing views">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="video-tab-all"
+                    aria-selected={videoSharingTab === 'all'}
+                    className={`video-tab-btn ${videoSharingTab === 'all' ? 'active' : ''}`}
+                    onClick={() => {
+                      setVideoSharingTab('all');
+                      setVideoSearchQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                    <span>All Videos</span>
+                    <span className="video-tab-badge">{allCommunityVideos.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="video-tab-trending"
+                    aria-selected={videoSharingTab === 'trending'}
+                    className={`video-tab-btn ${videoSharingTab === 'trending' ? 'active' : ''}`}
+                    onClick={() => {
+                      setVideoSharingTab('trending');
+                      setVideoSearchQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                    </svg>
+                    <span>Trending</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="video-tab-my"
+                    aria-selected={videoSharingTab === 'my-videos'}
+                    className={`video-tab-btn ${videoSharingTab === 'my-videos' ? 'active' : ''}`}
+                    onClick={() => {
+                      setVideoSharingTab('my-videos');
+                      setVideoSearchQuery('');
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span>My Videos</span>
+                    <span className="video-tab-badge">{myVideosPosts.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    id="video-tab-upload"
+                    aria-selected={videoSharingTab === 'upload'}
+                    className={`video-tab-btn ${videoSharingTab === 'upload' ? 'active' : ''}`}
+                    onClick={() => setVideoSharingTab('upload')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Share New Video</span>
+                    {uploadedVideo && <span className="video-tab-dot"></span>}
+                  </button>
+                </div>
+
+                {/* Hidden File Input for Video Files */}
                 <input
                   ref={uploadVideoRef}
                   type="file"
-                  id="upload-video-input"
-                  accept="video/*"
+                  id="video-share-file-input"
+                  accept="video/mp4, video/webm, video/ogg, video/quicktime, video/*"
                   className="hidden-file-input"
                   onClick={(e) => {
                     e.target.value = null;
@@ -11949,46 +12648,867 @@ function App() {
                   onChange={handleVideoUpload}
                 />
 
-                {!uploadedVideo ? (
-                  <div
-                    className="upload-video-dropzone"
-                    id="upload-video-dropzone"
-                    onClick={() => uploadVideoRef.current?.click()}
-                  >
-                    <div className="upload-video-icon-wrapper">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                      </svg>
+                {/* VIDEO COMPOSER STUDIO (Active when on 'upload' tab or a video is loaded) */}
+                {(videoSharingTab === 'upload' || uploadedVideo) && (
+                  <div className="video-composer-card" id="video-composer-card">
+                    <div className="video-composer-header">
+                      <div className="video-composer-title-wrap">
+                        <h2 className="video-composer-title">Video Studio Publisher</h2>
+                        <span className="video-composer-hint">
+                          Upload an MP4/WebM file, paste an external video link, or select a sample clip.
+                        </span>
+                      </div>
+                      {videoSharingTab === 'upload' && !uploadedVideo && (
+                        <button
+                          type="button"
+                          className="video-composer-close-btn"
+                          onClick={() => setVideoSharingTab('all')}
+                          title="Back to videos"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      id="upload-video-btn"
-                      className="upload-video-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        uploadVideoRef.current?.click();
-                      }}
-                    >
-                      Upload Video
-                    </button>
+
+                    {!uploadedVideo ? (
+                      <div className="video-composer-picker-flow">
+                        {/* Source Mode Selector */}
+                        <div className="video-source-mode-bar">
+                          <button
+                            type="button"
+                            className={`video-source-btn ${videoSourceTab === 'file' ? 'active' : ''}`}
+                            onClick={() => setVideoSourceTab('file')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                              <polyline points="17 8 12 3 7 8"></polyline>
+                              <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span>Upload Video File</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`video-source-btn ${videoSourceTab === 'url' ? 'active' : ''}`}
+                            onClick={() => setVideoSourceTab('url')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            <span>Paste Video URL</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`video-source-btn ${videoSourceTab === 'presets' ? 'active' : ''}`}
+                            onClick={() => setVideoSourceTab('presets')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span>Preset Sample Clips</span>
+                          </button>
+                        </div>
+
+                        {videoSourceTab === 'file' && (
+                          <div
+                            className="video-dropzone"
+                            onClick={() => uploadVideoRef.current?.click()}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const files = e.dataTransfer?.files;
+                              if (files && files[0]) {
+                                handleVideoUpload({ target: { files: [files[0]] } });
+                              }
+                            }}
+                          >
+                            <div className="video-dropzone-icon">
+                              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                              </svg>
+                            </div>
+                            <h3 className="video-dropzone-prompt">
+                              {isUploadingVideoFile ? 'Reading video file...' : 'Drag & drop your video here, or click to browse'}
+                            </h3>
+                            <p className="video-dropzone-sub">
+                              Supports MP4, WebM, MOV, and OGG clips up to 20MB for direct cloud persistence.
+                            </p>
+                            <button
+                              type="button"
+                              className="video-browse-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                uploadVideoRef.current?.click();
+                              }}
+                            >
+                              Browse Video File
+                            </button>
+                          </div>
+                        )}
+
+                        {videoSourceTab === 'url' && (
+                          <div className="video-url-form">
+                            <label className="video-form-label" htmlFor="video-url-input-field">
+                              Paste YouTube, Vimeo, or Direct Video Stream URL:
+                            </label>
+                            <div className="video-url-input-row">
+                              <input
+                                id="video-url-input-field"
+                                type="url"
+                                className="video-url-input"
+                                placeholder="https://www.youtube.com/watch?v=... or https://.../clip.mp4"
+                                value={videoUrlInput}
+                                onChange={(e) => setVideoUrlInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleApplyVideoUrl();
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="video-attach-url-btn"
+                                onClick={handleApplyVideoUrl}
+                                disabled={!videoUrlInput.trim()}
+                              >
+                                Attach Video
+                              </button>
+                            </div>
+                            <p className="video-form-hint">
+                              Supports YouTube links, YouTube Shorts, Vimeo, or direct .mp4/.webm video links.
+                            </p>
+                          </div>
+                        )}
+
+                        {videoSourceTab === 'presets' && (
+                          <div className="video-presets-container">
+                            <span className="video-form-label">Pick a high-definition starter video clip:</span>
+                            <div className="video-presets-grid">
+                              {PRESET_VIDEO_SAMPLES.map((preset) => (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  className="video-preset-card"
+                                  onClick={() => handleSelectVideoPreset(preset)}
+                                >
+                                  <div className="video-preset-icon">▶</div>
+                                  <div className="video-preset-meta">
+                                    <span className="video-preset-title">{preset.label}</span>
+                                    <span className="video-preset-desc">{preset.title}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="video-composer-active-flow">
+                        {/* Video Player Preview Column */}
+                        <div className="video-composer-preview-col">
+                          <div className="video-player-frame-wrap preview">
+                            {(() => {
+                              const embedUrl = getVideoEmbedUrl(uploadedVideo);
+                              return embedUrl ? (
+                                <iframe
+                                  src={embedUrl}
+                                  title="Video Preview"
+                                  className="video-player-iframe"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              ) : (
+                                <video
+                                  src={uploadedVideo}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="video-player-native"
+                                />
+                              );
+                            })()}
+                          </div>
+
+                          <div className="video-composer-media-bar">
+                            <div className="video-composer-meta-pill">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                              </svg>
+                              <span>{uploadedVideoMeta?.name || 'Attached Video'}</span>
+                              {uploadedVideoMeta?.size && (
+                                <span className="video-meta-size">• {uploadedVideoMeta.size}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="video-remove-btn"
+                              onClick={() => {
+                                setUploadedVideo(null);
+                                setUploadedVideoMeta(null);
+                                setVideoTitle('');
+                                setVideoDescription('');
+                              }}
+                              title="Remove and choose another video"
+                            >
+                              Change Video
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Title & Description Form Column */}
+                        <div className="video-composer-fields-col">
+                          <div className="video-form-group">
+                            <label className="video-form-label" htmlFor="video-composer-title-field">
+                              Video Title *
+                            </label>
+                            <input
+                              id="video-composer-title-field"
+                              type="text"
+                              className="video-title-input"
+                              placeholder="Give your video a descriptive title..."
+                              value={videoTitle}
+                              onChange={(e) => setVideoTitle(e.target.value)}
+                              maxLength={120}
+                            />
+                          </div>
+
+                          <div className="video-form-group">
+                            <label className="video-form-label" htmlFor="video-composer-desc-field">
+                              Description & Tags
+                            </label>
+                            <textarea
+                              id="video-composer-desc-field"
+                              className="video-desc-textarea"
+                              rows="3"
+                              placeholder="Describe your video, add timestamps, notes, or hashtags..."
+                              value={videoDescription}
+                              onChange={(e) => setVideoDescription(e.target.value)}
+                              maxLength={1000}
+                            />
+                          </div>
+
+                          {/* Quick Hashtag Suggestions */}
+                          <div className="video-tags-container">
+                            <span className="video-tags-label">Add category tags:</span>
+                            <div className="video-tags-suggestions">
+                              {[
+                                '#Tech',
+                                '#Tutorial',
+                                '#Gaming',
+                                '#Shorts',
+                                '#Music',
+                                '#Nature',
+                                '#Education',
+                                '#Vlog',
+                                '#Entertainment',
+                              ].map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  className="video-tag-pill"
+                                  onClick={() => {
+                                    if (!videoDescription.includes(tag)) {
+                                      setVideoDescription((prev) =>
+                                        prev ? `${prev.trim()} ${tag}` : tag
+                                      );
+                                    }
+                                  }}
+                                >
+                                  {tag}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Composer Action Buttons */}
+                          <div className="video-composer-actions">
+                            <button
+                              type="button"
+                              className="video-discard-btn"
+                              onClick={() => {
+                                setUploadedVideo(null);
+                                setUploadedVideoMeta(null);
+                                setVideoTitle('');
+                                setVideoDescription('');
+                                if (videoSharingTab === 'upload') setVideoSharingTab('all');
+                              }}
+                              disabled={isPublishingVideo}
+                            >
+                              Discard
+                            </button>
+                            <button
+                              type="button"
+                              className="video-publish-btn"
+                              id="video-publish-btn"
+                              disabled={isPublishingVideo || !uploadedVideo}
+                              onClick={handlePublishSharedVideo}
+                            >
+                              {isPublishingVideo ? 'Sharing Video...' : 'Share Video Now'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="uploaded-video-preview-card" id="uploaded-video-preview-card">
-                    <video
-                      src={uploadedVideo}
-                      controls
-                      className="uploaded-video-preview"
-                    />
-                    <div className="uploaded-video-actions">
+                )}
+
+                {/* SEARCH & CATEGORY FILTERS (when viewing video feeds) */}
+                {videoSharingTab !== 'upload' && (
+                  <div className="video-gallery-controls">
+                    {/* Search Box */}
+                    <div className="video-search-box">
+                      <svg
+                        className="video-search-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                      <input
+                        type="text"
+                        className="video-search-input"
+                        placeholder="Search videos by title, tags, or author @username..."
+                        value={videoSearchQuery}
+                        onChange={(e) => setVideoSearchQuery(e.target.value)}
+                        aria-label="Search videos"
+                      />
+                      {videoSearchQuery && (
+                        <button
+                          type="button"
+                          className="video-search-clear"
+                          onClick={() => setVideoSearchQuery('')}
+                          aria-label="Clear video search"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Pills */}
+                    <div className="video-categories-bar" role="toolbar" aria-label="Filter videos by category">
+                      {[
+                        { id: 'all', label: 'All Categories' },
+                        { id: 'tech', label: '#Tech' },
+                        { id: 'tutorial', label: '#Tutorial' },
+                        { id: 'gaming', label: '#Gaming' },
+                        { id: 'shorts', label: '#Shorts' },
+                        { id: 'music', label: '#Music' },
+                        { id: 'nature', label: '#Nature' },
+                        { id: 'education', label: '#Education' },
+                        { id: 'vlog', label: '#Vlog' },
+                      ].map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          className={`video-category-pill ${videoCategoryFilter === cat.id ? 'active' : ''}`}
+                          onClick={() => setVideoCategoryFilter(cat.id)}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* COMMUNITY VIDEO GRID / FEED */}
+                {videoSharingTab !== 'upload' && (
+                  <div className="video-feed-section">
+                    {filteredCommunityVideos.length === 0 ? (
+                      <div className="video-empty-state">
+                        <div className="video-empty-icon">
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                        </div>
+                        <h3 className="video-empty-title">
+                          {videoSearchQuery || videoCategoryFilter !== 'all'
+                            ? 'No videos match your filter criteria'
+                            : videoSharingTab === 'my-videos'
+                            ? 'You have not shared any videos yet'
+                            : 'No community videos shared yet'}
+                        </h3>
+                        <p className="video-empty-desc">
+                          {videoSearchQuery || videoCategoryFilter !== 'all'
+                            ? 'Try clearing your search query or selecting a different category tag.'
+                            : 'Be the first to share an inspiring video clip or tutorial with the community!'}
+                        </p>
+                        {videoSearchQuery || videoCategoryFilter !== 'all' ? (
+                          <button
+                            type="button"
+                            className="video-empty-action-btn"
+                            onClick={() => {
+                              setVideoSearchQuery('');
+                              setVideoCategoryFilter('all');
+                            }}
+                          >
+                            Reset All Filters
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="video-empty-action-btn"
+                            onClick={() => setVideoSharingTab('upload')}
+                          >
+                            + Share Your First Video
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="video-grid-layout" id="video-grid-layout">
+                        {filteredCommunityVideos.map((video) => {
+                          const videoSrc = video.video || video.media;
+                          const embedUrl = getVideoEmbedUrl(videoSrc);
+                          const isCommentsOpen = Boolean(openVideoComments[video.id] ?? openCommentsPosts[video.id]);
+                          const likesArr = video.likes || [];
+                          const cleanUser = String(loggedInUser || 'User').trim().toLowerCase();
+                          const hasLiked = likesArr.map((u) => String(u).toLowerCase()).includes(cleanUser);
+                          const isOwner =
+                            loggedInUser &&
+                            String(video.author || '').toLowerCase() === String(loggedInUser).toLowerCase();
+                          const { title, desc } = parseVideoContent(video.content || video.title, video.title);
+
+                          return (
+                            <article key={video.id} className="video-card" id={`video-card-${video.id}`}>
+                              {/* 16:9 Video Player Container */}
+                              <div className="video-card-player-wrap">
+                                {embedUrl ? (
+                                  <iframe
+                                    src={embedUrl}
+                                    title={title}
+                                    className="video-player-iframe"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                ) : (
+                                  <video
+                                    src={videoSrc}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    className="video-player-native"
+                                  />
+                                )}
+
+                                {/* Cinema Mode Trigger Overlay */}
+                                <button
+                                  type="button"
+                                  className="video-cinema-trigger-btn"
+                                  onClick={() => setTheaterVideo(video)}
+                                  title="Watch in Cinema Theater Mode"
+                                  aria-label="Cinema mode"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <polyline points="9 21 3 21 3 15"></polyline>
+                                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                                  </svg>
+                                  <span>Cinema</span>
+                                </button>
+                              </div>
+
+                              {/* Card Body */}
+                              <div className="video-card-body">
+                                {/* Author Row */}
+                                <div className="video-card-author-header">
+                                  <div
+                                    className="post-author-avatar clickable"
+                                    style={{
+                                      backgroundColor: video.authorAvatar
+                                        ? 'transparent'
+                                        : getAvatarColor(video.authorName || video.author),
+                                    }}
+                                    onClick={() => {
+                                      setProfileUser(video.author);
+                                      navigateTo('user-profile');
+                                    }}
+                                    title={`View ${video.authorName || video.author}'s profile`}
+                                  >
+                                    {video.authorAvatar ? (
+                                      <img
+                                        src={video.authorAvatar}
+                                        alt={video.authorName || video.author}
+                                      />
+                                    ) : (
+                                      <span>{getInitials(video.authorName || video.author)}</span>
+                                    )}
+                                  </div>
+                                  <div className="video-author-meta">
+                                    <span
+                                      className="video-author-name clickable"
+                                      onClick={() => {
+                                        setProfileUser(video.author);
+                                        navigateTo('user-profile');
+                                      }}
+                                    >
+                                      {video.authorName || video.author}
+                                    </span>
+                                    <span className="video-author-handle">
+                                      @{video.author} • {video.time || 'Recent'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Video Title & Description */}
+                                <div className="video-card-info">
+                                  <h3 className="video-card-title">{title}</h3>
+                                  {desc && <p className="video-card-desc">{desc}</p>}
+                                </div>
+
+                                {/* Action Buttons Toolbar */}
+                                <div className="video-card-toolbar">
+                                  {/* Like */}
+                                  <button
+                                    type="button"
+                                    className={`video-action-btn like-btn ${hasLiked ? 'liked' : ''}`}
+                                    onClick={() => handleLikeVideo(video.id)}
+                                    title="Like video"
+                                  >
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill={hasLiked ? 'currentColor' : 'none'}
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    >
+                                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                    <span>{likesArr.length || video.likesCount || 0}</span>
+                                  </button>
+
+                                  {/* Comments */}
+                                  <button
+                                    type="button"
+                                    className={`video-action-btn comment-btn ${isCommentsOpen ? 'active' : ''}`}
+                                    onClick={() => {
+                                      setOpenVideoComments((prev) => ({
+                                        ...prev,
+                                        [video.id]: !isCommentsOpen,
+                                      }));
+                                      toggleComments(video.id);
+                                    }}
+                                    title="Comments"
+                                  >
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    <span>{video.commentsCount ?? (video.comments || []).length}</span>
+                                  </button>
+
+                                  {/* Watch in Cinema */}
+                                  <button
+                                    type="button"
+                                    className="video-action-btn theater-btn"
+                                    onClick={() => setTheaterVideo(video)}
+                                    title="Watch full screen in Cinema Theater"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                                    </svg>
+                                    <span>Theater</span>
+                                  </button>
+
+                                  {/* Share Link */}
+                                  <button
+                                    type="button"
+                                    className="video-action-btn share-btn"
+                                    onClick={() => handleCopyVideoLink(video)}
+                                    title="Copy video link"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                    </svg>
+                                    <span>{videoShareCopiedId === video.id ? 'Copied!' : 'Link'}</span>
+                                  </button>
+
+                                  {/* Download */}
+                                  <button
+                                    type="button"
+                                    className="video-action-btn download-btn"
+                                    onClick={() => handleDownloadVideo(video)}
+                                    title="Download video clip"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                      <polyline points="7 10 12 15 17 10"></polyline>
+                                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                  </button>
+
+                                  {/* Delete */}
+                                  {isOwner && (
+                                    <div className="video-delete-wrap">
+                                      {deleteVideoConfirmId === video.id ? (
+                                        <div className="video-delete-confirm-group">
+                                          <button
+                                            type="button"
+                                            className="video-confirm-delete-btn"
+                                            onClick={() => handleDeleteVideo(video.id)}
+                                          >
+                                            Confirm
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="video-cancel-delete-btn"
+                                            onClick={() => setDeleteVideoConfirmId(null)}
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="video-action-btn delete-btn"
+                                          onClick={() => setDeleteVideoConfirmId(video.id)}
+                                          title="Delete video"
+                                        >
+                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Expandable Comments Drawer */}
+                                {isCommentsOpen && (
+                                  <div className="video-comments-drawer">
+                                    <form
+                                      className="video-comment-form"
+                                      onSubmit={(e) => handleAddVideoComment(video.id, e)}
+                                    >
+                                      <input
+                                        type="text"
+                                        className="video-comment-input"
+                                        placeholder="Add a comment on this video..."
+                                        value={commentInputs[video.id] || ''}
+                                        onChange={(e) =>
+                                          setCommentInputs((prev) => ({
+                                            ...prev,
+                                            [video.id]: e.target.value,
+                                          }))
+                                        }
+                                      />
+                                      <button
+                                        type="submit"
+                                        className="video-comment-submit-btn"
+                                        disabled={!(commentInputs[video.id] || '').trim() || submittingCommentPostIds[video.id]}
+                                      >
+                                        Post
+                                      </button>
+                                    </form>
+
+                                    <div className="video-comments-list">
+                                      {video.comments && video.comments.length > 0 ? (
+                                        video.comments.map((comment) => (
+                                          <div key={comment.id || comment._id} className="video-comment-row">
+                                            <div
+                                              className="contact-avatar small"
+                                              style={{
+                                                backgroundColor: comment.authorAvatar
+                                                  ? 'transparent'
+                                                  : getAvatarColor(comment.authorName || comment.author),
+                                                width: '26px',
+                                                height: '26px',
+                                                fontSize: '11px',
+                                              }}
+                                            >
+                                              {comment.authorAvatar ? (
+                                                <img src={comment.authorAvatar} alt={comment.authorName || comment.author} />
+                                              ) : (
+                                                <span>{getInitials(comment.authorName || comment.author)}</span>
+                                              )}
+                                            </div>
+                                            <div className="video-comment-body">
+                                              <div className="video-comment-header">
+                                                <span className="video-comment-author">
+                                                  {comment.authorName || comment.author}
+                                                </span>
+                                                <span className="video-comment-time">
+                                                  {comment.time || 'Recently'}
+                                                </span>
+                                              </div>
+                                              <p className="video-comment-text">{comment.content}</p>
+                                            </div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <p className="video-comments-empty">
+                                          No comments yet. Be the first to start the conversation!
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* FULL-SCREEN THEATER / CINEMA MODAL */}
+                {theaterVideo && (
+                  <div
+                    className="video-theater-overlay"
+                    onClick={() => setTheaterVideo(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Video Cinema Theater"
+                  >
+                    <div
+                      className="video-theater-content"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
-                        id="upload-video-btn"
-                        className="upload-video-btn"
-                        onClick={() => uploadVideoRef.current?.click()}
+                        className="video-theater-close"
+                        onClick={() => setTheaterVideo(null)}
+                        aria-label="Close cinema mode"
                       >
-                        Upload Video
+                        ✕
                       </button>
+
+                      <div className="video-theater-media-wrap">
+                        {(() => {
+                          const tSrc = theaterVideo.video || theaterVideo.media;
+                          const tEmbed = getVideoEmbedUrl(tSrc);
+                          const { title: tTitle } = parseVideoContent(theaterVideo.content || theaterVideo.title, theaterVideo.title);
+                          return tEmbed ? (
+                            <iframe
+                              src={`${tEmbed}?autoplay=1`}
+                              title={tTitle}
+                              className="video-theater-iframe"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <video
+                              src={tSrc}
+                              controls
+                              autoPlay
+                              playsInline
+                              className="video-theater-native"
+                            />
+                          );
+                        })()}
+                      </div>
+
+                      <div className="video-theater-info-drawer">
+                        <div className="video-theater-header">
+                          <div className="video-card-author-header">
+                            <div
+                              className="post-author-avatar clickable"
+                              style={{
+                                backgroundColor: theaterVideo.authorAvatar
+                                  ? 'transparent'
+                                  : getAvatarColor(theaterVideo.authorName || theaterVideo.author),
+                              }}
+                              onClick={() => {
+                                setProfileUser(theaterVideo.author);
+                                navigateTo('user-profile');
+                                setTheaterVideo(null);
+                              }}
+                            >
+                              {theaterVideo.authorAvatar ? (
+                                <img src={theaterVideo.authorAvatar} alt={theaterVideo.authorName || theaterVideo.author} />
+                              ) : (
+                                <span>{getInitials(theaterVideo.authorName || theaterVideo.author)}</span>
+                              )}
+                            </div>
+                            <div className="video-author-meta">
+                              <span
+                                className="video-author-name clickable"
+                                onClick={() => {
+                                  setProfileUser(theaterVideo.author);
+                                  navigateTo('user-profile');
+                                  setTheaterVideo(null);
+                                }}
+                              >
+                                {theaterVideo.authorName || theaterVideo.author}
+                              </span>
+                              <span className="video-author-handle">
+                                @{theaterVideo.author} • {theaterVideo.time || 'Recent'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="video-theater-actions">
+                            <button
+                              type="button"
+                              className={`video-action-btn like-btn ${
+                                (theaterVideo.likes || [])
+                                  .map((u) => String(u).toLowerCase())
+                                  .includes(String(loggedInUser || 'User').toLowerCase())
+                                  ? 'liked'
+                                  : ''
+                              }`}
+                              onClick={() => handleLikeVideo(theaterVideo.id)}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                              </svg>
+                              <span>{(theaterVideo.likes || []).length || theaterVideo.likesCount || 0}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="video-action-btn"
+                              onClick={() => handleCopyVideoLink(theaterVideo)}
+                            >
+                              {videoShareCopiedId === theaterVideo.id ? 'Copied!' : 'Share Link'}
+                            </button>
+                            <button
+                              type="button"
+                              className="video-action-btn"
+                              onClick={() => handleDownloadVideo(theaterVideo)}
+                            >
+                              Download
+                            </button>
+                          </div>
+                        </div>
+
+                        {(() => {
+                          const { title, desc } = parseVideoContent(theaterVideo.content || theaterVideo.title, theaterVideo.title);
+                          return (
+                            <div className="video-theater-text">
+                              <h2 className="video-theater-title">{title}</h2>
+                              {desc && <p className="video-theater-desc">{desc}</p>}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                 )}
