@@ -672,6 +672,33 @@ function App() {
     }
   });
 
+  // Display name & rich profile state
+  const [displayName, setDisplayName] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_display_name') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [myProfileActiveTab, setMyProfileActiveTab] = useState('posts');
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({
+    displayName: '',
+    username: '',
+    bio: '',
+    location: '',
+    website: '',
+    education: '',
+    employment: '',
+    skills: '',
+    interests: '',
+  });
+  const [isSavingFullProfile, setIsSavingFullProfile] = useState(false);
+  const [fullProfileFeedback, setFullProfileFeedback] = useState(null);
+  const [followModalType, setFollowModalType] = useState(null);
+  const [followSearchQuery, setFollowSearchQuery] = useState('');
+  const [profileToast, setProfileToast] = useState(null);
+
   // Edit username state
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [editUsernameInput, setEditUsernameInput] = useState('');
@@ -1336,6 +1363,22 @@ function App() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.success && data.user) {
+          if (data.user.displayName) {
+            setDisplayName((prev) => prev || data.user.displayName);
+            try {
+              if (!localStorage.getItem('assistance_display_name')) {
+                localStorage.setItem('assistance_display_name', data.user.displayName);
+              }
+            } catch {}
+          }
+          if (data.user.coverPhoto) {
+            setCoverPhoto((prev) => prev || data.user.coverPhoto);
+            try {
+              if (!localStorage.getItem('assistance_cover_photo')) {
+                localStorage.setItem('assistance_cover_photo', data.user.coverPhoto);
+              }
+            } catch {}
+          }
           if (data.user.avatar) {
             setProfilePicture((prev) => prev || data.user.avatar);
             try {
@@ -1447,6 +1490,157 @@ function App() {
       try {
         localStorage.setItem('assistance_cover_photo', compressed);
       } catch {}
+      if (loggedInUser) {
+        fetch('/api/users/update-profile-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: loggedInUser, coverPhoto: compressed }),
+        }).catch(() => {});
+      }
+      setProfileToast({ type: 'success', text: 'Cover photo updated!' });
+      setTimeout(() => setProfileToast(null), 3000);
+    }
+  };
+
+  const handleRemoveCoverPhoto = async (e) => {
+    if (e) e.stopPropagation();
+    setCoverPhoto(null);
+    try {
+      localStorage.removeItem('assistance_cover_photo');
+    } catch {}
+    if (loggedInUser) {
+      fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loggedInUser, coverPhoto: '' }),
+      }).catch(() => {});
+    }
+    setProfileToast({ type: 'info', text: 'Cover photo removed' });
+    setTimeout(() => setProfileToast(null), 3000);
+  };
+
+  const handleOpenEditProfileModal = () => {
+    setEditProfileForm({
+      displayName: displayName || loggedInUser || '',
+      username: loggedInUser || '',
+      bio: aboutText || '',
+      location: locationText || '',
+      website: websiteText || '',
+      education: educationText || '',
+      employment: employmentText || '',
+      skills: skillsText || '',
+      interests: interestsText || '',
+    });
+    setFullProfileFeedback(null);
+    setIsEditProfileModalOpen(true);
+  };
+
+  const handleSaveFullProfile = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setFullProfileFeedback(null);
+    const cleanedDisplayName = editProfileForm.displayName.trim();
+    const cleanedUsername = editProfileForm.username.trim().toLowerCase();
+    const cleanedBio = editProfileForm.bio.trim();
+    const cleanedLocation = editProfileForm.location.trim();
+    const cleanedWebsite = editProfileForm.website.trim();
+    const cleanedEducation = editProfileForm.education.trim();
+    const cleanedEmployment = editProfileForm.employment.trim();
+    const cleanedSkills = editProfileForm.skills.trim();
+    const cleanedInterests = editProfileForm.interests.trim();
+
+    if (!cleanedUsername) {
+      setFullProfileFeedback({ type: 'error', text: 'Username cannot be empty' });
+      return;
+    }
+    if (cleanedUsername.length < 3) {
+      setFullProfileFeedback({ type: 'error', text: 'Username must be at least 3 characters' });
+      return;
+    }
+
+    setIsSavingFullProfile(true);
+
+    try {
+      let currentActiveUser = loggedInUser;
+      if (cleanedUsername !== String(loggedInUser || '').toLowerCase()) {
+        const uRes = await fetch('/api/users/update-username', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            currentUsername: loggedInUser,
+            newUsername: cleanedUsername,
+          }),
+        });
+        const uData = await uRes.json();
+        if (!uRes.ok) {
+          setIsSavingFullProfile(false);
+          setFullProfileFeedback({ type: 'error', text: uData.message || 'Failed to update username' });
+          return;
+        }
+        currentActiveUser = uData.username || cleanedUsername;
+        setLoggedInUser(currentActiveUser);
+        try {
+          localStorage.setItem('assistance_user', currentActiveUser);
+        } catch {}
+      }
+
+      await fetch('/api/users/update-profile-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: currentActiveUser,
+          displayName: cleanedDisplayName || currentActiveUser,
+          status: cleanedBio || 'Hey there! I am using Assistance',
+          location: cleanedLocation,
+          website: cleanedWebsite,
+          education: cleanedEducation,
+          employment: cleanedEmployment,
+          skills: cleanedSkills,
+          interests: cleanedInterests,
+        }),
+      }).catch(() => {});
+
+      setDisplayName(cleanedDisplayName || currentActiveUser);
+      setAboutText(cleanedBio || 'Hey there! I am using Assistance');
+      setLocationText(cleanedLocation);
+      setWebsiteText(cleanedWebsite);
+      setEducationText(cleanedEducation);
+      setEmploymentText(cleanedEmployment);
+      setSkillsText(cleanedSkills);
+      setInterestsText(cleanedInterests);
+
+      try {
+        localStorage.setItem('assistance_display_name', cleanedDisplayName || currentActiveUser);
+        localStorage.setItem('assistance_about', cleanedBio || 'Hey there! I am using Assistance');
+        localStorage.setItem('assistance_location', cleanedLocation);
+        localStorage.setItem('assistance_website', cleanedWebsite);
+        localStorage.setItem('assistance_education', cleanedEducation);
+        localStorage.setItem('assistance_employment', cleanedEmployment);
+        localStorage.setItem('assistance_skills', cleanedSkills);
+        localStorage.setItem('assistance_interests', cleanedInterests);
+      } catch {}
+
+      setIsSavingFullProfile(false);
+      setIsEditProfileModalOpen(false);
+      setProfileToast({ type: 'success', text: 'Profile updated successfully!' });
+      setTimeout(() => setProfileToast(null), 3500);
+    } catch (err) {
+      console.error('Save profile error:', err);
+      setIsSavingFullProfile(false);
+      setFullProfileFeedback({ type: 'error', text: 'Network error saving profile changes' });
+    }
+  };
+
+  const handleShareMyProfile = async () => {
+    const profileUrl = `${window.location.origin}/profile/${encodeURIComponent(loggedInUser || 'user')}`;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(profileUrl);
+      }
+      setProfileToast({ type: 'success', text: 'Profile link copied to clipboard!' });
+      setTimeout(() => setProfileToast(null), 3500);
+    } catch {
+      setProfileToast({ type: 'info', text: `@${loggedInUser}` });
+      setTimeout(() => setProfileToast(null), 3500);
     }
   };
 
@@ -3908,6 +4102,27 @@ function App() {
     return u.toLowerCase().includes(searchFriendsQuery.trim().toLowerCase());
   });
 
+  const myAuthoredPosts = posts.filter(
+    (p) => String(p.author || '').toLowerCase() === String(loggedInUser || '').toLowerCase()
+  );
+
+  const myPhotosPosts = myAuthoredPosts.filter((p) => {
+    const isVideo = Boolean(
+      p.video ||
+      p.mediaType === 'video' ||
+      (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov') || p.media.includes('/video/')))
+    );
+    return !isVideo && Boolean(p.image || p.media);
+  });
+
+  const myVideosPosts = myAuthoredPosts.filter((p) => {
+    return Boolean(
+      p.video ||
+      p.mediaType === 'video' ||
+      (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov') || p.media.includes('/video/')))
+    );
+  });
+
   if (
     currentView === 'messages' ||
     currentView === 'blank' ||
@@ -5180,52 +5395,51 @@ function App() {
           ) : currentView === 'profile' ? (
             <div className="profile-space" id="profile-space">
               <div className="profile-container" id="profile-container">
+                {/* 1. Cover Photo Banner */}
                 <div
-                  className="cover-photo-container"
-                  id="cover-photo-container"
+                  className="profile-cover"
+                  id="profile-cover"
                   onClick={() => coverFileInputRef.current?.click()}
                   title={coverPhoto ? 'Click to change cover photo' : 'Click to add cover photo'}
                 >
                   {coverPhoto ? (
-                    <>
-                      <img src={coverPhoto} alt="Cover preview" className="cover-photo-img" />
-                      <button
-                        type="button"
-                        className="cover-photo-btn cover-photo-btn-change"
-                        id="cover-photo-btn"
-                        title="Change cover photo"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          coverFileInputRef.current?.click();
-                        }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                          <circle cx="12" cy="13" r="4"></circle>
-                        </svg>
-                        <span>Change Cover Photo</span>
-                      </button>
-                    </>
+                    <img src={coverPhoto} alt="Cover preview" className="profile-cover-img" />
                   ) : (
-                    <div className="cover-photo-empty">
-                      <button
-                        type="button"
-                        className="cover-photo-btn cover-photo-btn-add"
-                        id="cover-photo-btn"
-                        title="Add cover photo"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          coverFileInputRef.current?.click();
-                        }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                          <circle cx="12" cy="13" r="4"></circle>
-                        </svg>
-                        <span>Add Cover Photo</span>
-                      </button>
+                    <div className="profile-cover-placeholder">
+                      <div className="profile-cover-gradient"></div>
                     </div>
                   )}
+
+                  <div className="profile-cover-actions">
+                    <button
+                      type="button"
+                      className="profile-cover-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        coverFileInputRef.current?.click();
+                      }}
+                      title="Upload cover photo"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                      </svg>
+                      <span>{coverPhoto ? 'Change Cover' : 'Add Cover'}</span>
+                    </button>
+                    {coverPhoto && (
+                      <button
+                        type="button"
+                        className="profile-cover-btn remove"
+                        onClick={handleRemoveCoverPhoto}
+                        title="Remove cover photo"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
 
                   <input
                     ref={coverFileInputRef}
@@ -5240,38 +5454,44 @@ function App() {
                   />
                 </div>
 
-                <div className="profile-picture-container" id="profile-picture-container">
-                  <div
-                    className="profile-picture-wrapper"
-                    onClick={() => profileFileInputRef.current?.click()}
-                    title="Click to change profile picture"
-                  >
-                    {profilePicture ? (
-                      <img src={profilePicture} alt="Profile preview" className="profile-picture-img" />
-                    ) : (
-                      <div className="profile-picture-placeholder">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                          <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                      </div>
-                    )}
+                {/* 2. Profile Header (Overlapping Avatar + Action Buttons) */}
+                <div className="profile-header-row">
+                  <div className="profile-avatar-wrapper">
+                    <div
+                      className="profile-avatar-circle"
+                      style={{
+                        backgroundColor: profilePicture ? 'transparent' : getAvatarColor(displayName || loggedInUser || 'User'),
+                      }}
+                      onClick={() => {
+                        if (profilePicture) setSelectedPostImageModal(profilePicture);
+                        else profileFileInputRef.current?.click();
+                      }}
+                      title={profilePicture ? 'Click to view photo' : 'Click to add profile picture'}
+                    >
+                      {profilePicture ? (
+                        <img src={profilePicture} alt={displayName || loggedInUser} className="profile-avatar-img" />
+                      ) : (
+                        <span className="profile-avatar-initials">
+                          {getInitials(displayName || loggedInUser || 'User')}
+                        </span>
+                      )}
+                    </div>
 
                     <button
                       type="button"
-                      className="profile-picture-btn"
-                      id="profile-picture-btn"
-                      title="Set profile picture"
+                      className="profile-avatar-camera-btn"
+                      title="Change profile picture"
                       onClick={(e) => {
                         e.stopPropagation();
                         profileFileInputRef.current?.click();
                       }}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                         <circle cx="12" cy="13" r="4"></circle>
                       </svg>
                     </button>
+
                     <input
                       ref={profileFileInputRef}
                       type="file"
@@ -5284,719 +5504,1032 @@ function App() {
                       onChange={handleProfilePictureChange}
                     />
                   </div>
+
+                  <div className="profile-main-actions">
+                    <button
+                      type="button"
+                      className="profile-btn profile-btn-primary"
+                      onClick={handleOpenEditProfileModal}
+                      title="Edit Profile Information"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                      </svg>
+                      <span>Edit Profile</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="profile-btn profile-btn-secondary"
+                      onClick={handleShareMyProfile}
+                      title="Share your profile"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                      </svg>
+                      <span>Share</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="profile-details" id="profile-details">
-                  {isEditingUsername ? (
-                    <form className="edit-username-form" onSubmit={handleSaveUsername}>
-                      <div className="edit-username-input-row">
-                        <input
-                          type="text"
-                          className="input-field edit-username-input"
-                          id="edit-username-input"
-                          value={editUsernameInput}
-                          onChange={(e) => setEditUsernameInput(e.target.value)}
-                          placeholder="Enter user name"
-                          autoFocus
-                        />
-                        <button
-                          type="submit"
-                          className="btn-save-username"
-                          id="save-username-btn"
-                          disabled={isSavingUsername}
-                        >
-                          {isSavingUsername ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-cancel-username"
-                          id="cancel-username-btn"
-                          onClick={() => {
-                            setIsEditingUsername(false);
-                            setUsernameEditFeedback(null);
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {usernameEditFeedback && (
-                        <p className="status-message status-taken" role="alert">
-                          ✕ {usernameEditFeedback.text}
-                        </p>
-                      )}
-                    </form>
-                  ) : (
-                    <div className="username-display-row">
-                      <h2 className="profile-username" id="profile-username">
-                        {loggedInUser || 'User'}
-                      </h2>
-                      <button
-                        type="button"
-                        className="edit-username-btn"
-                        id="edit-username-btn"
-                        title="Edit user name"
-                        aria-label="Edit user name"
-                        onClick={() => {
-                          setEditUsernameInput(loggedInUser || '');
-                          setIsEditingUsername(true);
-                        }}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                        </svg>
-                        <span>Edit</span>
-                      </button>
-                    </div>
-                  )}
+                {/* Toast Feedback */}
+                {profileToast && (
+                  <div className={`profile-toast ${profileToast.type}`}>
+                    <span>{profileToast.text}</span>
+                  </div>
+                )}
 
-                  {/* Followers and Following lists */}
-                  <div className="profile-follow-summary-row" id="profile-follow-summary-row">
-                    <button
-                      type="button"
-                      className={`profile-follow-pill ${activeFollowView === 'followers' ? 'active' : ''}`}
-                      id="pill-followers-btn"
-                      onClick={() => setActiveFollowView(activeFollowView === 'followers' ? 'all' : 'followers')}
-                    >
-                      <span className="profile-follow-count">{followersList.length}</span>
-                      <span className="profile-follow-label">Followers</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`profile-follow-pill ${activeFollowView === 'following' ? 'active' : ''}`}
-                      id="pill-following-btn"
-                      onClick={() => setActiveFollowView(activeFollowView === 'following' ? 'all' : 'following')}
-                    >
-                      <span className="profile-follow-count">{followingList.length}</span>
-                      <span className="profile-follow-label">Following</span>
-                    </button>
+                {/* 3. Identity Information Section */}
+                <div className="profile-identity-section">
+                  <div className="profile-name-row">
+                    <h1 className="profile-display-name">
+                      {displayName || loggedInUser || 'User'}
+                    </h1>
+                    <span className="profile-verified-badge" title="Verified Member">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                    </span>
+                    <span className="profile-you-badge">You</span>
                   </div>
 
-                  {followError && (
-                    <p className="status-message status-taken" style={{ color: '#ff6b6b', margin: '0.25rem 0' }} role="alert">
-                      ✕ {followError}
-                    </p>
+                  <span className="profile-handle">@{loggedInUser}</span>
+
+                  {aboutText && (
+                    <p className="profile-bio-text">{aboutText}</p>
                   )}
 
-                  {/* Followers List Section */}
-                  {(activeFollowView === 'all' || activeFollowView === 'followers') && (
-                    <div className="profile-about-section" id="profile-followers-section">
-                      <div className="profile-about-header">
-                        <h3 className="profile-about-title">Followers ({followersList.length})</h3>
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="add-follower-toggle-btn"
-                          title="Add follower"
-                          onClick={() => {
-                            setFollowError('');
-                            setIsAddingFollower((prev) => !prev);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>{isAddingFollower ? 'Close' : 'Add'}</span>
-                        </button>
-                      </div>
-
-                      {isAddingFollower && (
-                        <form className="profile-follow-add-form" id="add-follower-form" onSubmit={handleAddFollower}>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="add-follower-input"
-                            style={{ paddingLeft: '0.875rem' }}
-                            placeholder="Enter username to add follower..."
-                            value={addFollowerInput}
-                            onChange={(e) => setAddFollowerInput(e.target.value)}
-                            autoFocus
-                          />
-                          <div className="edit-about-actions">
-                            <button type="submit" className="btn-save-username" id="confirm-add-follower-btn">
-                              Add
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-cancel-username"
-                              onClick={() => {
-                                setIsAddingFollower(false);
-                                setFollowError('');
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      <div className="profile-follow-list" id="profile-followers-list">
-                        {followersList.length === 0 ? (
-                          <p className="profile-follow-empty" id="no-followers-text">No followers yet</p>
-                        ) : (
-                          followersList.map((follower) => (
-                            <div className="profile-follow-item" key={`follower-${follower}`}>
-                              <div className="profile-follow-user-info">
-                                <div className="profile-follow-avatar-circle">
-                                  {follower.slice(0, 1).toUpperCase()}
-                                </div>
-                                <span className="profile-follow-username">{follower}</span>
-                              </div>
-                              <button
-                                type="button"
-                                className="profile-follow-btn-action"
-                                title={`Remove ${follower}`}
-                                onClick={() => handleRemoveFollower(follower)}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Following List Section */}
-                  {(activeFollowView === 'all' || activeFollowView === 'following') && (
-                    <div className="profile-about-section" id="profile-following-section">
-                      <div className="profile-about-header">
-                        <h3 className="profile-about-title">Following ({followingList.length})</h3>
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="add-following-toggle-btn"
-                          title="Follow user"
-                          onClick={() => {
-                            setFollowError('');
-                            setIsAddingFollowing((prev) => !prev);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>{isAddingFollowing ? 'Close' : 'Follow'}</span>
-                        </button>
-                      </div>
-
-                      {isAddingFollowing && (
-                        <form className="profile-follow-add-form" id="add-following-form" onSubmit={handleFollowUser}>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="add-following-input"
-                            style={{ paddingLeft: '0.875rem' }}
-                            placeholder="Enter username to follow..."
-                            value={addFollowingInput}
-                            onChange={(e) => setAddFollowingInput(e.target.value)}
-                            autoFocus
-                          />
-                          <div className="edit-about-actions">
-                            <button type="submit" className="btn-save-username" id="confirm-follow-btn">
-                              Follow
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-cancel-username"
-                              onClick={() => {
-                                setIsAddingFollowing(false);
-                                setFollowError('');
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      <div className="profile-follow-list" id="profile-following-list">
-                        {followingList.length === 0 ? (
-                          <p className="profile-follow-empty" id="no-following-text">Not following anyone yet</p>
-                        ) : (
-                          followingList.map((target) => (
-                            <div className="profile-follow-item" key={`following-${target}`}>
-                              <div className="profile-follow-user-info">
-                                <div className="profile-follow-avatar-circle">
-                                  {target.slice(0, 1).toUpperCase()}
-                                </div>
-                                <span className="profile-follow-username">{target}</span>
-                              </div>
-                              <button
-                                type="button"
-                                className="profile-follow-btn-action"
-                                title={`Unfollow ${target}`}
-                                onClick={() => handleUnfollowUser(target)}
-                              >
-                                Unfollow
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="profile-about-section" id="profile-about-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">About</h3>
-                      {!isEditingAbout && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-about-btn"
-                          title="Edit About"
-                          aria-label="Edit About"
-                          onClick={() => {
-                            setEditAboutInput(aboutText);
-                            setIsEditingAbout(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingAbout ? (
-                      <form className="edit-about-form" id="edit-about-form" onSubmit={handleSaveAbout}>
-                        <textarea
-                          className="input-field edit-about-textarea"
-                          id="edit-about-input"
-                          value={editAboutInput}
-                          onChange={(e) => setEditAboutInput(e.target.value)}
-                          placeholder="Write something about yourself..."
-                          rows="3"
-                          autoFocus
-                        />
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-about-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-about-btn"
-                            onClick={() => setIsEditingAbout(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <p className="profile-about-text" id="profile-about-text">
-                        {aboutText}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="profile-about-section" id="profile-location-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Location</h3>
-                      {!isEditingLocation && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-location-btn"
-                          title="Edit Location"
-                          aria-label="Edit Location"
-                          onClick={() => {
-                            setEditLocationInput(locationText);
-                            setIsEditingLocation(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingLocation ? (
-                      <form className="edit-about-form" id="edit-location-form" onSubmit={handleSaveLocation}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                            <circle cx="12" cy="10" r="3"></circle>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-location-input"
-                            value={editLocationInput}
-                            onChange={(e) => setEditLocationInput(e.target.value)}
-                            placeholder="Enter your location (e.g. New York, USA)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-location-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-location-btn"
-                            onClick={() => setIsEditingLocation(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-location-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* 6 & 7. Location, Website, Employment, Education */}
+                  <div className="profile-meta-grid">
+                    {locationText && (
+                      <div className="profile-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                           <circle cx="12" cy="10" r="3"></circle>
                         </svg>
-                        <span className="profile-info-text" id="profile-location-text">
-                          {locationText || 'No location set'}
-                        </span>
+                        <span>{locationText}</span>
                       </div>
                     )}
-                  </div>
 
-                  <div className="profile-about-section" id="profile-website-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Website Information</h3>
-                      {!isEditingWebsite && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-website-btn"
-                          title="Edit Website Information"
-                          aria-label="Edit Website Information"
-                          onClick={() => {
-                            setEditWebsiteInput(websiteText);
-                            setIsEditingWebsite(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingWebsite ? (
-                      <form className="edit-about-form" id="edit-website-form" onSubmit={handleSaveWebsite}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-website-input"
-                            value={editWebsiteInput}
-                            onChange={(e) => setEditWebsiteInput(e.target.value)}
-                            placeholder="Enter your website (e.g. https://yourwebsite.com)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-website-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-website-btn"
-                            onClick={() => setIsEditingWebsite(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-website-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {websiteText && (
+                      <div className="profile-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="10"></circle>
                           <line x1="2" y1="12" x2="22" y2="12"></line>
                           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                         </svg>
-                        {websiteText ? (
-                          <a
-                            href={websiteText.startsWith('http://') || websiteText.startsWith('https://') ? websiteText : `https://${websiteText}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="profile-website-link"
-                            id="profile-website-link"
-                          >
-                            {websiteText}
-                          </a>
-                        ) : (
-                          <span className="profile-info-text" id="profile-website-text">
-                            No website set
-                          </span>
-                        )}
+                        <a
+                          href={websiteText.startsWith('http') ? websiteText : `https://${websiteText}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="profile-link"
+                        >
+                          {websiteText}
+                        </a>
                       </div>
                     )}
-                  </div>
 
-                  <div className="profile-about-section" id="profile-education-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Education</h3>
-                      {!isEditingEducation && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-education-btn"
-                          title="Edit Education"
-                          aria-label="Edit Education"
-                          onClick={() => {
-                            setEditEducationInput(educationText);
-                            setIsEditingEducation(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingEducation ? (
-                      <form className="edit-about-form" id="edit-education-form" onSubmit={handleSaveEducation}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
-                            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-education-input"
-                            value={editEducationInput}
-                            onChange={(e) => setEditEducationInput(e.target.value)}
-                            placeholder="Enter your education (e.g. University / Degree)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-education-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-education-btn"
-                            onClick={() => setIsEditingEducation(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-education-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
-                          <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
-                        </svg>
-                        <span className="profile-info-text" id="profile-education-text">
-                          {educationText || 'No education details set'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="profile-about-section" id="profile-employment-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Employment</h3>
-                      {!isEditingEmployment && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-employment-btn"
-                          title="Edit Employment"
-                          aria-label="Edit Employment"
-                          onClick={() => {
-                            setEditEmploymentInput(employmentText);
-                            setIsEditingEmployment(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingEmployment ? (
-                      <form className="edit-about-form" id="edit-employment-form" onSubmit={handleSaveEmployment}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-employment-input"
-                            value={editEmploymentInput}
-                            onChange={(e) => setEditEmploymentInput(e.target.value)}
-                            placeholder="Enter your employment (e.g. Job Title / Company)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-employment-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-employment-btn"
-                            onClick={() => setIsEditingEmployment(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-employment-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {employmentText && (
+                      <div className="profile-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                           <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
                         </svg>
-                        <span className="profile-info-text" id="profile-employment-text">
-                          {employmentText || 'No employment details set'}
-                        </span>
+                        <span>{employmentText}</span>
                       </div>
                     )}
+
+                    {educationText && (
+                      <div className="profile-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                          <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                        </svg>
+                        <span>{educationText}</span>
+                      </div>
+                    )}
+
+                    <div className="profile-meta-item">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                      </svg>
+                      <span>Member of Assistance</span>
+                    </div>
                   </div>
 
-                  <div className="profile-about-section" id="profile-skills-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Skills</h3>
-                      {!isEditingSkills && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-skills-btn"
-                          title="Edit Skills"
-                          aria-label="Edit Skills"
-                          onClick={() => {
-                            setEditSkillsInput(skillsText);
-                            setIsEditingSkills(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
+                  {/* 8. Skills & Interests tags preview */}
+                  {(skillsText || interestsText) && (
+                    <div className="profile-tags-row">
+                      {skillsText &&
+                        skillsText
+                          .split(/[,;\n]/)
+                          .map((s) => s.trim())
+                          .filter(Boolean)
+                          .map((skill, idx) => (
+                            <span key={`skill-${idx}`} className="profile-pill-tag skill" title="Skill">
+                              {skill}
+                            </span>
+                          ))}
+                      {interestsText &&
+                        interestsText
+                          .split(/[,;\n]/)
+                          .map((i) => i.trim())
+                          .filter(Boolean)
+                          .map((interest, idx) => (
+                            <span key={`interest-${idx}`} className="profile-pill-tag interest" title="Interest">
+                              {interest}
+                            </span>
+                          ))}
                     </div>
-                    {isEditingSkills ? (
-                      <form className="edit-about-form" id="edit-skills-form" onSubmit={handleSaveSkills}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-skills-input"
-                            value={editSkillsInput}
-                            onChange={(e) => setEditSkillsInput(e.target.value)}
-                            placeholder="Enter your skills (e.g. JavaScript, Python, Design)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-skills-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-skills-btn"
-                            onClick={() => setIsEditingSkills(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-skills-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                        </svg>
-                        <span className="profile-info-text" id="profile-skills-text">
-                          {skillsText || 'No skills set'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
-                  <div className="profile-about-section" id="profile-interests-section">
-                    <div className="profile-about-header">
-                      <h3 className="profile-about-title">Interests</h3>
-                      {!isEditingInterests && (
-                        <button
-                          type="button"
-                          className="edit-username-btn"
-                          id="edit-interests-btn"
-                          title="Edit Interests"
-                          aria-label="Edit Interests"
-                          onClick={() => {
-                            setEditInterestsInput(interestsText);
-                            setIsEditingInterests(true);
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                      )}
-                    </div>
-                    {isEditingInterests ? (
-                      <form className="edit-about-form" id="edit-interests-form" onSubmit={handleSaveInterests}>
-                        <div className="profile-input-with-icon">
-                          <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                          </svg>
-                          <input
-                            type="text"
-                            className="input-field edit-info-input"
-                            id="edit-interests-input"
-                            value={editInterestsInput}
-                            onChange={(e) => setEditInterestsInput(e.target.value)}
-                            placeholder="Enter your interests (e.g. Photography, Music, Reading)"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="edit-about-actions">
-                          <button type="submit" className="btn-save-username" id="save-interests-btn">
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-cancel-username"
-                            id="cancel-interests-btn"
-                            onClick={() => setIsEditingInterests(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="profile-info-display" id="profile-interests-display">
-                        <svg className="profile-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        <span className="profile-info-text" id="profile-interests-text">
-                          {interestsText || 'No interests set'}
-                        </span>
-                      </div>
-                    )}
+                  {/* 13. Followers & Following Statistics Bar */}
+                  <div className="profile-stats-grid">
+                    <button
+                      type="button"
+                      className="profile-stat-box"
+                      onClick={() => setFollowModalType('following')}
+                      title="View following list"
+                    >
+                      <strong className="profile-stat-number">{followingList.length}</strong>
+                      <span className="profile-stat-title">Following</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="profile-stat-box"
+                      onClick={() => setFollowModalType('followers')}
+                      title="View followers list"
+                    >
+                      <strong className="profile-stat-number">{followersList.length}</strong>
+                      <span className="profile-stat-title">Followers</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="profile-stat-box"
+                      onClick={() => navigateTo('social')}
+                      title="View friends"
+                    >
+                      <strong className="profile-stat-number">{friendsList.length}</strong>
+                      <span className="profile-stat-title">Friends</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="profile-stat-box"
+                      onClick={() => setMyProfileActiveTab('posts')}
+                      title="View posts"
+                    >
+                      <strong className="profile-stat-number">{myAuthoredPosts.length}</strong>
+                      <span className="profile-stat-title">Posts</span>
+                    </button>
                   </div>
                 </div>
+
+                {/* 9. Profile Posts, Photos, and Videos Tabs */}
+                <div className="profile-tabs-header">
+                  <button
+                    type="button"
+                    className={`profile-tab-button ${myProfileActiveTab === 'posts' ? 'active' : ''}`}
+                    onClick={() => setMyProfileActiveTab('posts')}
+                  >
+                    <span>Posts</span>
+                    <span className="profile-tab-count">{myAuthoredPosts.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-tab-button ${myProfileActiveTab === 'photos' ? 'active' : ''}`}
+                    onClick={() => setMyProfileActiveTab('photos')}
+                  >
+                    <span>Photos</span>
+                    <span className="profile-tab-count">{myPhotosPosts.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-tab-button ${myProfileActiveTab === 'videos' ? 'active' : ''}`}
+                    onClick={() => setMyProfileActiveTab('videos')}
+                  >
+                    <span>Videos</span>
+                    <span className="profile-tab-count">{myVideosPosts.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`profile-tab-button ${myProfileActiveTab === 'about' ? 'active' : ''}`}
+                    onClick={() => setMyProfileActiveTab('about')}
+                  >
+                    <span>About</span>
+                  </button>
+                </div>
+
+                {/* Tab Contents */}
+                <div className="profile-tab-body">
+                  {/* Posts Tab */}
+                  {myProfileActiveTab === 'posts' && (
+                    <div className="profile-posts-tab">
+                      {/* Quick Post Prompt */}
+                      <div className="profile-create-prompt" onClick={() => navigateTo('whats-happening')}>
+                        <div
+                          className="profile-prompt-avatar"
+                          style={{
+                            backgroundColor: profilePicture
+                              ? 'transparent'
+                              : getAvatarColor(displayName || loggedInUser || 'User'),
+                          }}
+                        >
+                          {profilePicture ? (
+                            <img src={profilePicture} alt="Avatar" />
+                          ) : (
+                            <span>{getInitials(displayName || loggedInUser || 'User')}</span>
+                          )}
+                        </div>
+                        <span className="profile-prompt-text">
+                          What's on your mind, {displayName || loggedInUser}?
+                        </span>
+                        <button type="button" className="profile-prompt-btn">Create Post</button>
+                      </div>
+
+                      {myAuthoredPosts.length === 0 ? (
+                        <div className="profile-empty-state">
+                          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                          </svg>
+                          <h3>No posts yet</h3>
+                          <p>You haven't posted any updates yet. Share your thoughts, photos, or videos with your network!</p>
+                          <button
+                            type="button"
+                            className="profile-btn profile-btn-primary"
+                            onClick={() => navigateTo('whats-happening')}
+                          >
+                            Share your first post
+                          </button>
+                        </div>
+                      ) : (
+                        myAuthoredPosts.map((post) => {
+                          const isPostOwner = true;
+                          const hasLiked = loggedInUser && (post.likes || []).includes(String(loggedInUser).toLowerCase());
+                          const isCommentsOpen = Boolean(openCommentsPosts[post.id]);
+                          const isVideo = Boolean(
+                            post.video ||
+                              post.mediaType === 'video' ||
+                              (post.media &&
+                                (post.media.startsWith('data:video') ||
+                                  post.media.endsWith('.mp4') ||
+                                  post.media.endsWith('.webm') ||
+                                  post.media.endsWith('.mov') ||
+                                  post.media.includes('/video/')))
+                          );
+                          const videoSrc = post.video || (isVideo ? post.media : null);
+                          const imageSrc = !isVideo ? post.image || post.media : null;
+
+                          return (
+                            <article key={post.id} className="post-card">
+                              <div className="post-header">
+                                <div className="post-author-wrap">
+                                  <div
+                                    className="post-author-avatar"
+                                    style={{
+                                      backgroundColor: profilePicture
+                                        ? 'transparent'
+                                        : getAvatarColor(displayName || loggedInUser || 'User'),
+                                    }}
+                                  >
+                                    {profilePicture ? (
+                                      <img src={profilePicture} alt={displayName || loggedInUser} />
+                                    ) : (
+                                      <span>{getInitials(displayName || loggedInUser || 'User')}</span>
+                                    )}
+                                  </div>
+                                  <div className="post-author-meta">
+                                    <span className="post-author">{displayName || loggedInUser}</span>
+                                    <span className="post-handle">@{loggedInUser}</span>
+                                  </div>
+                                </div>
+                                <span className="post-time">{post.time || post.timestamp}</span>
+                              </div>
+
+                              {post.content && <p className="post-content">{post.content}</p>}
+
+                              {isVideo && videoSrc && (
+                                <div className="post-media-video-wrap">
+                                  <video src={videoSrc} controls playsInline preload="metadata" className="post-media-video" />
+                                </div>
+                              )}
+
+                              {imageSrc && (
+                                <div
+                                  className="post-media-wrap"
+                                  onClick={() => setSelectedPostImageModal(imageSrc)}
+                                  title="Click to view full image"
+                                >
+                                  <img src={imageSrc} alt="Post media" className="post-media-image" loading="lazy" />
+                                </div>
+                              )}
+
+                              <div className="post-footer">
+                                <button
+                                  type="button"
+                                  className={`post-action-btn like-btn ${hasLiked ? 'liked' : ''}`}
+                                  onClick={() => handleLikePost(post.id)}
+                                  title="Like post"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill={hasLiked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                  </svg>
+                                  <span>{(post.likes || []).length}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`post-action-btn comment-btn ${isCommentsOpen ? 'active' : ''}`}
+                                  onClick={() => toggleComments(post.id)}
+                                  title="Comments"
+                                  aria-expanded={isCommentsOpen}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                  <span>{post.commentsCount ?? (post.comments || []).length}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="post-action-btn delete-btn"
+                                  onClick={() => handleDeletePost(post.id)}
+                                  title="Delete post"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                  </svg>
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+
+                              {isCommentsOpen && (
+                                <div className="post-comments-section">
+                                  <form
+                                    className="post-comment-form"
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      handleAddComment(post.id);
+                                    }}
+                                  >
+                                    <div
+                                      className="post-comment-input-avatar"
+                                      style={{
+                                        backgroundColor: profilePicture
+                                          ? 'transparent'
+                                          : getAvatarColor(displayName || loggedInUser || 'User'),
+                                      }}
+                                    >
+                                      {profilePicture ? (
+                                        <img src={profilePicture} alt="User" />
+                                      ) : (
+                                        <span>{getInitials(displayName || loggedInUser || 'User')}</span>
+                                      )}
+                                    </div>
+                                    <input
+                                      type="text"
+                                      className="post-comment-input"
+                                      placeholder="Write a comment..."
+                                      value={commentInputs[post.id] || ''}
+                                      onChange={(e) => handleCommentInputChange(post.id, e.target.value)}
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="post-comment-submit-btn"
+                                      disabled={!(commentInputs[post.id] || '').trim()}
+                                    >
+                                      Post
+                                    </button>
+                                  </form>
+
+                                  <div className="post-comments-list">
+                                    {(post.comments || []).length === 0 ? (
+                                      <p className="post-comments-empty">No comments yet.</p>
+                                    ) : (
+                                      (post.comments || []).map((c) => (
+                                        <div key={c.id} className="post-comment-item">
+                                          <div
+                                            className="post-comment-author-avatar"
+                                            style={{
+                                              backgroundColor: c.authorAvatar
+                                                ? 'transparent'
+                                                : getAvatarColor(c.authorName || c.author || 'User'),
+                                            }}
+                                          >
+                                            {c.authorAvatar ? (
+                                              <img src={c.authorAvatar} alt={c.authorName || c.author} />
+                                            ) : (
+                                              <span>{getInitials(c.authorName || c.author || 'User')}</span>
+                                            )}
+                                          </div>
+                                          <div className="post-comment-body">
+                                            <div className="post-comment-bubble">
+                                              <span className="post-comment-author">{c.authorName || c.author}</span>
+                                              <p className="post-comment-text">{c.text}</p>
+                                            </div>
+                                            <span className="post-comment-time">{c.time || c.timestamp}</span>
+                                          </div>
+                                          {loggedInUser &&
+                                            String(c.author || '').toLowerCase() === String(loggedInUser).toLowerCase() && (
+                                              <button
+                                                type="button"
+                                                className="post-comment-delete-btn"
+                                                title="Delete comment"
+                                                onClick={() => handleDeleteComment(post.id, c.id)}
+                                              >
+                                                ×
+                                              </button>
+                                            )}
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Photos Tab */}
+                  {myProfileActiveTab === 'photos' && (
+                    <div className="profile-media-tab">
+                      {myPhotosPosts.length === 0 ? (
+                        <div className="profile-empty-state">
+                          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                          </svg>
+                          <h3>No photos uploaded</h3>
+                          <p>Photos you include in your posts will appear here in your gallery.</p>
+                          <button
+                            type="button"
+                            className="profile-btn profile-btn-primary"
+                            onClick={() => navigateTo('photo-sharing')}
+                          >
+                            Upload a Photo
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="profile-media-grid">
+                          {myPhotosPosts.map((p) => {
+                            const isVideo = Boolean(
+                              p.video ||
+                                p.mediaType === 'video' ||
+                                (p.media &&
+                                  (p.media.startsWith('data:video') ||
+                                    p.media.endsWith('.mp4') ||
+                                    p.media.endsWith('.webm') ||
+                                    p.media.endsWith('.mov') ||
+                                    p.media.includes('/video/')))
+                            );
+                            const imgUrl = !isVideo ? p.image || p.media : null;
+                            if (!imgUrl) return null;
+                            return (
+                              <div
+                                key={p.id}
+                                className="profile-media-item"
+                                onClick={() => setSelectedPostImageModal(imgUrl)}
+                                title="Click to expand"
+                              >
+                                <img src={imgUrl} alt="Photo" className="profile-media-thumb" loading="lazy" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Videos Tab */}
+                  {myProfileActiveTab === 'videos' && (
+                    <div className="profile-media-tab">
+                      {myVideosPosts.length === 0 ? (
+                        <div className="profile-empty-state">
+                          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                          <h3>No videos uploaded</h3>
+                          <p>Videos you post will be showcased here with full playback support.</p>
+                          <button
+                            type="button"
+                            className="profile-btn profile-btn-primary"
+                            onClick={() => navigateTo('video-sharing')}
+                          >
+                            Upload a Video
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="profile-videos-grid">
+                          {myVideosPosts.map((p) => {
+                            const videoUrl = p.video || p.media;
+                            return (
+                              <div key={p.id} className="profile-video-card">
+                                <video
+                                  src={videoUrl}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="profile-video-player"
+                                />
+                                {p.content && <p className="profile-video-caption">{p.content}</p>}
+                                <span className="profile-video-date">{p.time || p.timestamp}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* About Tab */}
+                  {myProfileActiveTab === 'about' && (
+                    <div className="profile-about-structured">
+                      {/* Biography */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span>Biography & Story</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <p className="profile-about-box-text">{aboutText || 'Hey there! I am using Assistance'}</p>
+                      </div>
+
+                      {/* Employment / Work Experience */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                            </svg>
+                            <span>Work & Employment</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <div className="profile-info-row-item">
+                          <span className="profile-info-row-label">Organization & Role</span>
+                          <span className="profile-info-row-val">{employmentText || 'Not specified'}</span>
+                        </div>
+                      </div>
+
+                      {/* Education */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                              <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                            </svg>
+                            <span>Education & Degrees</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <div className="profile-info-row-item">
+                          <span className="profile-info-row-label">Institution / Degree</span>
+                          <span className="profile-info-row-val">{educationText || 'Not specified'}</span>
+                        </div>
+                      </div>
+
+                      {/* Skills */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            <span>Skills & Expertise</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <div className="profile-tags-row">
+                          {skillsText ? (
+                            skillsText
+                              .split(/[,;\n]/)
+                              .map((s) => s.trim())
+                              .filter(Boolean)
+                              .map((skill, idx) => (
+                                <span key={`skill-ab-${idx}`} className="profile-pill-tag skill">
+                                  {skill}
+                                </span>
+                              ))
+                          ) : (
+                            <span className="profile-empty-muted">No skills added yet.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interests */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            <span>Interests & Passions</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <div className="profile-tags-row">
+                          {interestsText ? (
+                            interestsText
+                              .split(/[,;\n]/)
+                              .map((i) => i.trim())
+                              .filter(Boolean)
+                              .map((interest, idx) => (
+                                <span key={`interest-ab-${idx}`} className="profile-pill-tag interest">
+                                  {interest}
+                                </span>
+                              ))
+                          ) : (
+                            <span className="profile-empty-muted">No interests added yet.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contact & Links */}
+                      <div className="profile-about-box">
+                        <div className="profile-about-box-header">
+                          <h3 className="profile-about-box-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="2" y1="12" x2="22" y2="12"></line>
+                              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            <span>Contact & Presence</span>
+                          </h3>
+                          <button type="button" className="profile-inline-edit-btn" onClick={handleOpenEditProfileModal}>
+                            Edit
+                          </button>
+                        </div>
+                        <div className="profile-info-rows-list">
+                          <div className="profile-info-row-item">
+                            <span className="profile-info-row-label">Location</span>
+                            <span className="profile-info-row-val">{locationText || 'Not specified'}</span>
+                          </div>
+                          <div className="profile-info-row-item">
+                            <span className="profile-info-row-label">Website</span>
+                            <span className="profile-info-row-val">
+                              {websiteText ? (
+                                <a
+                                  href={websiteText.startsWith('http') ? websiteText : `https://${websiteText}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="profile-link"
+                                >
+                                  {websiteText}
+                                </a>
+                              ) : (
+                                'Not specified'
+                              )}
+                            </span>
+                          </div>
+                          <div className="profile-info-row-item">
+                            <span className="profile-info-row-label">Unique Handle</span>
+                            <span className="profile-info-row-val">@{loggedInUser}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit Profile Modal Dialog */}
+                {isEditProfileModalOpen && (
+                  <div className="profile-modal-overlay" onClick={() => setIsEditProfileModalOpen(false)}>
+                    <div className="profile-modal-dialog" onClick={(e) => e.stopPropagation()}>
+                      <div className="profile-modal-header">
+                        <h2>Edit Profile</h2>
+                        <button
+                          type="button"
+                          className="profile-modal-close"
+                          onClick={() => setIsEditProfileModalOpen(false)}
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      {fullProfileFeedback && (
+                        <div className={`profile-modal-alert ${fullProfileFeedback.type}`}>
+                          {fullProfileFeedback.text}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleSaveFullProfile} className="profile-modal-form">
+                        <div className="profile-form-group">
+                          <label htmlFor="edit-display-name">Display Name</label>
+                          <input
+                            type="text"
+                            id="edit-display-name"
+                            value={editProfileForm.displayName}
+                            onChange={(e) =>
+                              setEditProfileForm({ ...editProfileForm, displayName: e.target.value })
+                            }
+                            placeholder="Your full name"
+                          />
+                        </div>
+
+                        <div className="profile-form-group">
+                          <label htmlFor="edit-username-field">Unique Username</label>
+                          <div className="profile-input-prefix-wrap">
+                            <span className="profile-input-prefix">@</span>
+                            <input
+                              type="text"
+                              id="edit-username-field"
+                              value={editProfileForm.username}
+                              onChange={(e) =>
+                                setEditProfileForm({ ...editProfileForm, username: e.target.value })
+                              }
+                              placeholder="username"
+                            />
+                          </div>
+                          <small className="profile-field-hint">Your unique @handle across Assistance</small>
+                        </div>
+
+                        <div className="profile-form-group">
+                          <label htmlFor="edit-bio">Biography / Status</label>
+                          <textarea
+                            id="edit-bio"
+                            rows="3"
+                            value={editProfileForm.bio}
+                            onChange={(e) =>
+                              setEditProfileForm({ ...editProfileForm, bio: e.target.value })
+                            }
+                            placeholder="Tell the world about yourself..."
+                          />
+                        </div>
+
+                        <div className="profile-form-row">
+                          <div className="profile-form-group">
+                            <label htmlFor="edit-location">Location</label>
+                            <input
+                              type="text"
+                              id="edit-location"
+                              value={editProfileForm.location}
+                              onChange={(e) =>
+                                setEditProfileForm({ ...editProfileForm, location: e.target.value })
+                              }
+                              placeholder="e.g. San Francisco, CA"
+                            />
+                          </div>
+
+                          <div className="profile-form-group">
+                            <label htmlFor="edit-website">Website</label>
+                            <input
+                              type="text"
+                              id="edit-website"
+                              value={editProfileForm.website}
+                              onChange={(e) =>
+                                setEditProfileForm({ ...editProfileForm, website: e.target.value })
+                              }
+                              placeholder="https://yourwebsite.com"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="profile-form-row">
+                          <div className="profile-form-group">
+                            <label htmlFor="edit-employment">Employment</label>
+                            <input
+                              type="text"
+                              id="edit-employment"
+                              value={editProfileForm.employment}
+                              onChange={(e) =>
+                                setEditProfileForm({ ...editProfileForm, employment: e.target.value })
+                              }
+                              placeholder="Role / Company"
+                            />
+                          </div>
+
+                          <div className="profile-form-group">
+                            <label htmlFor="edit-education">Education</label>
+                            <input
+                              type="text"
+                              id="edit-education"
+                              value={editProfileForm.education}
+                              onChange={(e) =>
+                                setEditProfileForm({ ...editProfileForm, education: e.target.value })
+                              }
+                              placeholder="Degree / University"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="profile-form-group">
+                          <label htmlFor="edit-skills">Skills (comma-separated)</label>
+                          <input
+                            type="text"
+                            id="edit-skills"
+                            value={editProfileForm.skills}
+                            onChange={(e) =>
+                              setEditProfileForm({ ...editProfileForm, skills: e.target.value })
+                            }
+                            placeholder="e.g. React, Node.js, Python, UI/UX"
+                          />
+                        </div>
+
+                        <div className="profile-form-group">
+                          <label htmlFor="edit-interests">Interests (comma-separated)</label>
+                          <input
+                            type="text"
+                            id="edit-interests"
+                            value={editProfileForm.interests}
+                            onChange={(e) =>
+                              setEditProfileForm({ ...editProfileForm, interests: e.target.value })
+                            }
+                            placeholder="e.g. Open Source, Photography, AI"
+                          />
+                        </div>
+
+                        <div className="profile-modal-footer">
+                          <button
+                            type="button"
+                            className="profile-btn profile-btn-secondary"
+                            onClick={() => setIsEditProfileModalOpen(false)}
+                            disabled={isSavingFullProfile}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="profile-btn profile-btn-primary"
+                            disabled={isSavingFullProfile}
+                          >
+                            {isSavingFullProfile ? 'Saving Changes...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Followers & Following Modal Dialog */}
+                {followModalType && (
+                  <div className="profile-modal-overlay" onClick={() => setFollowModalType(null)}>
+                    <div className="profile-modal-dialog" onClick={(e) => e.stopPropagation()}>
+                      <div className="profile-modal-header">
+                        <h2>
+                          {followModalType === 'followers'
+                            ? `Followers (${followersList.length})`
+                            : `Following (${followingList.length})`}
+                        </h2>
+                        <button
+                          type="button"
+                          className="profile-modal-close"
+                          onClick={() => setFollowModalType(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      {/* Add follower / follow form */}
+                      <form
+                        className="profile-modal-follow-add"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (followModalType === 'followers') handleAddFollower(e);
+                          else handleFollowUser(e);
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder={
+                            followModalType === 'followers'
+                              ? 'Enter username to add follower...'
+                              : 'Enter username to follow...'
+                          }
+                          value={followModalType === 'followers' ? addFollowerInput : addFollowingInput}
+                          onChange={(e) => {
+                            if (followModalType === 'followers') setAddFollowerInput(e.target.value);
+                            else setAddFollowingInput(e.target.value);
+                          }}
+                        />
+                        <button type="submit" className="profile-btn profile-btn-primary">
+                          {followModalType === 'followers' ? 'Add' : 'Follow'}
+                        </button>
+                      </form>
+
+                      {followError && (
+                        <div className="profile-modal-alert error">{followError}</div>
+                      )}
+
+                      {/* Search Filter inside modal */}
+                      <div className="profile-modal-search">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Search in this list..."
+                          value={followSearchQuery}
+                          onChange={(e) => setFollowSearchQuery(e.target.value)}
+                        />
+                        {followSearchQuery && (
+                          <button type="button" onClick={() => setFollowSearchQuery('')}>
+                            ×
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="profile-modal-users-list">
+                        {(followModalType === 'followers' ? followersList : followingList)
+                          .filter(
+                            (u) =>
+                              !followSearchQuery.trim() ||
+                              u.toLowerCase().includes(followSearchQuery.toLowerCase())
+                          )
+                          .length === 0 ? (
+                          <p className="profile-empty-muted" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+                            {followSearchQuery
+                              ? 'No matching users found.'
+                              : followModalType === 'followers'
+                              ? 'No followers yet.'
+                              : 'Not following anyone yet.'}
+                          </p>
+                        ) : (
+                          (followModalType === 'followers' ? followersList : followingList)
+                            .filter(
+                              (u) =>
+                                !followSearchQuery.trim() ||
+                                u.toLowerCase().includes(followSearchQuery.toLowerCase())
+                            )
+                            .map((username) => (
+                              <div key={username} className="profile-modal-user-item">
+                                <div
+                                  className="profile-modal-user-avatar"
+                                  style={{ backgroundColor: getAvatarColor(username) }}
+                                >
+                                  {getInitials(username)}
+                                </div>
+                                <div className="profile-modal-user-info">
+                                  <span className="profile-modal-user-name">@{username}</span>
+                                </div>
+                                <div className="profile-modal-user-actions">
+                                  <button
+                                    type="button"
+                                    className="profile-btn profile-btn-secondary sm"
+                                    onClick={() => {
+                                      setFollowModalType(null);
+                                      handleOpenUserProfile({ username });
+                                    }}
+                                  >
+                                    View Home
+                                  </button>
+                                  {followModalType === 'following' ? (
+                                    <button
+                                      type="button"
+                                      className="profile-btn profile-btn-danger sm"
+                                      onClick={() => handleUnfollowUser(username)}
+                                    >
+                                      Unfollow
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="profile-btn profile-btn-danger sm"
+                                      onClick={() => handleRemoveFollower(username)}
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'social' ? (

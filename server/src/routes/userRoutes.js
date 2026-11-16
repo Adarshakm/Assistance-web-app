@@ -413,12 +413,15 @@ router.get('/profile/:username', async (req, res) => {
 // POST /api/users/update-profile-info
 router.post('/update-profile-info', async (req, res) => {
   try {
-    const { username, coverPhoto, location, website, education, employment, skills, interests, followers, following } = req.body;
+    const { username, displayName, status, avatar, coverPhoto, location, website, education, employment, skills, interests, followers, following } = req.body;
     if (!username || !username.trim()) {
       return res.status(400).json({ success: false, message: 'Username is required' });
     }
     const cleanUsername = username.trim().toLowerCase();
     const updateFields = {};
+    if (displayName !== undefined) updateFields.displayName = String(displayName).trim();
+    if (status !== undefined) updateFields.status = String(status).trim();
+    if (avatar !== undefined) updateFields.avatar = String(avatar).trim();
     if (coverPhoto !== undefined) updateFields.coverPhoto = String(coverPhoto).trim();
     if (location !== undefined) updateFields.location = String(location).trim();
     if (website !== undefined) updateFields.website = String(website).trim();
