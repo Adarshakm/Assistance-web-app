@@ -1028,8 +1028,17 @@ function App() {
     e.preventDefault();
     setLoginFeedback(null);
 
-    if (!loginUsername || !loginContact || !loginPassword) {
-      setLoginFeedback({ type: 'error', text: 'Please fill in all fields' });
+    const trimmedUsername = String(loginUsername || '').trim();
+    const trimmedContact = String(loginContact || '').trim();
+    const trimmedPassword = String(loginPassword || '').trim();
+
+    if (!trimmedUsername && !trimmedContact) {
+      setLoginFeedback({ type: 'error', text: 'Please enter your username, email, or phone number' });
+      return;
+    }
+
+    if (!trimmedPassword) {
+      setLoginFeedback({ type: 'error', text: 'Please enter your password' });
       return;
     }
 
@@ -1040,16 +1049,16 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: loginUsername,
-          contact: loginContact,
-          password: loginPassword,
+          username: trimmedUsername || trimmedContact,
+          contact: trimmedContact,
+          password: trimmedPassword,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        const activeUser = data.user?.username || loginUsername;
+        const activeUser = data.user?.username || trimmedUsername || trimmedContact;
         setLoggedInUser(activeUser);
         setActiveChatContact(null);
         setChatMessages({});
@@ -1067,7 +1076,7 @@ function App() {
         setLoginFeedback({ type: 'success', text: data.message || 'Logged in successfully!' });
         navigateTo('blank');
       } else {
-        setLoginFeedback({ type: 'error', text: data.message || 'Login failed' });
+        setLoginFeedback({ type: 'error', text: data.message || 'Login failed. Please check credentials.' });
       }
     } catch {
       setLoginFeedback({ type: 'error', text: 'Unable to connect to server. Please try again.' });
@@ -8277,31 +8286,37 @@ function App() {
           <form className="form-container" onSubmit={handleLoginSubmit}>
             <div className="form-group">
               <label htmlFor="login-username-input" className="input-label">
-                Username
+                Username or Email Address
               </label>
               <input
                 id="login-username-input"
                 type="text"
                 className="input-field"
-                placeholder="johndoe"
+                placeholder="Username or email"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="login-contact-input" className="input-label">
-                Email Address or Phone Number
+                Email Address or Phone Number (Optional)
               </label>
               <input
                 id="login-contact-input"
                 type="text"
                 className="input-field"
-                placeholder="name@example.com or +1 (555) 000-0000"
+                placeholder="name@example.com or phone (optional)"
                 value={loginContact}
                 onChange={(e) => setLoginContact(e.target.value)}
                 autoComplete="email tel"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
               />
             </div>
 

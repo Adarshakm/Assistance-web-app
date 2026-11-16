@@ -31,6 +31,10 @@ const resolveUserAliases = async (identifier = '') => {
     aliases.add(digits);
   }
 
+  if (mongoose.connection.readyState !== 1) {
+    return Array.from(aliases);
+  }
+
   try {
     const escaped = escapeRegex(raw);
     const query = {
