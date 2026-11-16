@@ -114,7 +114,8 @@ router.get('/', async (req, res) => {
         authorName: (user && user.displayName) || p.authorName || p.author,
         authorAvatar: (user && user.avatar) || p.authorAvatar || '',
         content: p.content,
-        media: p.media || '',
+        media: p.media || p.image || '',
+        image: p.image || p.media || '',
         likes: p.likes || [],
         likesCount: (p.likes || []).length,
         time: p.time || new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -133,18 +134,19 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/posts
- * Create a new post in "What's Happening Around You"
+ * Create a new post in feeds (text and/or image)
  */
 router.post('/', async (req, res) => {
   try {
-    const { author, content, authorName, authorAvatar, media = '' } = req.body || {};
+    const { author, content, authorName, authorAvatar, media = '', image = '' } = req.body || {};
 
     const rawAuthor = (author && String(author).trim()) || (authorName && String(authorName).trim()) || 'User';
     const cleanAuthor = rawAuthor.toLowerCase();
     const cleanContent = String(content || '').trim();
+    const finalMedia = String(media || image || '').trim();
 
-    if (!cleanContent) {
-      return res.status(400).json({ success: false, error: 'Post content cannot be empty' });
+    if (!cleanContent && !finalMedia) {
+      return res.status(400).json({ success: false, error: 'Post must contain text or an image' });
     }
 
     // Look up author info if not provided
@@ -169,14 +171,15 @@ router.post('/', async (req, res) => {
       authorName: finalAuthorName,
       authorAvatar: finalAuthorAvatar,
       content: cleanContent,
-      media: media || '',
+      media: finalMedia,
+      image: finalMedia,
       likes: [],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
 
     await newPost.save();
 
-    console.log(`[Post Created] New post by @${cleanAuthor}: "${cleanContent.slice(0, 30)}..."`);
+    console.log(`[Post Created] New post by @${cleanAuthor}: "${cleanContent.slice(0, 30)}..." [hasImage: ${Boolean(finalMedia)}]`);
 
     return res.status(201).json({
       success: true,
@@ -187,6 +190,7 @@ router.post('/', async (req, res) => {
         authorAvatar: newPost.authorAvatar,
         content: newPost.content,
         media: newPost.media,
+        image: newPost.media,
         likes: newPost.likes,
         likesCount: 0,
         time: newPost.time,
@@ -243,17 +247,13 @@ router.post('/:id/like', async (req, res) => {
 
 /**
  * PUT /api/posts/:id
- * Edit an existing post
+ * Edit an existing post (content and/or image)
  */
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, user, username } = req.body || {};
+    const { content, media, image, user, username } = req.body || {};
     const rawUser = user || username;
-
-    if (!content || !String(content).trim()) {
-      return res.status(400).json({ success: false, error: 'Post content cannot be empty' });
-    }
 
     if (!rawUser) {
       return res.status(401).json({ success: false, error: 'User must be logged in to edit post' });
@@ -269,7 +269,19 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized to edit this post' });
     }
 
-    post.content = String(content).trim();
+    if (content !== undefined) {
+      post.content = String(content || '').trim();
+    }
+    if (media !== undefined || image !== undefined) {
+      const updatedMedia = media !== undefined ? media : image;
+      post.media = String(updatedMedia || '').trim();
+      post.image = post.media;
+    }
+
+    if (!post.content && !post.media) {
+      return res.status(400).json({ success: false, error: 'Post must contain text or an image' });
+    }
+
     post.isEdited = true;
     post.editedAt = new Date();
 
@@ -287,6 +299,7 @@ router.put('/:id', async (req, res) => {
         authorAvatar: post.authorAvatar,
         content: post.content,
         media: post.media,
+        image: post.media,
         likes: post.likes,
         likesCount: (post.likes || []).length,
         time: post.time,

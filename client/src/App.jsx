@@ -821,14 +821,20 @@ function App() {
     }
   });
 
-  // Text posts state for "What's Happening Around You"
+  // Text & image posts state for feeds
   const [postContent, setPostContent] = useState('');
+  const [postImage, setPostImage] = useState(null);
+  const [isUploadingPostImage, setIsUploadingPostImage] = useState(false);
+  const postImageInputRef = useRef(null);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [postFeedback, setPostFeedback] = useState(null);
   const [editingPostId, setEditingPostId] = useState(null);
   const [editingPostContent, setEditingPostContent] = useState('');
+  const [editingPostImage, setEditingPostImage] = useState(null);
+  const editPostImageInputRef = useRef(null);
   const [isSavingPostEdit, setIsSavingPostEdit] = useState(false);
   const [editPostFeedback, setEditPostFeedback] = useState(null);
+  const [selectedPostImageModal, setSelectedPostImageModal] = useState(null);
   const [posts, setPosts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_posts');
@@ -1767,18 +1773,65 @@ function App() {
     } catch {}
   };
 
+  const handlePostImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('image/')) {
+      setPostFeedback({ type: 'error', text: 'Please select a valid image file (PNG, JPG, WebP, GIF).' });
+      return;
+    }
+    try {
+      setIsUploadingPostImage(true);
+      setPostFeedback(null);
+      const compressed = await compressImageFile(file, 1200, 0.85);
+      if (compressed) {
+        setPostImage(compressed);
+      } else {
+        setPostFeedback({ type: 'error', text: 'Failed to process selected image.' });
+      }
+    } catch {
+      setPostFeedback({ type: 'error', text: 'Could not load image.' });
+    } finally {
+      setIsUploadingPostImage(false);
+    }
+  };
+
+  const handleRemovePostImage = () => {
+    setPostImage(null);
+  };
+
+  const handleEditPostImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('image/')) {
+      setEditPostFeedback('Please select a valid image file (PNG, JPG, WebP, GIF).');
+      return;
+    }
+    try {
+      setEditPostFeedback(null);
+      const compressed = await compressImageFile(file, 1200, 0.85);
+      if (compressed) {
+        setEditingPostImage(compressed);
+      }
+    } catch {
+      setEditPostFeedback('Could not load image.');
+    }
+  };
+
   const handleCreatePost = async (e) => {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
     const trimmed = postContent.trim();
-    if (!trimmed || isSubmittingPost) return;
+    if ((!trimmed && !postImage) || isSubmittingPost || isUploadingPostImage) return;
 
     setIsSubmittingPost(true);
     setPostFeedback(null);
 
-    // Keep payload lightweight (< 1KB).
+    // Keep payload lightweight.
     // Never send multi-megabyte base64 strings in authorAvatar over mobile networks!
     const safeAvatar =
       profilePicture && typeof profilePicture === 'string' && profilePicture.length < 1000
@@ -1795,6 +1848,8 @@ function App() {
           author: loggedInUser || 'User',
           authorName: loggedInUser || 'User',
           content: trimmed,
+          media: postImage || '',
+          image: postImage || '',
           authorAvatar: safeAvatar,
         }),
       });
@@ -1806,6 +1861,7 @@ function App() {
         const postWithTag = { ...data.post, _localCreatedAt: Date.now() };
         setPosts((prev) => [postWithTag, ...prev.filter((p) => p.id !== data.post.id)]);
         setPostContent('');
+        setPostImage(null);
         setPostFeedback(null);
         try {
           localStorage.setItem(
@@ -1881,18 +1937,20 @@ function App() {
   const handleStartEditPost = (post) => {
     setEditingPostId(post.id);
     setEditingPostContent(post.content || '');
+    setEditingPostImage(post.media || post.image || null);
     setEditPostFeedback(null);
   };
 
   const handleCancelEditPost = () => {
     setEditingPostId(null);
     setEditingPostContent('');
+    setEditingPostImage(null);
     setEditPostFeedback(null);
   };
 
   const handleSaveEditPost = async (postId) => {
     const trimmed = editingPostContent.trim();
-    if (!trimmed || isSavingPostEdit) return;
+    if ((!trimmed && !editingPostImage) || isSavingPostEdit) return;
 
     setIsSavingPostEdit(true);
     setEditPostFeedback(null);
@@ -1903,6 +1961,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: trimmed,
+          media: editingPostImage || '',
+          image: editingPostImage || '',
           user: loggedInUser,
         }),
       });
@@ -1916,6 +1976,8 @@ function App() {
               ? {
                   ...p,
                   content: data.post.content,
+                  media: data.post.media,
+                  image: data.post.media,
                   isEdited: true,
                   editedAt: data.post.editedAt || new Date().toISOString(),
                 }
@@ -1929,6 +1991,8 @@ function App() {
               ? {
                   ...p,
                   content: data.post.content,
+                  media: data.post.media,
+                  image: data.post.media,
                   isEdited: true,
                   editedAt: data.post.editedAt || new Date().toISOString(),
                 }
@@ -1938,6 +2002,7 @@ function App() {
         } catch {}
         setEditingPostId(null);
         setEditingPostContent('');
+        setEditingPostImage(null);
       } else {
         const errorMsg =
           (data && (data.error || data.message)) ||
@@ -5932,13 +5997,56 @@ function App() {
                       {postFeedback.text}
                     </div>
                   )}
+
+                  {/* Image preview before posting */}
+                  {postImage && (
+                    <div className="create-post-preview">
+                      <img src={postImage} alt="Post preview" className="create-post-preview-img" />
+                      <button
+                        type="button"
+                        className="create-post-remove-img-btn"
+                        onClick={handleRemovePostImage}
+                        title="Remove image"
+                        aria-label="Remove image"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    ref={postImageInputRef}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handlePostImageSelect}
+                  />
+
                   <div className="create-post-actions">
+                    <button
+                      type="button"
+                      className="create-post-attach-btn"
+                      onClick={() => postImageInputRef.current?.click()}
+                      disabled={isSubmittingPost || isUploadingPostImage}
+                      title="Add an image to your post"
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                      </svg>
+                      <span>{isUploadingPostImage ? 'Processing...' : postImage ? 'Change Image' : 'Image'}</span>
+                    </button>
+
                     <button
                       type="button"
                       id="create-post-btn"
                       className="create-post-btn"
                       onClick={handleCreatePost}
-                      disabled={!postContent.trim() || isSubmittingPost}
+                      disabled={(!postContent.trim() && !postImage) || isSubmittingPost || isUploadingPostImage}
                     >
                       {isSubmittingPost ? 'Posting...' : 'Post'}
                     </button>
@@ -6105,32 +6213,88 @@ function App() {
                                   autoFocus
                                   aria-label="Edit post content"
                                 />
+                                {editingPostImage && (
+                                  <div className="post-edit-image-preview-wrap">
+                                    <img src={editingPostImage} alt="Post preview" className="post-edit-image-preview" />
+                                    <button
+                                      type="button"
+                                      className="post-edit-image-remove-btn"
+                                      onClick={() => setEditingPostImage(null)}
+                                      title="Remove image"
+                                      aria-label="Remove image"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  ref={editPostImageInputRef}
+                                  style={{ display: 'none' }}
+                                  onChange={handleEditPostImageSelect}
+                                />
                                 {editPostFeedback && (
                                   <div className="post-edit-feedback-error" role="alert">
                                     {editPostFeedback}
                                   </div>
                                 )}
-                                <div className="post-edit-actions">
+                                <div className="post-edit-actions-row">
                                   <button
                                     type="button"
-                                    className="post-edit-btn cancel"
-                                    onClick={handleCancelEditPost}
+                                    className="post-edit-attach-btn"
+                                    onClick={() => editPostImageInputRef.current?.click()}
                                     disabled={isSavingPostEdit}
+                                    title={editingPostImage ? "Change image" : "Add image"}
                                   >
-                                    Cancel
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                      <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                    <span>{editingPostImage ? 'Change Image' : 'Add Image'}</span>
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="post-edit-btn save"
-                                    onClick={() => handleSaveEditPost(post.id)}
-                                    disabled={!editingPostContent.trim() || isSavingPostEdit}
-                                  >
-                                    {isSavingPostEdit ? 'Saving...' : 'Save'}
-                                  </button>
+                                  <div className="post-edit-actions">
+                                    <button
+                                      type="button"
+                                      className="post-edit-btn cancel"
+                                      onClick={handleCancelEditPost}
+                                      disabled={isSavingPostEdit}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="post-edit-btn save"
+                                      onClick={() => handleSaveEditPost(post.id)}
+                                      disabled={(!editingPostContent.trim() && !editingPostImage) || isSavingPostEdit}
+                                    >
+                                      {isSavingPostEdit ? 'Saving...' : 'Save'}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ) : (
-                              <p className="post-content">{post.content}</p>
+                              <>
+                                {post.content && <p className="post-content">{post.content}</p>}
+                                {(post.media || post.image) && (
+                                  <div
+                                    className="post-media-wrap"
+                                    onClick={() => setSelectedPostImageModal(post.media || post.image)}
+                                    title="Click to view full image"
+                                  >
+                                    <img
+                                      src={post.media || post.image}
+                                      alt="Post attachment"
+                                      className="post-media-image"
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                )}
+                              </>
                             )}
 
                             <div className="post-footer">
@@ -6184,6 +6348,30 @@ function App() {
                     </div>
                   );
                 })()}
+
+                {/* Fullscreen Post Image Modal / Lightbox */}
+                {selectedPostImageModal && (
+                  <div
+                    className="post-image-modal-backdrop"
+                    onClick={() => setSelectedPostImageModal(null)}
+                  >
+                    <div className="post-image-modal-content" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="post-image-modal-close-btn"
+                        onClick={() => setSelectedPostImageModal(null)}
+                        title="Close image"
+                        aria-label="Close image"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                      <img src={selectedPostImageModal} alt="Enlarged view" className="post-image-modal-img" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : currentView === 'photo-sharing' ? (
