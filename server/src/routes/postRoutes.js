@@ -118,6 +118,7 @@ router.get('/', async (req, res) => {
         p.mediaType === 'video' ||
         (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov')))
       );
+      const mediaPayload = isVideo ? (p.video || p.media || '') : (p.image || p.media || '');
       const comments = Array.isArray(p.comments)
         ? p.comments.map((c) => {
             const commentUser = userMap.get(String(c.author).toLowerCase());
@@ -141,10 +142,10 @@ router.get('/', async (req, res) => {
         authorName: (user && user.displayName) || p.authorName || p.author,
         authorAvatar: (user && user.avatar) || p.authorAvatar || '',
         content: p.content,
-        media: p.media || p.image || p.video || '',
-        image: p.image || (isVideo ? '' : p.media) || '',
-        video: p.video || (isVideo ? p.media : '') || '',
-        mediaType: p.mediaType || (isVideo ? 'video' : (p.image || p.media) ? 'image' : ''),
+        media: mediaPayload,
+        image: !isVideo ? mediaPayload : '',
+        video: isVideo ? mediaPayload : '',
+        mediaType: p.mediaType || (isVideo ? 'video' : mediaPayload ? 'image' : ''),
         likes: p.likes || [],
         likesCount: (p.likes || []).length,
         comments,
@@ -206,7 +207,9 @@ router.post('/', async (req, res) => {
 
     const u = await User.findOne({ username: { $regex: '^' + escapeRegex(cleanAuthor) + '$', $options: 'i' } })
       .select('displayName avatar username')
-      .lean();
+      .maxTimeMS(3000)
+      .lean()
+      .catch(() => null);
     if (u) {
       if (!authorName || finalAuthorName.toLowerCase() === cleanAuthor) {
         finalAuthorName = u.displayName || u.username || rawAuthor;
@@ -456,7 +459,9 @@ router.post('/:id/comments', async (req, res) => {
 
     const u = await User.findOne({ username: { $regex: '^' + escapeRegex(cleanAuthor) + '$', $options: 'i' } })
       .select('displayName avatar username')
-      .lean();
+      .maxTimeMS(3000)
+      .lean()
+      .catch(() => null);
     if (u) {
       if (!authorName || finalAuthorName.toLowerCase() === cleanAuthor) {
         finalAuthorName = u.displayName || u.username || rawAuthor;

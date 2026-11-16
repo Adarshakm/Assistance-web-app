@@ -863,10 +863,17 @@ function App() {
     }
   }, [postFeedback]);
 
+  const isFetchingPostsRef = useRef(false);
+
   // Fetch posts from backend and poll for real-time updates across all users
   const fetchPosts = async () => {
+    if (isFetchingPostsRef.current) return;
+    isFetchingPostsRef.current = true;
     try {
-      const res = await fetch(`/api/posts?_t=${Date.now()}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`/api/posts?_t=${Date.now()}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.posts)) {
@@ -879,20 +886,41 @@ function App() {
             return [...localPending, ...data.posts];
           });
           try {
-            localStorage.setItem('assistance_posts', JSON.stringify(data.posts));
+            // Protect localStorage (5MB browser limit) by stripping heavy media strings
+            const lightForStorage = data.posts.slice(0, 30).map((p) => ({
+              ...p,
+              video: '',
+              media: p.media && p.media.length > 50000 ? '' : p.media,
+              image: p.image && p.image.length > 50000 ? '' : p.image,
+            }));
+            localStorage.setItem('assistance_posts', JSON.stringify(lightForStorage));
           } catch {}
         }
       }
-    } catch (err) {
+    } catch {
       // ignore network errors
+    } finally {
+      isFetchingPostsRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchPosts();
-    // Poll every 3 seconds so posts from any user appear in real time for everyone
-    const interval = setInterval(fetchPosts, 3000);
-    return () => clearInterval(interval);
+    let isCancelled = false;
+    let timer = null;
+
+    const poll = async () => {
+      await fetchPosts();
+      if (!isCancelled) {
+        timer = setTimeout(poll, 4000);
+      }
+    };
+
+    poll();
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [currentView]);
 
   // Photo and Image Sharing state
@@ -1932,15 +1960,42 @@ function App() {
     setIsSubmittingPost(true);
     setPostFeedback(null);
 
-    // Keep payload lightweight.
-    // Never send multi-megabyte base64 strings in authorAvatar over mobile networks!
     const safeAvatar =
-      profilePicture && typeof profilePicture === 'string' && profilePicture.length < 1000
+      profilePicture && typeof profilePicture === 'string' && profilePicture.length < 50000
         ? profilePicture
         : '';
 
     const mediaType = postVideo ? 'video' : postImage ? 'image' : '';
     const mediaPayload = postVideo || postImage || '';
+
+    // Optimistic UI: insert post immediately into feed so user sees it instantly (0ms delay)
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimisticPost = {
+      id: tempId,
+      author: loggedInUser || 'User',
+      authorName: loggedInUser || 'User',
+      authorAvatar: safeAvatar,
+      content: trimmed,
+      media: mediaPayload,
+      image: postImage || '',
+      video: postVideo || '',
+      mediaType,
+      likes: [],
+      likesCount: 0,
+      comments: [],
+      commentsCount: 0,
+      time: 'Just now',
+      createdAt: new Date().toISOString(),
+      _localCreatedAt: Date.now(),
+    };
+
+    setPosts((prev) => [optimisticPost, ...prev]);
+    setPostContent('');
+    setPostImage(null);
+    setPostVideo(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const res = await fetch('/api/posts', {
@@ -1958,25 +2013,20 @@ function App() {
           mediaType,
           authorAvatar: safeAvatar,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => null);
 
       if (res.ok && data && data.success && data.post) {
-        // Tag with local creation timestamp to protect from any immediate polling race condition
         const postWithTag = { ...data.post, _localCreatedAt: Date.now() };
-        setPosts((prev) => [postWithTag, ...prev.filter((p) => p.id !== data.post.id)]);
-        setPostContent('');
-        setPostImage(null);
-        setPostVideo(null);
-        setPostFeedback(null);
-        try {
-          localStorage.setItem(
-            'assistance_posts',
-            JSON.stringify([data.post, ...posts.filter((p) => p.id !== data.post.id)])
-          );
-        } catch {}
+        setPosts((prev) =>
+          prev.map((p) => (p.id === tempId ? postWithTag : p))
+        );
       } else {
+        // Rollback optimistic post on error
+        setPosts((prev) => prev.filter((p) => p.id !== tempId));
         const errMsg =
           (data && (data.error || data.message)) ||
           `Failed to publish post (Server HTTP ${res.status}).`;
@@ -1984,12 +2034,18 @@ function App() {
         setPostFeedback({ type: 'error', text: errMsg });
       }
     } catch (err) {
+      clearTimeout(timeoutId);
+      // Rollback on network failure
+      setPosts((prev) => prev.filter((p) => p.id !== tempId));
       console.error('[Create Post Network Error]:', err);
       setPostFeedback({
         type: 'error',
-        text: 'Network error while posting. Please check your connection and tap Post again.',
+        text: err.name === 'AbortError'
+          ? 'Post request timed out. Please check your connection and try again.'
+          : 'Network error while posting. Please check your connection and tap Post again.',
       });
     } finally {
+      clearTimeout(timeoutId);
       setIsSubmittingPost(false);
     }
   };
