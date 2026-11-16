@@ -1,5 +1,35 @@
 import mongoose from 'mongoose';
 
+const commentSchema = new mongoose.Schema(
+  {
+    author: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+    },
+    authorName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    authorAvatar: {
+      type: String,
+      default: '',
+    },
+    content: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true }
+);
+
 const postSchema = new mongoose.Schema(
   {
     author: {
@@ -31,8 +61,20 @@ const postSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    video: {
+      type: String,
+      default: '',
+    },
+    mediaType: {
+      type: String,
+      default: '',
+    },
     likes: {
       type: [String],
+      default: [],
+    },
+    comments: {
+      type: [commentSchema],
       default: [],
     },
     time: {

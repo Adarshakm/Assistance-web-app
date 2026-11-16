@@ -94,7 +94,12 @@ router.get('/', async (req, res) => {
     const rawPosts = await Post.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
 
     // Collect unique author usernames to fetch latest avatars & display names
-    const authors = [...new Set(rawPosts.map((p) => p.author).filter(Boolean))];
+    const authors = [
+      ...new Set([
+        ...rawPosts.map((p) => p.author),
+        ...rawPosts.flatMap((p) => (p.comments || []).map((c) => c.author)),
+      ].filter(Boolean)),
+    ];
     const users = await User.find({
       username: { $in: authors.map((a) => new RegExp('^' + escapeRegex(a) + '$', 'i')) },
     })
@@ -108,16 +113,42 @@ router.get('/', async (req, res) => {
 
     const posts = rawPosts.map((p) => {
       const user = userMap.get(String(p.author).toLowerCase());
+      const isVideo = Boolean(
+        p.video ||
+        p.mediaType === 'video' ||
+        (p.media && (p.media.startsWith('data:video') || p.media.endsWith('.mp4') || p.media.endsWith('.webm') || p.media.endsWith('.mov')))
+      );
+      const comments = Array.isArray(p.comments)
+        ? p.comments.map((c) => {
+            const commentUser = userMap.get(String(c.author).toLowerCase());
+            return {
+              id: c._id ? c._id.toString() : c.id,
+              author: c.author,
+              authorName: (commentUser && commentUser.displayName) || c.authorName || c.author,
+              authorAvatar: (commentUser && commentUser.avatar) || c.authorAvatar || '',
+              content: c.content,
+              createdAt: c.createdAt,
+              time: c.createdAt
+                ? new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '',
+            };
+          })
+        : [];
+
       return {
         id: p._id.toString(),
         author: p.author,
         authorName: (user && user.displayName) || p.authorName || p.author,
         authorAvatar: (user && user.avatar) || p.authorAvatar || '',
         content: p.content,
-        media: p.media || p.image || '',
-        image: p.image || p.media || '',
+        media: p.media || p.image || p.video || '',
+        image: p.image || (isVideo ? '' : p.media) || '',
+        video: p.video || (isVideo ? p.media : '') || '',
+        mediaType: p.mediaType || (isVideo ? 'video' : (p.image || p.media) ? 'image' : ''),
         likes: p.likes || [],
         likesCount: (p.likes || []).length,
+        comments,
+        commentsCount: comments.length,
         time: p.time || new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isEdited: p.isEdited || false,
         editedAt: p.editedAt || null,
@@ -134,19 +165,38 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/posts
- * Create a new post in feeds (text and/or image)
+ * Create a new post in feeds (text, image, and/or video)
  */
 router.post('/', async (req, res) => {
   try {
-    const { author, content, authorName, authorAvatar, media = '', image = '' } = req.body || {};
+    const { author, content, authorName, authorAvatar, media = '', image = '', video = '', mediaType = '' } = req.body || {};
 
     const rawAuthor = (author && String(author).trim()) || (authorName && String(authorName).trim()) || 'User';
     const cleanAuthor = rawAuthor.toLowerCase();
     const cleanContent = String(content || '').trim();
-    const finalMedia = String(media || image || '').trim();
 
-    if (!cleanContent && !finalMedia) {
-      return res.status(400).json({ success: false, error: 'Post must contain text or an image' });
+    let finalVideo = String(video || '').trim();
+    let finalImage = String(image || '').trim();
+    let finalMedia = String(media || '').trim();
+    let finalMediaType = String(mediaType || '').trim();
+
+    if (!finalVideo && (finalMediaType === 'video' || (finalMedia && (finalMedia.startsWith('data:video') || finalMedia.endsWith('.mp4') || finalMedia.endsWith('.webm') || finalMedia.endsWith('.mov'))))) {
+      finalVideo = finalMedia;
+      finalMediaType = 'video';
+    }
+    if (!finalImage && (finalMediaType === 'image' || (!finalVideo && finalMedia))) {
+      finalImage = finalMedia;
+      if (!finalMediaType) finalMediaType = 'image';
+    }
+    if (!finalMedia) {
+      finalMedia = finalVideo || finalImage || '';
+    }
+    if (!finalMediaType) {
+      finalMediaType = finalVideo ? 'video' : finalImage ? 'image' : '';
+    }
+
+    if (!cleanContent && !finalMedia && !finalImage && !finalVideo) {
+      return res.status(400).json({ success: false, error: 'Post must contain text, an image, or a video' });
     }
 
     // Look up author info if not provided
@@ -172,14 +222,16 @@ router.post('/', async (req, res) => {
       authorAvatar: finalAuthorAvatar,
       content: cleanContent,
       media: finalMedia,
-      image: finalMedia,
+      image: finalImage,
+      video: finalVideo,
+      mediaType: finalMediaType,
       likes: [],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
 
     await newPost.save();
 
-    console.log(`[Post Created] New post by @${cleanAuthor}: "${cleanContent.slice(0, 30)}..." [hasImage: ${Boolean(finalMedia)}]`);
+    console.log(`[Post Created] New post by @${cleanAuthor}: "${cleanContent.slice(0, 30)}..." [type: ${finalMediaType || 'text'}]`);
 
     return res.status(201).json({
       success: true,
@@ -190,9 +242,13 @@ router.post('/', async (req, res) => {
         authorAvatar: newPost.authorAvatar,
         content: newPost.content,
         media: newPost.media,
-        image: newPost.media,
+        image: newPost.image,
+        video: newPost.video,
+        mediaType: newPost.mediaType,
         likes: newPost.likes,
         likesCount: 0,
+        comments: [],
+        commentsCount: 0,
         time: newPost.time,
         createdAt: newPost.createdAt,
       },
@@ -247,12 +303,12 @@ router.post('/:id/like', async (req, res) => {
 
 /**
  * PUT /api/posts/:id
- * Edit an existing post (content and/or image)
+ * Edit an existing post (content, image, and/or video)
  */
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, media, image, user, username } = req.body || {};
+    const { content, media, image, video, mediaType, user, username } = req.body || {};
     const rawUser = user || username;
 
     if (!rawUser) {
@@ -272,14 +328,28 @@ router.put('/:id', async (req, res) => {
     if (content !== undefined) {
       post.content = String(content || '').trim();
     }
-    if (media !== undefined || image !== undefined) {
-      const updatedMedia = media !== undefined ? media : image;
-      post.media = String(updatedMedia || '').trim();
-      post.image = post.media;
+    if (video !== undefined) {
+      post.video = String(video || '').trim();
+    }
+    if (image !== undefined) {
+      post.image = String(image || '').trim();
+    }
+    if (media !== undefined) {
+      post.media = String(media || '').trim();
+    }
+    if (mediaType !== undefined) {
+      post.mediaType = String(mediaType || '').trim();
+    } else if (post.video) {
+      post.mediaType = 'video';
+    } else if (post.image) {
+      post.mediaType = 'image';
+    }
+    if (!post.media) {
+      post.media = post.video || post.image || '';
     }
 
-    if (!post.content && !post.media) {
-      return res.status(400).json({ success: false, error: 'Post must contain text or an image' });
+    if (!post.content && !post.media && !post.image && !post.video) {
+      return res.status(400).json({ success: false, error: 'Post must contain text, an image, or a video' });
     }
 
     post.isEdited = true;
@@ -299,9 +369,21 @@ router.put('/:id', async (req, res) => {
         authorAvatar: post.authorAvatar,
         content: post.content,
         media: post.media,
-        image: post.media,
+        image: post.image,
+        video: post.video,
+        mediaType: post.mediaType,
         likes: post.likes,
         likesCount: (post.likes || []).length,
+        comments: (post.comments || []).map((c) => ({
+          id: c._id ? c._id.toString() : c.id,
+          author: c.author,
+          authorName: c.authorName || c.author,
+          authorAvatar: c.authorAvatar || '',
+          content: c.content,
+          createdAt: c.createdAt,
+          time: c.createdAt ? new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        })),
+        commentsCount: (post.comments || []).length,
         time: post.time,
         isEdited: post.isEdited,
         editedAt: post.editedAt,
@@ -344,6 +426,126 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('[Post Route Error - DELETE]:', err);
     return res.status(500).json({ error: 'Failed to delete post', details: err.message });
+  }
+});
+
+/**
+ * POST /api/posts/:id/comments
+ * Add a comment to a post
+ */
+router.post('/:id/comments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, author, authorName, authorAvatar, username } = req.body || {};
+    const rawAuthor = author || username || 'User';
+    const cleanAuthor = String(rawAuthor).trim().toLowerCase();
+    const cleanContent = String(content || '').trim();
+
+    if (!cleanContent) {
+      return res.status(400).json({ success: false, error: 'Comment content cannot be empty' });
+    }
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+
+    // Look up author info to get latest displayName and avatar
+    let finalAuthorName = (authorName && String(authorName).trim()) || rawAuthor;
+    let finalAuthorAvatar = (authorAvatar && typeof authorAvatar === 'string' && authorAvatar.length < 50000) ? authorAvatar : '';
+
+    const u = await User.findOne({ username: { $regex: '^' + escapeRegex(cleanAuthor) + '$', $options: 'i' } })
+      .select('displayName avatar username')
+      .lean();
+    if (u) {
+      if (!authorName || finalAuthorName.toLowerCase() === cleanAuthor) {
+        finalAuthorName = u.displayName || u.username || rawAuthor;
+      }
+      if (!finalAuthorAvatar && u.avatar) {
+        finalAuthorAvatar = u.avatar;
+      }
+    }
+
+    const commentDoc = {
+      author: cleanAuthor,
+      authorName: finalAuthorName,
+      authorAvatar: finalAuthorAvatar,
+      content: cleanContent,
+      createdAt: new Date(),
+    };
+
+    if (!Array.isArray(post.comments)) {
+      post.comments = [];
+    }
+
+    post.comments.push(commentDoc);
+    await post.save();
+
+    const savedComment = post.comments[post.comments.length - 1];
+
+    console.log(`[Comment Added] Comment on post ${id} by @${cleanAuthor}: "${cleanContent.slice(0, 30)}..."`);
+
+    return res.status(201).json({
+      success: true,
+      comment: {
+        id: savedComment._id.toString(),
+        author: savedComment.author,
+        authorName: savedComment.authorName,
+        authorAvatar: savedComment.authorAvatar,
+        content: savedComment.content,
+        createdAt: savedComment.createdAt,
+        time: new Date(savedComment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+      commentsCount: post.comments.length,
+    });
+  } catch (err) {
+    console.error('[Post Route Error - POST /:id/comments]:', err);
+    return res.status(500).json({ success: false, error: 'Failed to add comment', details: err.message });
+  }
+});
+
+/**
+ * DELETE /api/posts/:postId/comments/:commentId
+ * Delete a comment from a post
+ */
+router.delete('/:postId/comments/:commentId', async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const rawUser = req.query.user || req.body.user || req.query.username || req.body.username;
+    const cleanUser = rawUser ? String(rawUser).trim().toLowerCase() : '';
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ success: false, error: 'Post not found' });
+    }
+
+    if (!Array.isArray(post.comments)) {
+      return res.status(404).json({ success: false, error: 'Comment not found' });
+    }
+
+    const comment = post.comments.id ? post.comments.id(commentId) : post.comments.find((c) => c._id.toString() === commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, error: 'Comment not found' });
+    }
+
+    // Check authorization: must be comment author or post author
+    if (cleanUser && comment.author !== cleanUser && post.author !== cleanUser) {
+      return res.status(403).json({ success: false, error: 'Not authorized to delete this comment' });
+    }
+
+    post.comments = post.comments.filter((c) => c._id.toString() !== commentId);
+    await post.save();
+
+    console.log(`[Comment Deleted] Comment ${commentId} on post ${postId} deleted by @${cleanUser || 'user'}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Comment deleted successfully',
+      commentsCount: post.comments.length,
+    });
+  } catch (err) {
+    console.error('[Post Route Error - DELETE /:postId/comments/:commentId]:', err);
+    return res.status(500).json({ success: false, error: 'Failed to delete comment', details: err.message });
   }
 });
 

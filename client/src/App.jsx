@@ -821,17 +821,22 @@ function App() {
     }
   });
 
-  // Text & image posts state for feeds
+  // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
   const [isUploadingPostImage, setIsUploadingPostImage] = useState(false);
   const postImageInputRef = useRef(null);
+  const [postVideo, setPostVideo] = useState(null);
+  const [isUploadingPostVideo, setIsUploadingPostVideo] = useState(false);
+  const postVideoInputRef = useRef(null);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [postFeedback, setPostFeedback] = useState(null);
   const [editingPostId, setEditingPostId] = useState(null);
   const [editingPostContent, setEditingPostContent] = useState('');
   const [editingPostImage, setEditingPostImage] = useState(null);
   const editPostImageInputRef = useRef(null);
+  const [editingPostVideo, setEditingPostVideo] = useState(null);
+  const editPostVideoInputRef = useRef(null);
   const [isSavingPostEdit, setIsSavingPostEdit] = useState(false);
   const [editPostFeedback, setEditPostFeedback] = useState(null);
   const [selectedPostImageModal, setSelectedPostImageModal] = useState(null);
@@ -843,6 +848,12 @@ function App() {
       return [];
     }
   });
+
+  // Post Comments state
+  const [openCommentsPosts, setOpenCommentsPosts] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
+  const [submittingCommentPostIds, setSubmittingCommentPostIds] = useState({});
+  const [deletingCommentIds, setDeletingCommentIds] = useState({});
 
   // Automatically clear post feedback after 6 seconds
   useEffect(() => {
@@ -1787,6 +1798,7 @@ function App() {
       const compressed = await compressImageFile(file, 1200, 0.85);
       if (compressed) {
         setPostImage(compressed);
+        setPostVideo(null);
       } else {
         setPostFeedback({ type: 'error', text: 'Failed to process selected image.' });
       }
@@ -1799,6 +1811,51 @@ function App() {
 
   const handleRemovePostImage = () => {
     setPostImage(null);
+  };
+
+  const handlePostVideoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('video/')) {
+      setPostFeedback({ type: 'error', text: 'Please select a valid video file (MP4, WebM, MOV, etc.).' });
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setPostFeedback({
+        type: 'error',
+        text: `Video file is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please choose a video under 15MB.`,
+      });
+      return;
+    }
+
+    try {
+      setIsUploadingPostVideo(true);
+      setPostFeedback(null);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result;
+        if (typeof dataUrl === 'string') {
+          setPostVideo(dataUrl);
+          setPostImage(null);
+        } else {
+          setPostFeedback({ type: 'error', text: 'Failed to read video file.' });
+        }
+        setIsUploadingPostVideo(false);
+      };
+      reader.onerror = () => {
+        setPostFeedback({ type: 'error', text: 'Could not load video.' });
+        setIsUploadingPostVideo(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setPostFeedback({ type: 'error', text: 'Error reading video.' });
+      setIsUploadingPostVideo(false);
+    }
+  };
+
+  const handleRemovePostVideo = () => {
+    setPostVideo(null);
   };
 
   const handleEditPostImageSelect = async (e) => {
@@ -1814,10 +1871,35 @@ function App() {
       const compressed = await compressImageFile(file, 1200, 0.85);
       if (compressed) {
         setEditingPostImage(compressed);
+        setEditingPostVideo(null);
       }
     } catch {
       setEditPostFeedback('Could not load image.');
     }
+  };
+
+  const handleEditPostVideoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (!file.type.startsWith('video/')) {
+      setEditPostFeedback('Please select a valid video file (MP4, WebM, MOV, etc.).');
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setEditPostFeedback(`Video file is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please select a video under 15MB.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result;
+      if (typeof dataUrl === 'string') {
+        setEditingPostVideo(dataUrl);
+        setEditingPostImage(null);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleCreatePost = async (e) => {
@@ -1826,7 +1908,7 @@ function App() {
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
     const trimmed = postContent.trim();
-    if ((!trimmed && !postImage) || isSubmittingPost || isUploadingPostImage) return;
+    if ((!trimmed && !postImage && !postVideo) || isSubmittingPost || isUploadingPostImage || isUploadingPostVideo) return;
 
     setIsSubmittingPost(true);
     setPostFeedback(null);
@@ -1838,6 +1920,9 @@ function App() {
         ? profilePicture
         : '';
 
+    const mediaType = postVideo ? 'video' : postImage ? 'image' : '';
+    const mediaPayload = postVideo || postImage || '';
+
     try {
       const res = await fetch('/api/posts', {
         method: 'POST',
@@ -1848,8 +1933,10 @@ function App() {
           author: loggedInUser || 'User',
           authorName: loggedInUser || 'User',
           content: trimmed,
-          media: postImage || '',
+          media: mediaPayload,
           image: postImage || '',
+          video: postVideo || '',
+          mediaType,
           authorAvatar: safeAvatar,
         }),
       });
@@ -1862,6 +1949,7 @@ function App() {
         setPosts((prev) => [postWithTag, ...prev.filter((p) => p.id !== data.post.id)]);
         setPostContent('');
         setPostImage(null);
+        setPostVideo(null);
         setPostFeedback(null);
         try {
           localStorage.setItem(
@@ -1934,10 +2022,172 @@ function App() {
     }
   };
 
+  const toggleComments = (postId) => {
+    setOpenCommentsPosts((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
+  const handleAddComment = async (postId) => {
+    if (!loggedInUser || !postId) return;
+    const content = (commentInputs[postId] || '').trim();
+    if (!content || submittingCommentPostIds[postId]) return;
+
+    const tempCommentId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const safeAvatar = profilePicture && typeof profilePicture === 'string' && profilePicture.length < 50000
+      ? profilePicture
+      : '';
+    const newCommentObj = {
+      id: tempCommentId,
+      author: loggedInUser,
+      authorName: loggedInUser,
+      authorAvatar: safeAvatar,
+      content,
+      createdAt: new Date().toISOString(),
+      time: 'Just now',
+    };
+
+    // Optimistically add comment to posts state
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          const prevComments = Array.isArray(p.comments) ? p.comments : [];
+          return {
+            ...p,
+            comments: [...prevComments, newCommentObj],
+            commentsCount: prevComments.length + 1,
+          };
+        }
+        return p;
+      })
+    );
+
+    // Clear input for this post immediately
+    setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
+    setSubmittingCommentPostIds((prev) => ({ ...prev, [postId]: true }));
+
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          author: loggedInUser,
+          authorName: loggedInUser,
+          authorAvatar: safeAvatar,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.comment) {
+          setPosts((prev) =>
+            prev.map((p) => {
+              if (p.id === postId) {
+                const updatedComments = (p.comments || []).map((c) =>
+                  c.id === tempCommentId ? data.comment : c
+                );
+                return {
+                  ...p,
+                  comments: updatedComments,
+                  commentsCount: data.commentsCount || updatedComments.length,
+                };
+              }
+              return p;
+            })
+          );
+        }
+      } else {
+        // Rollback optimistic comment on failure
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === postId) {
+              const rolledBack = (p.comments || []).filter((c) => c.id !== tempCommentId);
+              return {
+                ...p,
+                comments: rolledBack,
+                commentsCount: rolledBack.length,
+              };
+            }
+            return p;
+          })
+        );
+      }
+    } catch (err) {
+      console.error('[Add Comment Error]:', err);
+      // Rollback on network failure
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id === postId) {
+            const rolledBack = (p.comments || []).filter((c) => c.id !== tempCommentId);
+            return {
+              ...p,
+              comments: rolledBack,
+              commentsCount: rolledBack.length,
+            };
+          }
+          return p;
+        })
+      );
+    } finally {
+      setSubmittingCommentPostIds((prev) => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!loggedInUser || !postId || !commentId) return;
+
+    setDeletingCommentIds((prev) => ({ ...prev, [commentId]: true }));
+
+    // Keep reference in case rollback is needed
+    let previousComments = [];
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          previousComments = p.comments || [];
+          const updated = previousComments.filter((c) => (c.id || c._id) !== commentId);
+          return {
+            ...p,
+            comments: updated,
+            commentsCount: updated.length,
+          };
+        }
+        return p;
+      })
+    );
+
+    try {
+      const res = await fetch(
+        `/api/posts/${postId}/comments/${commentId}?user=${encodeURIComponent(loggedInUser)}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) {
+        // Rollback if delete rejected
+        setPosts((prev) =>
+          prev.map((p) => (p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p))
+        );
+      }
+    } catch (err) {
+      console.error('[Delete Comment Error]:', err);
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, comments: previousComments, commentsCount: previousComments.length } : p))
+      );
+    } finally {
+      setDeletingCommentIds((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
   const handleStartEditPost = (post) => {
     setEditingPostId(post.id);
     setEditingPostContent(post.content || '');
-    setEditingPostImage(post.media || post.image || null);
+    const isVideo = Boolean(
+      post.video ||
+      post.mediaType === 'video' ||
+      (post.media && (post.media.startsWith('data:video') || post.media.endsWith('.mp4') || post.media.endsWith('.webm') || post.media.endsWith('.mov')))
+    );
+    setEditingPostVideo(isVideo ? (post.video || post.media) : null);
+    setEditingPostImage(!isVideo ? (post.image || post.media || null) : null);
     setEditPostFeedback(null);
   };
 
@@ -1945,15 +2195,19 @@ function App() {
     setEditingPostId(null);
     setEditingPostContent('');
     setEditingPostImage(null);
+    setEditingPostVideo(null);
     setEditPostFeedback(null);
   };
 
   const handleSaveEditPost = async (postId) => {
     const trimmed = editingPostContent.trim();
-    if ((!trimmed && !editingPostImage) || isSavingPostEdit) return;
+    if ((!trimmed && !editingPostImage && !editingPostVideo) || isSavingPostEdit) return;
 
     setIsSavingPostEdit(true);
     setEditPostFeedback(null);
+
+    const mediaType = editingPostVideo ? 'video' : editingPostImage ? 'image' : '';
+    const mediaPayload = editingPostVideo || editingPostImage || '';
 
     try {
       const res = await fetch(`/api/posts/${postId}`, {
@@ -1961,8 +2215,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: trimmed,
-          media: editingPostImage || '',
+          media: mediaPayload,
           image: editingPostImage || '',
+          video: editingPostVideo || '',
+          mediaType,
           user: loggedInUser,
         }),
       });
@@ -1977,7 +2233,9 @@ function App() {
                   ...p,
                   content: data.post.content,
                   media: data.post.media,
-                  image: data.post.media,
+                  image: data.post.image || '',
+                  video: data.post.video || '',
+                  mediaType: data.post.mediaType || mediaType,
                   isEdited: true,
                   editedAt: data.post.editedAt || new Date().toISOString(),
                 }
@@ -1992,7 +2250,9 @@ function App() {
                   ...p,
                   content: data.post.content,
                   media: data.post.media,
-                  image: data.post.media,
+                  image: data.post.image || '',
+                  video: data.post.video || '',
+                  mediaType: data.post.mediaType || mediaType,
                   isEdited: true,
                   editedAt: data.post.editedAt || new Date().toISOString(),
                 }
@@ -2003,6 +2263,7 @@ function App() {
         setEditingPostId(null);
         setEditingPostContent('');
         setEditingPostImage(null);
+        setEditingPostVideo(null);
       } else {
         const errorMsg =
           (data && (data.error || data.message)) ||
@@ -6017,6 +6278,31 @@ function App() {
                     </div>
                   )}
 
+                  {/* Video preview before posting */}
+                  {postVideo && (
+                    <div className="create-post-video-preview-wrap">
+                      <video
+                        src={postVideo}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="create-post-video-preview"
+                      />
+                      <button
+                        type="button"
+                        className="create-post-remove-img-btn"
+                        onClick={handleRemovePostVideo}
+                        title="Remove video"
+                        aria-label="Remove video"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+
                   <input
                     type="file"
                     ref={postImageInputRef}
@@ -6025,28 +6311,52 @@ function App() {
                     onChange={handlePostImageSelect}
                   />
 
+                  <input
+                    type="file"
+                    ref={postVideoInputRef}
+                    accept="video/*"
+                    style={{ display: 'none' }}
+                    onChange={handlePostVideoSelect}
+                  />
+
                   <div className="create-post-actions">
-                    <button
-                      type="button"
-                      className="create-post-attach-btn"
-                      onClick={() => postImageInputRef.current?.click()}
-                      disabled={isSubmittingPost || isUploadingPostImage}
-                      title="Add an image to your post"
-                    >
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 16 10 5 21"></polyline>
-                      </svg>
-                      <span>{isUploadingPostImage ? 'Processing...' : postImage ? 'Change Image' : 'Image'}</span>
-                    </button>
+                    <div className="create-post-toolbar">
+                      <button
+                        type="button"
+                        className="create-post-attach-btn"
+                        onClick={() => postImageInputRef.current?.click()}
+                        disabled={isSubmittingPost || isUploadingPostImage || isUploadingPostVideo}
+                        title="Add an image to your post"
+                      >
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                          <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                        <span>{isUploadingPostImage ? 'Processing...' : postImage ? 'Change Image' : 'Image'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="create-post-attach-btn"
+                        onClick={() => postVideoInputRef.current?.click()}
+                        disabled={isSubmittingPost || isUploadingPostImage || isUploadingPostVideo}
+                        title="Add a video to your post"
+                      >
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                        </svg>
+                        <span>{isUploadingPostVideo ? 'Loading Video...' : postVideo ? 'Change Video' : 'Video'}</span>
+                      </button>
+                    </div>
 
                     <button
                       type="button"
                       id="create-post-btn"
                       className="create-post-btn"
                       onClick={handleCreatePost}
-                      disabled={(!postContent.trim() && !postImage) || isSubmittingPost || isUploadingPostImage}
+                      disabled={(!postContent.trim() && !postImage && !postVideo) || isSubmittingPost || isUploadingPostImage || isUploadingPostVideo}
                     >
                       {isSubmittingPost ? 'Posting...' : 'Post'}
                     </button>
@@ -6230,6 +6540,29 @@ function App() {
                                     </button>
                                   </div>
                                 )}
+                                {editingPostVideo && (
+                                  <div className="post-edit-video-preview-wrap">
+                                    <video
+                                      src={editingPostVideo}
+                                      controls
+                                      playsInline
+                                      preload="metadata"
+                                      className="post-edit-video-preview"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="post-edit-image-remove-btn"
+                                      onClick={() => setEditingPostVideo(null)}
+                                      title="Remove video"
+                                      aria-label="Remove video"
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -6237,26 +6570,48 @@ function App() {
                                   style={{ display: 'none' }}
                                   onChange={handleEditPostImageSelect}
                                 />
+                                <input
+                                  type="file"
+                                  accept="video/*"
+                                  ref={editPostVideoInputRef}
+                                  style={{ display: 'none' }}
+                                  onChange={handleEditPostVideoSelect}
+                                />
                                 {editPostFeedback && (
                                   <div className="post-edit-feedback-error" role="alert">
                                     {editPostFeedback}
                                   </div>
                                 )}
                                 <div className="post-edit-actions-row">
-                                  <button
-                                    type="button"
-                                    className="post-edit-attach-btn"
-                                    onClick={() => editPostImageInputRef.current?.click()}
-                                    disabled={isSavingPostEdit}
-                                    title={editingPostImage ? "Change image" : "Add image"}
-                                  >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                      <polyline points="21 15 16 10 5 21"></polyline>
-                                    </svg>
-                                    <span>{editingPostImage ? 'Change Image' : 'Add Image'}</span>
-                                  </button>
+                                  <div className="post-edit-toolbar">
+                                    <button
+                                      type="button"
+                                      className="post-edit-attach-btn"
+                                      onClick={() => editPostImageInputRef.current?.click()}
+                                      disabled={isSavingPostEdit}
+                                      title={editingPostImage ? "Change image" : "Add image"}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                      </svg>
+                                      <span>{editingPostImage ? 'Change Image' : 'Image'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="post-edit-attach-btn"
+                                      onClick={() => editPostVideoInputRef.current?.click()}
+                                      disabled={isSavingPostEdit}
+                                      title={editingPostVideo ? "Change video" : "Add video"}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                                      </svg>
+                                      <span>{editingPostVideo ? 'Change Video' : 'Video'}</span>
+                                    </button>
+                                  </div>
                                   <div className="post-edit-actions">
                                     <button
                                       type="button"
@@ -6270,7 +6625,7 @@ function App() {
                                       type="button"
                                       className="post-edit-btn save"
                                       onClick={() => handleSaveEditPost(post.id)}
-                                      disabled={(!editingPostContent.trim() && !editingPostImage) || isSavingPostEdit}
+                                      disabled={(!editingPostContent.trim() && !editingPostImage && !editingPostVideo) || isSavingPostEdit}
                                     >
                                       {isSavingPostEdit ? 'Saving...' : 'Save'}
                                     </button>
@@ -6280,20 +6635,48 @@ function App() {
                             ) : (
                               <>
                                 {post.content && <p className="post-content">{post.content}</p>}
-                                {(post.media || post.image) && (
-                                  <div
-                                    className="post-media-wrap"
-                                    onClick={() => setSelectedPostImageModal(post.media || post.image)}
-                                    title="Click to view full image"
-                                  >
-                                    <img
-                                      src={post.media || post.image}
-                                      alt="Post attachment"
-                                      className="post-media-image"
-                                      loading="lazy"
-                                    />
-                                  </div>
-                                )}
+                                {(() => {
+                                  const isVideo = Boolean(
+                                    post.video ||
+                                    post.mediaType === 'video' ||
+                                    (post.media && (post.media.startsWith('data:video') || post.media.endsWith('.mp4') || post.media.endsWith('.webm') || post.media.endsWith('.mov') || post.media.includes('/video/')))
+                                  );
+                                  const videoSrc = post.video || (isVideo ? post.media : null);
+                                  const imageSrc = !isVideo ? (post.image || post.media) : null;
+
+                                  if (isVideo && videoSrc) {
+                                    return (
+                                      <div className="post-media-video-wrap">
+                                        <video
+                                          src={videoSrc}
+                                          controls
+                                          playsInline
+                                          preload="metadata"
+                                          className="post-media-video"
+                                        />
+                                      </div>
+                                    );
+                                  }
+
+                                  if (imageSrc) {
+                                    return (
+                                      <div
+                                        className="post-media-wrap"
+                                        onClick={() => setSelectedPostImageModal(imageSrc)}
+                                        title="Click to view full image"
+                                      >
+                                        <img
+                                          src={imageSrc}
+                                          alt="Post attachment"
+                                          className="post-media-image"
+                                          loading="lazy"
+                                        />
+                                      </div>
+                                    );
+                                  }
+
+                                  return null;
+                                })()}
                               </>
                             )}
 
@@ -6308,6 +6691,19 @@ function App() {
                                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                                 </svg>
                                 <span>{(post.likes || []).length > 0 ? (post.likes || []).length : 'Like'}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className={`post-action-btn comment-btn ${openCommentsPosts[post.id] ? 'active' : ''}`}
+                                onClick={() => toggleComments(post.id)}
+                                title="Comments"
+                                aria-expanded={Boolean(openCommentsPosts[post.id])}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                </svg>
+                                <span>{(post.comments || []).length > 0 ? (post.comments || []).length : 'Comment'}</span>
                               </button>
 
                               {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
@@ -6342,6 +6738,132 @@ function App() {
                                 </>
                               )}
                             </div>
+
+                            {/* Comment Section */}
+                            {openCommentsPosts[post.id] && (
+                              <div className="post-comments-section" id={`comments-${post.id}`}>
+                                {/* Comment Input Box */}
+                                <form
+                                  className="post-comment-form"
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleAddComment(post.id);
+                                  }}
+                                >
+                                  <div
+                                    className="post-comment-input-avatar"
+                                    style={{
+                                      backgroundColor: profilePicture ? 'transparent' : getAvatarColor(loggedInUser || 'User'),
+                                    }}
+                                  >
+                                    {profilePicture ? (
+                                      <img src={profilePicture} alt={loggedInUser || 'User'} />
+                                    ) : (
+                                      <span>{getInitials(loggedInUser || 'User')}</span>
+                                    )}
+                                  </div>
+                                  <div className="post-comment-input-wrap">
+                                    <input
+                                      type="text"
+                                      className="post-comment-input"
+                                      placeholder="Write a comment..."
+                                      value={commentInputs[post.id] || ''}
+                                      onChange={(e) =>
+                                        setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }))
+                                      }
+                                      maxLength={500}
+                                    />
+                                    <button
+                                      type="submit"
+                                      className="post-comment-submit-btn"
+                                      disabled={
+                                        !(commentInputs[post.id] || '').trim() ||
+                                        submittingCommentPostIds[post.id]
+                                      }
+                                      title="Post comment"
+                                      aria-label="Post comment"
+                                    >
+                                      {submittingCommentPostIds[post.id] ? (
+                                        <span className="post-comment-spinner" />
+                                      ) : (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <line x1="22" y1="2" x2="11" y2="13"></line>
+                                          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                </form>
+
+                                {/* Comments List */}
+                                <div className="post-comments-list">
+                                  {(!post.comments || post.comments.length === 0) ? (
+                                    <div className="post-no-comments">
+                                      <span>No comments yet. Be the first to share your thoughts!</span>
+                                    </div>
+                                  ) : (
+                                    post.comments.map((comment) => {
+                                      const cId = comment.id || comment._id;
+                                      const isCommentAuthor =
+                                        loggedInUser &&
+                                        String(comment.author || '').toLowerCase() === String(loggedInUser).toLowerCase();
+                                      const isPostAuthor =
+                                        loggedInUser &&
+                                        String(post.author || '').toLowerCase() === String(loggedInUser).toLowerCase();
+                                      const canDelete = isCommentAuthor || isPostAuthor;
+
+                                      return (
+                                        <div key={cId} className="post-comment-item">
+                                          <div
+                                            className="post-comment-avatar"
+                                            style={{
+                                              backgroundColor: comment.authorAvatar
+                                                ? 'transparent'
+                                                : getAvatarColor(comment.authorName || comment.author || 'User'),
+                                            }}
+                                          >
+                                            {comment.authorAvatar ? (
+                                              <img src={comment.authorAvatar} alt={comment.authorName || comment.author} />
+                                            ) : (
+                                              <span>{getInitials(comment.authorName || comment.author || 'User')}</span>
+                                            )}
+                                          </div>
+                                          <div className="post-comment-body">
+                                            <div className="post-comment-header">
+                                              <div className="post-comment-author-info">
+                                                <span className="post-comment-author">
+                                                  {comment.authorName || comment.author || 'User'}
+                                                </span>
+                                                <span className="post-comment-handle">@{comment.author || 'user'}</span>
+                                                {comment.time && (
+                                                  <span className="post-comment-time">· {comment.time}</span>
+                                                )}
+                                              </div>
+                                              {canDelete && (
+                                                <button
+                                                  type="button"
+                                                  className="post-comment-delete-btn"
+                                                  onClick={() => handleDeleteComment(post.id, cId)}
+                                                  disabled={deletingCommentIds[cId]}
+                                                  title="Delete comment"
+                                                  aria-label="Delete comment"
+                                                >
+                                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                  </svg>
+                                                </button>
+                                              )}
+                                            </div>
+                                            <p className="post-comment-content">{comment.content}</p>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </article>
                         ))
                       )}
