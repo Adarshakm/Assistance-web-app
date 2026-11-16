@@ -1756,6 +1756,8 @@ function App() {
     // Set initial profile user right away (0ms instant display)
     setSelectedProfileUser(userObj);
     setProfileActiveTab('posts');
+    setSendRequestFeedback(null);
+    setFriendRequestActionFeedback(null);
     navigateTo('user-profile');
     setIsLoadingUserProfile(true);
     setIsLoadingProfilePosts(true);
@@ -1786,6 +1788,11 @@ function App() {
           setSelectedProfileUser((prev) => ({
             ...prev,
             ...u,
+            friends: Array.isArray(u.friends) ? u.friends : [],
+            friendRequestsSent: Array.isArray(u.friendRequestsSent) ? u.friendRequestsSent : [],
+            friendRequestsReceived: Array.isArray(u.friendRequestsReceived) ? u.friendRequestsReceived : [],
+            followers: Array.isArray(u.followers) ? u.followers : [],
+            following: Array.isArray(u.following) ? u.following : [],
             education: formatField(u.education),
             employment: formatField(u.employment),
             location: formatField(u.location),
@@ -6496,6 +6503,181 @@ function App() {
                           </button>
                         )}
 
+                        {/* Friend Request Option */}
+                        {(() => {
+                          const targetUser = String(selectedProfileUser?.username || '').toLowerCase();
+                          const isFriend =
+                            friendsList.some((u) => u.toLowerCase() === targetUser) ||
+                            (selectedProfileUser?.friends || []).some(
+                              (u) => u.toLowerCase() === String(loggedInUser || '').toLowerCase()
+                            );
+                          const isPendingSent =
+                            sentFriendRequests.some((u) => u.toLowerCase() === targetUser) ||
+                            (selectedProfileUser?.friendRequestsReceived || []).some(
+                              (u) => u.toLowerCase() === String(loggedInUser || '').toLowerCase()
+                            );
+                          const isPendingReceived =
+                            receivedFriendRequests.some((u) => u.toLowerCase() === targetUser) ||
+                            (selectedProfileUser?.friendRequestsSent || []).some(
+                              (u) => u.toLowerCase() === String(loggedInUser || '').toLowerCase()
+                            );
+
+                          if (isFriend) {
+                            return (
+                              <button
+                                type="button"
+                                className="profile-home-btn friend-status-btn friends"
+                                title="You are friends with this user"
+                              >
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                <span>Friends</span>
+                              </button>
+                            );
+                          }
+
+                          if (isPendingReceived) {
+                            return (
+                              <button
+                                type="button"
+                                className="profile-home-btn friend-status-btn accept"
+                                title="Accept friend request"
+                                onClick={() => {
+                                  if (!selectedProfileUser?.username) return;
+                                  handleAcceptFriendRequest(selectedProfileUser.username);
+                                  setSelectedProfileUser((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          friends: [
+                                            ...(prev.friends || []),
+                                            String(loggedInUser || '').toLowerCase(),
+                                          ],
+                                          friendRequestsSent: (
+                                            prev.friendRequestsSent || []
+                                          ).filter(
+                                            (u) =>
+                                              u.toLowerCase() !==
+                                              String(loggedInUser || '').toLowerCase()
+                                          ),
+                                        }
+                                      : prev
+                                  );
+                                }}
+                              >
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                  <circle cx="9" cy="7" r="4"></circle>
+                                  <polyline points="16 11 18 13 22 9"></polyline>
+                                </svg>
+                                <span>Accept Request</span>
+                              </button>
+                            );
+                          }
+
+                          if (isPendingSent) {
+                            return (
+                              <button
+                                type="button"
+                                className="profile-home-btn friend-status-btn pending"
+                                title="Friend request sent (click to cancel)"
+                                onClick={() => {
+                                  if (!selectedProfileUser?.username) return;
+                                  handleCancelFriendRequest(selectedProfileUser.username);
+                                  setSelectedProfileUser((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          friendRequestsReceived: (
+                                            prev.friendRequestsReceived || []
+                                          ).filter(
+                                            (u) =>
+                                              u.toLowerCase() !==
+                                              String(loggedInUser || '').toLowerCase()
+                                          ),
+                                        }
+                                      : prev
+                                  );
+                                }}
+                              >
+                                <svg
+                                  width="15"
+                                  height="15"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <polyline points="12 6 12 12 14 14"></polyline>
+                                </svg>
+                                <span>Request Sent</span>
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              className="profile-home-btn friend-status-btn add"
+                              title={`Send friend request to @${selectedProfileUser?.username}`}
+                              onClick={() => {
+                                if (!selectedProfileUser?.username) return;
+                                handleSendFriendRequest(selectedProfileUser.username);
+                                setSelectedProfileUser((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        friendRequestsReceived: [
+                                          ...(prev.friendRequestsReceived || []),
+                                          String(loggedInUser || '').toLowerCase(),
+                                        ],
+                                      }
+                                    : prev
+                                );
+                              }}
+                            >
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <line x1="20" y1="8" x2="20" y2="14"></line>
+                                <line x1="23" y1="11" x2="17" y2="11"></line>
+                              </svg>
+                              <span>Add Friend</span>
+                            </button>
+                          );
+                        })()}
+
                         <button
                           type="button"
                           className="profile-home-btn message-btn"
@@ -6559,6 +6741,29 @@ function App() {
 
                 {/* Identity info */}
                 <div className="profile-home-identity">
+                  {(sendRequestFeedback || friendRequestActionFeedback) && (
+                    <div
+                      className={`profile-home-alert ${
+                        (sendRequestFeedback?.type || friendRequestActionFeedback?.type) === 'error'
+                          ? 'error'
+                          : 'success'
+                      }`}
+                    >
+                      <span>{sendRequestFeedback?.text || friendRequestActionFeedback?.text}</span>
+                      <button
+                        type="button"
+                        className="profile-home-alert-close"
+                        onClick={() => {
+                          setSendRequestFeedback(null);
+                          setFriendRequestActionFeedback(null);
+                        }}
+                        title="Dismiss"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
                   <div className="profile-home-name-row">
                     <h1 className="profile-home-name">
                       {selectedProfileUser?.displayName || selectedProfileUser?.username}
@@ -6710,6 +6915,10 @@ function App() {
                     <div className="profile-home-count-item">
                       <strong>{(selectedProfileUser?.followers || []).length}</strong>
                       <span>Followers</span>
+                    </div>
+                    <div className="profile-home-count-item">
+                      <strong>{(selectedProfileUser?.friends || []).length}</strong>
+                      <span>Friends</span>
                     </div>
                     <div className="profile-home-count-item">
                       <strong>{profileUserPosts.length}</strong>
