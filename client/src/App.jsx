@@ -6331,40 +6331,6 @@ function App() {
           ) : currentView === 'user-profile' ? (
             <div className="user-profile-space" id="user-profile-space">
               <div className="user-profile-container" id="user-profile-container">
-                {/* Back Topbar */}
-                <div className="profile-home-topbar">
-                  <button
-                    type="button"
-                    className="profile-home-back-btn"
-                    onClick={handleBackFromProfile}
-                    title="Back"
-                    aria-label="Back"
-                  >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="19" y1="12" x2="5" y2="12"></line>
-                      <polyline points="12 19 5 12 12 5"></polyline>
-                    </svg>
-                    <span>Back</span>
-                  </button>
-                  <div className="profile-home-topbar-info">
-                    <h2 className="profile-home-topbar-title">
-                      {selectedProfileUser?.displayName || selectedProfileUser?.username || 'Profile'}
-                    </h2>
-                    <span className="profile-home-topbar-subtitle">
-                      {profileUserPosts.length} {profileUserPosts.length === 1 ? 'post' : 'posts'}
-                    </span>
-                  </div>
-                </div>
-
                 {/* Cover Banner */}
                 <div className="profile-home-cover">
                   {selectedProfileUser?.coverPhoto ? (
