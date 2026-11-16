@@ -9,6 +9,7 @@ import userRoutes from './routes/userRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import callRoutes from './routes/callRoutes.js';
 import postRoutes from './routes/postRoutes.js';
+import storyRoutes from './routes/storyRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,8 @@ app.use('/api/call', callRoutes);
 app.use('/call', callRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/posts', postRoutes);
+app.use('/api/stories', storyRoutes);
+app.use('/stories', storyRoutes);
 
 // Catch-all for Single Page Application routing (non-API routes)
 app.get('*', (req, res, next) => {
@@ -72,7 +75,8 @@ app.get('*', (req, res, next) => {
     req.path.startsWith('/chat') ||
     req.path.startsWith('/users') ||
     req.path.startsWith('/call') ||
-    req.path.startsWith('/posts')
+    req.path.startsWith('/posts') ||
+    req.path.startsWith('/stories')
   ) {
     return next();
   }
