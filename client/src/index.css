@@ -11663,34 +11663,308 @@ body.light-theme .social-modal-footer {
    ========================================================================== */
 @media (max-width: 768px) {
   .video-sharing-space {
-    padding: 1rem 0.75rem;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.75rem 0.5rem max(5.5rem, calc(4.5rem + env(safe-area-inset-bottom, 1rem))) !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .video-sharing-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
   }
 
   .video-sharing-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .video-sharing-heading {
+    font-size: 1.25rem !important;
+  }
+
+  .video-sharing-subtitle {
+    font-size: 0.8rem !important;
   }
 
   .video-share-launch-btn {
-    width: 100%;
-    justify-content: center;
+    display: none !important;
   }
 
+  /* Video Navigation Tabs Bar */
+  .video-tabs-bar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    width: 100% !important;
+    padding-bottom: 0.35rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-tabs-bar::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .video-tab-btn {
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.8rem !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Video Composer Card on Mobile */
+  .video-composer-card {
+    padding: 1rem 0.75rem !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    gap: 1rem !important;
+  }
+
+  .video-composer-header {
+    padding-bottom: 0.65rem !important;
+  }
+
+  .video-composer-title {
+    font-size: 1.05rem !important;
+  }
+
+  .video-composer-hint {
+    font-size: 0.75rem !important;
+  }
+
+  /* Pre-upload Source Selection Mode Buttons */
+  .video-source-mode-bar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-source-btn {
+    flex: 1 1 calc(33.333% - 0.35rem) !important;
+    min-width: 100px !important;
+    padding: 0.45rem 0.4rem !important;
+    font-size: 0.725rem !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Dropzone on Mobile */
+  .video-dropzone {
+    padding: 1.5rem 0.75rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    gap: 0.65rem !important;
+  }
+
+  .video-dropzone-icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .video-dropzone-prompt {
+    font-size: 0.925rem !important;
+  }
+
+  .video-dropzone-sub {
+    font-size: 0.75rem !important;
+  }
+
+  .video-browse-btn {
+    width: 100% !important;
+    max-width: 240px !important;
+    font-size: 0.825rem !important;
+    padding: 0.55rem 1rem !important;
+  }
+
+  /* Presets Grid */
+  .video-presets-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-preset-card {
+    padding: 0.65rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-preset-title {
+    font-size: 0.8rem !important;
+  }
+
+  .video-preset-desc {
+    font-size: 0.7rem !important;
+  }
+
+  /* URL Form on Mobile */
+  .video-url-input-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-url-input {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 0.85rem !important;
+    padding: 0.65rem 0.85rem !important;
+  }
+
+  .video-attach-url-btn {
+    width: 100% !important;
+    padding: 0.65rem 1rem !important;
+  }
+
+  /* Active Composer Flow (When video is attached/uploaded) */
   .video-composer-active-flow {
-    grid-template-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1.1rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-composer-preview-col,
+  .video-composer-fields-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-player-frame-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-player-native,
+  .video-player-iframe {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    border: none !important;
+    display: block !important;
+    border-radius: 10px !important;
+  }
+
+  .video-composer-media-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    flex-wrap: wrap !important;
+  }
+
+  .video-composer-meta-pill {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+    font-size: 0.75rem !important;
+    padding: 0.3rem 0.6rem !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .video-composer-meta-pill span {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .video-remove-btn {
+    flex-shrink: 0 !important;
+    font-size: 0.75rem !important;
+    padding: 0.3rem 0.65rem !important;
+  }
+
+  .video-form-group {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-title-input,
+  .video-desc-textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0.65rem 0.85rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .video-tags-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .video-tags-suggestions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.3rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .video-tag-pill {
+    font-size: 0.72rem !important;
+    padding: 0.2rem 0.55rem !important;
+  }
+
+  .video-composer-actions {
+    display: flex !important;
+    flex-direction: column-reverse !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+    margin-top: 0.35rem !important;
+  }
+
+  .video-discard-btn,
+  .video-publish-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    box-sizing: border-box !important;
   }
 
   .video-grid-layout {
     grid-template-columns: 1fr;
-  }
-
-  .video-url-input-row {
-    flex-direction: column;
-  }
-
-  .video-attach-url-btn {
-    width: 100%;
   }
 
   .video-theater-overlay {
@@ -11705,6 +11979,28 @@ body.light-theme .social-modal-footer {
 
   .video-theater-media-wrap {
     max-height: 40vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .video-source-btn {
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .video-sharing-space {
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+  }
+
+  .video-composer-card {
+    padding: 0.85rem 0.5rem !important;
+  }
+
+  .video-tab-btn {
+    font-size: 0.75rem !important;
+    padding: 0.4rem 0.7rem !important;
   }
 }
 

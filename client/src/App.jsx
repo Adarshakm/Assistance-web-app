@@ -13395,21 +13395,6 @@ function App() {
                       Stream, watch, and share high-definition videos, tutorials, and moments with the community.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="video-share-launch-btn"
-                    id="video-share-launch-btn"
-                    onClick={() => {
-                      setVideoSharingTab('upload');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                    </svg>
-                    <span>+ Share Video</span>
-                  </button>
                 </div>
 
                 {/* Feedback Notification Alert */}
