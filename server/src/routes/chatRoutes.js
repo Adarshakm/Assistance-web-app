@@ -294,9 +294,11 @@ router.get('/conversation', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Conversation]:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch conversation: ' + (err.message || 'Server error'),
+    return res.status(200).json({
+      success: true,
+      count: 0,
+      messages: [],
+      offline: true,
     });
   }
 });
@@ -482,9 +484,11 @@ router.get('/recent', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Recent]:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch recent conversations: ' + (err.message || 'Server error'),
+    return res.status(200).json({
+      success: true,
+      totalUnread: 0,
+      conversations: [],
+      offline: true,
     });
   }
 });

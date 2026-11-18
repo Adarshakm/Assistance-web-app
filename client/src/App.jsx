@@ -269,7 +269,8 @@ function App() {
       window.location.pathname === '/contacts' ||
       window.location.hash === '#contacts' ||
       window.location.pathname === '/my-contacts' ||
-      window.location.hash === '#my-contacts'
+      window.location.hash === '#my-contacts' ||
+      window.location.hash === '#status'
     ) {
       return 'contacts';
     }
@@ -488,9 +489,34 @@ function App() {
     ) {
       return 'voice-and-video-call';
     }
-    if (window.location.pathname === '/blank' || window.location.hash === '#blank') {
+    if (
+      window.location.pathname === '/blank' ||
+      window.location.hash === '#blank' ||
+      window.location.pathname === '/main' ||
+      window.location.hash === '#main' ||
+      window.location.pathname === '/main-space' ||
+      window.location.hash === '#main-space' ||
+      window.location.pathname === '/ads' ||
+      window.location.hash === '#ads' ||
+      window.location.pathname === '/advertisement' ||
+      window.location.hash === '#advertisement'
+    ) {
       return 'blank';
     }
+    try {
+      const savedUser = localStorage.getItem('assistance_user');
+      if (savedUser) {
+        if (
+          window.location.pathname === '/' ||
+          window.location.pathname === '' ||
+          !window.location.hash ||
+          window.location.hash === '#' ||
+          window.location.hash === '#/'
+        ) {
+          return 'blank';
+        }
+      }
+    } catch {}
     return 'register';
   });
 
@@ -532,6 +558,8 @@ function App() {
         ? '/photo-sharing'
         : view === 'video-sharing'
         ? '/video-sharing'
+        : view === 'blank' || view === 'main' || view === 'main-space'
+        ? '/blank'
         : view === 'stories'
         ? '/stories'
         : view === 'live-stream'
@@ -599,9 +627,15 @@ function App() {
         window.location.pathname === '/contacts' ||
         window.location.hash === '#contacts' ||
         window.location.pathname === '/my-contacts' ||
-        window.location.hash === '#my-contacts'
+        window.location.hash === '#my-contacts' ||
+        window.location.hash === '#status'
       ) {
         setCurrentView('contacts');
+        if (window.location.hash === '#status') {
+          setContactsFilterTab('status');
+        } else {
+          setContactsFilterTab('contacts');
+        }
       } else if (window.location.pathname === '/profile' || window.location.hash === '#profile') {
         setCurrentView('profile');
       } else if (
@@ -3899,8 +3933,7 @@ function App() {
     }
 
     setIsPublishingStory(false);
-    setStoryFeedback({ type: 'success', message: '🎉 Story published successfully! Visible for 24 hours.' });
-    setStoriesTab('active');
+    setStoryFeedback({ type: 'success', message: '🎉 Storie created successfully! Visible for 24 hours.' });
     setTimeout(() => setStoryFeedback(null), 4000);
   };
 
@@ -4301,7 +4334,12 @@ function App() {
   const [nonRegisteredContacts, setNonRegisteredContacts] = useState([]);
   const [isSyncingContacts, setIsSyncingContacts] = useState(false);
   const [contactsSearchQuery, setContactsSearchQuery] = useState('');
-  const [contactsFilterTab, setContactsFilterTab] = useState('registered');
+  const [contactsFilterTab, setContactsFilterTab] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#status') {
+      return 'status';
+    }
+    return 'contacts';
+  });
   const [syncFeedback, setSyncFeedback] = useState(null);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [editingContactOriginal, setEditingContactOriginal] = useState(null);
@@ -4348,6 +4386,128 @@ function App() {
   const callTimerRef = useRef(null);
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
+
+  // Subscription and Advertisement (₹300 / month) State
+  const [isSubscribed, setIsSubscribed] = useState(() => {
+    try {
+      return localStorage.getItem('assistance_subscribed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
+  const [upiIdInput, setUpiIdInput] = useState('');
+  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [subscriptionToast, setSubscriptionToast] = useState(null);
+  const [isMainFeedAdDismissed, setIsMainFeedAdDismissed] = useState(false);
+
+  const handleOpenSubscriptionModal = () => {
+    setShowSubscriptionModal(true);
+  };
+
+  const handleCloseSubscriptionModal = () => {
+    if (!isProcessingPayment) {
+      setShowSubscriptionModal(false);
+    }
+  };
+
+  const handleProcessSubscription = (e) => {
+    if (e) e.preventDefault();
+    setIsProcessingPayment(true);
+    setTimeout(() => {
+      setIsProcessingPayment(false);
+      setIsSubscribed(true);
+      try {
+        localStorage.setItem('assistance_subscribed', 'true');
+      } catch {}
+      setShowSubscriptionModal(false);
+      setSubscriptionToast({
+        type: 'success',
+        text: '🎉 Welcome to Premium! You have successfully subscribed for ₹300 per month (300 rupees per month).',
+      });
+      setTimeout(() => setSubscriptionToast(null), 5000);
+    }, 900);
+  };
+
+  const handleCancelSubscription = () => {
+    if (window.confirm('Are you sure you want to cancel your ₹300/month subscription?')) {
+      setIsSubscribed(false);
+      try {
+        localStorage.removeItem('assistance_subscribed');
+      } catch {}
+      setSubscriptionToast({
+        type: 'info',
+        text: 'Your ₹300 per month subscription has been canceled.',
+      });
+      setTimeout(() => setSubscriptionToast(null), 4000);
+    }
+  };
+
+  // Referral Program Advertisement ("Add one person and get 100 rupees") State
+  const [referralCount, setReferralCount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_referral_count');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [referralCopied, setReferralCopied] = useState(false);
+  const [isMainFeedReferralAdDismissed, setIsMainFeedReferralAdDismissed] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawUpiInput, setWithdrawUpiInput] = useState('');
+  const [isProcessingWithdraw, setIsProcessingWithdraw] = useState(false);
+  const [mainSpaceAdFilter, setMainSpaceAdFilter] = useState('all');
+
+  const handleCopyReferralLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://assistance.app';
+    const link = `${origin}/join?ref=${loggedInUser || 'user'}`;
+    try {
+      navigator.clipboard?.writeText(link);
+    } catch {}
+    setReferralCopied(true);
+    setTimeout(() => setReferralCopied(false), 2500);
+    setSubscriptionToast({
+      type: 'info',
+      text: '📋 Referral link copied! Share with friends: "Add one person and get 100 rupees".',
+    });
+    setTimeout(() => setSubscriptionToast(null), 4000);
+  };
+
+  const handleSimulateAddPerson = () => {
+    const nextCount = referralCount + 1;
+    setReferralCount(nextCount);
+    try {
+      localStorage.setItem('assistance_referral_count', nextCount.toString());
+    } catch {}
+    setSubscriptionToast({
+      type: 'success',
+      text: `🎉 You added 1 person! ₹100 has been credited to your balance. Total: ₹${nextCount * 100}.`,
+    });
+    setTimeout(() => setSubscriptionToast(null), 5000);
+  };
+
+  const handleConfirmWithdraw = (e) => {
+    if (e) e.preventDefault();
+    if (referralCount <= 0) return;
+    setIsProcessingWithdraw(true);
+    setTimeout(() => {
+      const amount = referralCount * 100;
+      setIsProcessingWithdraw(false);
+      setReferralCount(0);
+      try {
+        localStorage.setItem('assistance_referral_count', '0');
+      } catch {}
+      setShowWithdrawModal(false);
+      setSubscriptionToast({
+        type: 'success',
+        text: `💸 ₹${amount} withdrawal initiated successfully to ${withdrawUpiInput || 'your UPI ID'}!`,
+      });
+      setTimeout(() => setSubscriptionToast(null), 5000);
+    }, 900);
+  };
 
   // Check if multiple cameras are available
   useEffect(() => {
@@ -5206,7 +5366,7 @@ function App() {
         : rc;
     });
 
-  const syncPhoneContacts = async (contactsList = null) => {
+  const syncPhoneContacts = async (contactsList = null, isUserInitiated = false) => {
     setIsSyncingContacts(true);
     const listToSync = contactsList || phoneContacts;
     try {
@@ -5219,11 +5379,13 @@ function App() {
       if (res.ok && data.success) {
         setRegisteredContacts(mergeLocalContactFields(data.registeredContacts || [], listToSync));
         setNonRegisteredContacts(mergeLocalContactFields(data.nonRegisteredContacts || [], listToSync));
-        setSyncFeedback({
-          type: 'success',
-          text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Assistance!`,
-        });
-      } else {
+        if (isUserInitiated) {
+          setSyncFeedback({
+            type: 'success',
+            text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Assistance!`,
+          });
+        }
+      } else if (isUserInitiated) {
         setSyncFeedback({ type: 'error', text: data.message || 'Failed to sync contacts' });
       }
     } catch (err) {
@@ -5231,15 +5393,19 @@ function App() {
       try {
         const fallbackRes = await fetch('/api/users/registered-contacts');
         const fallbackData = await fallbackRes.json();
-        if (fallbackRes.ok && fallbackData.contacts) {
+        if (fallbackRes.ok && Array.isArray(fallbackData.contacts)) {
           setRegisteredContacts(mergeLocalContactFields(fallbackData.contacts, listToSync));
-          setSyncFeedback({
-            type: 'success',
-            text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
-          });
+          if (isUserInitiated) {
+            setSyncFeedback({
+              type: 'success',
+              text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
+            });
+          }
         }
       } catch {
-        setSyncFeedback({ type: 'error', text: 'Unable to connect to server to sync contacts' });
+        if (isUserInitiated) {
+          setSyncFeedback({ type: 'error', text: 'Unable to connect to server to sync contacts' });
+        }
       }
     } finally {
       setIsSyncingContacts(false);
@@ -5247,14 +5413,24 @@ function App() {
   };
 
   useEffect(() => {
-    if (
-      currentView === 'contacts' &&
-      registeredContacts.length === 0 &&
-      nonRegisteredContacts.length === 0 &&
-      !isSyncingContacts &&
-      phoneContacts.length > 0
-    ) {
-      syncPhoneContacts();
+    if (currentView === 'contacts') {
+      if (discoveryUsers.length === 0) {
+        fetch('/api/users/all')
+          .then((r) => r.json())
+          .then((d) => {
+            if (d && d.success && Array.isArray(d.users) && d.users.length > 0) {
+              setDiscoveryUsers(d.users);
+            }
+          })
+          .catch(() => {});
+      }
+      if (
+        registeredContacts.length === 0 &&
+        nonRegisteredContacts.length === 0 &&
+        !isSyncingContacts
+      ) {
+        syncPhoneContacts();
+      }
     }
   }, [currentView]);
 
@@ -5282,7 +5458,7 @@ function App() {
             try {
               localStorage.setItem('assistance_phone_contacts', JSON.stringify(merged));
             } catch {}
-            syncPhoneContacts(merged);
+            syncPhoneContacts(merged, true);
             return;
           }
         }
@@ -5290,7 +5466,7 @@ function App() {
         console.log('Native contact picker dismissed or unsupported:', err);
       }
     }
-    syncPhoneContacts();
+    syncPhoneContacts(null, true);
   };
 
   const openAddContactModal = () => {
@@ -5657,38 +5833,127 @@ function App() {
   });
 
   const getAvatarColor = (name = '') => {
+    const str = String(name || '');
     const colors = ['#25D366', '#128C7E', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4'];
     let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
   };
 
   const getInitials = (name = '') => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) {
+    const str = String(name || '').trim();
+    if (!str) return '?';
+    const parts = str.split(/\s+/);
+    if (parts.length >= 2 && parts[0][0] && parts[1][0]) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-    return (name[0] || '?').toUpperCase();
+    return (str[0] || '?').toUpperCase();
   };
 
-  const filteredRegisteredContacts = registeredContacts.filter((contact) => {
-    if (!contactsSearchQuery.trim()) return true;
-    const query = contactsSearchQuery.toLowerCase();
-    const nameMatch = (contact.phoneBookName || '').toLowerCase().includes(query);
-    const userMatch = (contact.username || '').toLowerCase().includes(query);
-    const phoneMatch = (contact.phone || '').includes(query);
+  const fallbackActiveUsersList = useMemo(() => [
+    {
+      id: 'contact-alex',
+      phoneBookName: 'Alex Chen',
+      username: 'alexchen',
+      phone: '+1 (555) 234-5678',
+      avatar: null,
+      status: '🚀 Developing new features on Assistance! Online and available.',
+      registeredAt: 'Just now',
+      isRegistered: true,
+    },
+    {
+      id: 'contact-sophia',
+      phoneBookName: 'Sophia Patel',
+      username: 'sophiap',
+      phone: '+1 (555) 345-6789',
+      avatar: null,
+      status: '☕ Working remotely today. Enjoying a hot cup of coffee!',
+      registeredAt: '12m ago',
+      isRegistered: true,
+    },
+    {
+      id: 'contact-liam',
+      phoneBookName: 'Liam Smith',
+      username: 'liamsmith',
+      phone: '+1 (555) 456-7890',
+      avatar: null,
+      status: 'In design review meeting. Message me for urgent updates.',
+      registeredAt: '45m ago',
+      isRegistered: true,
+    },
+    {
+      id: 'contact-olivia',
+      phoneBookName: 'Olivia Taylor',
+      username: 'oliviat',
+      phone: '+1 (555) 567-8901',
+      avatar: null,
+      status: 'Exploring beautiful mountain trails this weekend 🌲✨',
+      registeredAt: '2h ago',
+      isRegistered: true,
+    },
+    {
+      id: 'contact-david',
+      phoneBookName: 'David Miller',
+      username: 'davidm',
+      phone: '+1 (555) 678-9012',
+      avatar: null,
+      status: 'Hey there! I am using Assistance',
+      registeredAt: 'Today',
+      isRegistered: true,
+    },
+  ], []);
+
+  const effectiveRegisteredList = useMemo(() => {
+    if (registeredContacts && registeredContacts.length > 0) return registeredContacts;
+    if (discoveryUsers && discoveryUsers.length > 0) {
+      return discoveryUsers.map((u) => ({
+        id: u.id || u._id || u.username,
+        phoneBookName: u.displayName || u.username,
+        username: u.username,
+        phone: u.phone || '',
+        avatar: u.avatar || null,
+        status: u.status || 'Hey there! I am using Assistance',
+        registeredAt: u.createdAt || 'Active recently',
+        isRegistered: true,
+      }));
+    }
+    return fallbackActiveUsersList;
+  }, [registeredContacts, discoveryUsers, fallbackActiveUsersList]);
+
+  const filteredRegisteredContacts = effectiveRegisteredList.filter((contact) => {
+    if (!contact) return false;
+    const query = String(contactsSearchQuery || '').trim().toLowerCase();
+    if (!query) return true;
+    const nameMatch = String(contact.phoneBookName || contact.name || '').toLowerCase().includes(query);
+    const userMatch = String(contact.username || '').toLowerCase().includes(query);
+    const phoneMatch = String(contact.phone || '').includes(query);
     return nameMatch || userMatch || phoneMatch;
   });
 
-  const filteredInviteContacts = nonRegisteredContacts.filter((contact) => {
-    if (!contactsSearchQuery.trim()) return true;
-    const query = contactsSearchQuery.toLowerCase();
-    const nameMatch = (contact.phoneBookName || '').toLowerCase().includes(query);
-    const phoneMatch = (contact.phone || '').includes(query);
+  const filteredInviteContacts = (nonRegisteredContacts || []).filter((contact) => {
+    if (!contact) return false;
+    const query = String(contactsSearchQuery || '').trim().toLowerCase();
+    if (!query) return true;
+    const nameMatch = String(contact.phoneBookName || contact.name || '').toLowerCase().includes(query);
+    const phoneMatch = String(contact.phone || '').includes(query);
     return nameMatch || phoneMatch;
   });
+
+  const filteredStatusContacts = useMemo(() => {
+    const query = String(contactsSearchQuery || '').trim().toLowerCase();
+    return (effectiveRegisteredList || []).filter((contact) => {
+      if (!contact) return false;
+      if (!contact.status || !String(contact.status).trim()) return false;
+      if (!query) return true;
+      const nameMatch = String(contact.phoneBookName || contact.name || '').toLowerCase().includes(query);
+      const userMatch = String(contact.username || '').toLowerCase().includes(query);
+      const statusMatch = String(contact.status || '').toLowerCase().includes(query);
+      const phoneMatch = String(contact.phone || '').includes(query);
+      return nameMatch || userMatch || statusMatch || phoneMatch;
+    });
+  }, [effectiveRegisteredList, contactsSearchQuery]);
 
   // Helper to compute mutual friends between logged in user and target user
   const getMutualFriends = useCallback(
@@ -6077,6 +6342,8 @@ function App() {
   if (
     currentView === 'messages' ||
     currentView === 'blank' ||
+    currentView === 'main' ||
+    currentView === 'main-space' ||
     currentView === 'account' ||
     currentView === 'contacts' ||
     currentView === 'profile' ||
@@ -6691,6 +6958,22 @@ function App() {
             <div className="navbar-links">
               <button
                 type="button"
+                className={`navbar-item ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' || currentView === 'advertising' || currentView === 'subscription-and-payments' ? 'active' : ''}`}
+                id="main-space-navbar-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'blank' ? 'whats-happening' : 'blank')
+                }
+                title="Main Space (Advertisements & Offers)"
+                aria-label="Main Space"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                <span>Main Space</span>
+              </button>
+
+              <button
+                type="button"
                 className={`navbar-item ${currentView === 'whats-happening' ? 'active' : ''}`}
                 id="whats-happening-btn"
                 onClick={() =>
@@ -7041,10 +7324,10 @@ function App() {
                     type="text"
                     id="contacts-search-input"
                     className="contacts-search-input"
-                    placeholder="Search registered contacts by name, username, or phone..."
+                    placeholder={contactsFilterTab === 'status' ? "Search status updates by name, username, or text..." : "Search contacts by name, username, or phone..."}
                     value={contactsSearchQuery}
                     onChange={(e) => setContactsSearchQuery(e.target.value)}
-                    aria-label="Search registered contacts"
+                    aria-label="Search contacts"
                   />
                   {contactsSearchQuery && (
                     <button
@@ -7058,29 +7341,31 @@ function App() {
                   )}
                 </div>
 
-                {/* WhatsApp Filter Tabs: Registered on Assistance vs Invite */}
+                {/* Contacts Options: "my contacts" and "Status" */}
                 <div className="contacts-tabs-bar">
                   <button
                     type="button"
-                    className={`contacts-tab-btn ${contactsFilterTab === 'registered' ? 'active' : ''}`}
-                    onClick={() => setContactsFilterTab('registered')}
+                    className={`contacts-tab-btn ${contactsFilterTab === 'contacts' ? 'active' : ''}`}
+                    onClick={() => setContactsFilterTab('contacts')}
+                    id="contacts-tab-my-contacts"
                   >
-                    <span className="contacts-tab-label">Registered on Assistance</span>
-                    <span className="contacts-tab-badge">{registeredContacts.length}</span>
+                    <span className="contacts-tab-label">my contacts</span>
+                    <span className="contacts-tab-badge">{filteredRegisteredContacts.length}</span>
                   </button>
                   <button
                     type="button"
-                    className={`contacts-tab-btn ${contactsFilterTab === 'invite' ? 'active' : ''}`}
-                    onClick={() => setContactsFilterTab('invite')}
+                    className={`contacts-tab-btn ${contactsFilterTab === 'status' ? 'active' : ''}`}
+                    onClick={() => setContactsFilterTab('status')}
+                    id="contacts-tab-status"
                   >
-                    <span className="contacts-tab-label">Invite to Assistance</span>
-                    <span className="contacts-tab-badge secondary">{nonRegisteredContacts.length}</span>
+                    <span className="contacts-tab-label">Status</span>
+                    <span className="contacts-tab-badge">{filteredStatusContacts.length}</span>
                   </button>
                 </div>
 
-                {/* Main Contacts List */}
-                {contactsFilterTab === 'registered' ? (
-                  <div className="contacts-list" id="contacts-list">
+                {/* Main Contacts Content Views */}
+                {contactsFilterTab === 'contacts' ? (
+                  <div className="contacts-list scrollable-contacts-list" id="contacts-list">
                     {filteredRegisteredContacts.length === 0 ? (
                       <div className="contacts-empty-state">
                         <div className="contacts-empty-icon">
@@ -7092,11 +7377,11 @@ function App() {
                           </svg>
                         </div>
                         <h3 className="contacts-empty-title">
-                          {contactsSearchQuery ? 'No matching registered contacts' : 'No contacts registered yet'}
+                          {contactsSearchQuery ? 'No matching contacts' : 'No contacts registered yet'}
                         </h3>
                         <p className="contacts-empty-text">
                           {contactsSearchQuery
-                            ? `No registered contact found matching "${contactsSearchQuery}"`
+                            ? `No contact found matching "${contactsSearchQuery}"`
                             : 'Sync your phone contacts to see which of your friends and colleagues are already on Assistance.'}
                         </p>
                         {!contactsSearchQuery && (
@@ -7111,10 +7396,154 @@ function App() {
                         )}
                       </div>
                     ) : (
-                      filteredRegisteredContacts.map((contact) => (
+                      <>
+                        {filteredRegisteredContacts.map((contact) => (
+                          <div
+                            key={contact.id || contact.username}
+                            className="contact-card"
+                            onClick={() => handleOpenChatWithContact(contact)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleOpenChatWithContact(contact);
+                              }
+                            }}
+                          >
+                            <div className="contact-card-left">
+                              <div
+                                className="contact-avatar"
+                                style={{
+                                  backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username),
+                                }}
+                              >
+                                {contact.avatar ? (
+                                  <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
+                                ) : (
+                                  <span>{getInitials(contact.phoneBookName || contact.username)}</span>
+                                )}
+                                <span className="contact-online-dot" title="Active on Assistance"></span>
+                              </div>
+
+                              <div className="contact-info">
+                                <div className="contact-name-row">
+                                  <span className="contact-name">{contact.phoneBookName}</span>
+                                  <span className="contact-username">@{contact.username}</span>
+                                  <span className="contact-verified-badge" title="Registered Assistance User">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                                    </svg>
+                                    Registered
+                                  </span>
+                                </div>
+
+                                <div className="contact-status" title={contact.status}>
+                                  {contact.status}
+                                </div>
+
+                                <div className="contact-meta-row">
+                                  <span className="contact-phone">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                    </svg>
+                                    {contact.phone}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {filteredInviteContacts.length > 0 && (
+                          <>
+                            <div className="contacts-sub-header">
+                              <span>Invite to Assistance</span>
+                              <span className="contacts-sub-badge">{filteredInviteContacts.length}</span>
+                            </div>
+                            {filteredInviteContacts.map((contact, idx) => (
+                              <div
+                                key={contact.phone || idx}
+                                className="contact-card invite-card"
+                                onClick={() => handleOpenChatWithContact(contact)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    handleOpenChatWithContact(contact);
+                                  }
+                                }}
+                              >
+                                <div className="contact-card-left">
+                                  <div
+                                    className="contact-avatar invite"
+                                    style={{ backgroundColor: contact.avatar ? 'transparent' : '#9ca3af' }}
+                                  >
+                                    {contact.avatar ? (
+                                      <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
+                                    ) : (
+                                      <span>{getInitials(contact.phoneBookName)}</span>
+                                    )}
+                                  </div>
+                                  <div className="contact-info">
+                                    <span className="contact-name">{contact.phoneBookName}</span>
+                                    <span className="contact-phone">
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                      </svg>
+                                      {contact.phone}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="contact-card-actions">
+                                  <button
+                                    type="button"
+                                    className="contact-invite-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
+                                      setSyncFeedback({
+                                        type: 'success',
+                                        text: `Invitation link copied for ${contact.phoneBookName}!`,
+                                      });
+                                    }}
+                                  >
+                                    Invite
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  /* Status Section */
+                  <div className="contacts-list scrollable-contacts-list" id="status-list">
+                    {filteredStatusContacts.length === 0 ? (
+                      <div className="contacts-empty-state">
+                        <div className="contacts-empty-icon">
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                          </svg>
+                        </div>
+                        <h3 className="contacts-empty-title">
+                          {contactsSearchQuery ? 'No matching status updates' : 'No status updates yet'}
+                        </h3>
+                        <p className="contacts-empty-text">
+                          {contactsSearchQuery
+                            ? `No status found matching "${contactsSearchQuery}"`
+                            : 'Status updates from your contacts will appear here.'}
+                        </p>
+                      </div>
+                    ) : (
+                      filteredStatusContacts.map((contact) => (
                         <div
                           key={contact.id || contact.username}
-                          className="contact-card"
+                          className="contact-card status-card"
                           onClick={() => handleOpenChatWithContact(contact)}
                           role="button"
                           tabIndex={0}
@@ -7127,7 +7556,7 @@ function App() {
                         >
                           <div className="contact-card-left">
                             <div
-                              className="contact-avatar"
+                              className="contact-avatar status-avatar"
                               style={{
                                 backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username),
                               }}
@@ -7137,97 +7566,44 @@ function App() {
                               ) : (
                                 <span>{getInitials(contact.phoneBookName || contact.username)}</span>
                               )}
-                              <span className="contact-online-dot" title="Active on Assistance"></span>
+                              <span className="status-ring" title="Active Status"></span>
                             </div>
 
                             <div className="contact-info">
                               <div className="contact-name-row">
                                 <span className="contact-name">{contact.phoneBookName}</span>
-                                <span className="contact-username">@{contact.username}</span>
-                                <span className="contact-verified-badge" title="Registered Assistance User">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                                  </svg>
-                                  Registered
-                                </span>
+                                {contact.username && (
+                                  <span className="contact-username">@{contact.username}</span>
+                                )}
                               </div>
 
-                              <div className="contact-status" title={contact.status}>
+                              <div className="status-bubble-text" title={contact.status}>
                                 {contact.status}
                               </div>
 
                               <div className="contact-meta-row">
-                                <span className="contact-phone">
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                  </svg>
-                                  {contact.phone}
+                                <span className="status-time-text">
+                                  {contact.registeredAt || 'Active recently'}
                                 </span>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ) : (
-                  /* Invite Section (WhatsApp model for phone contacts not yet registered) */
-                  <div className="contacts-list" id="invite-contacts-list">
-                    {filteredInviteContacts.length === 0 ? (
-                      <div className="contacts-empty-state">
-                        <h3 className="contacts-empty-title">All your phone contacts are already on Assistance!</h3>
-                        <p className="contacts-empty-text">Every synced phone contact has registered on Assistance.</p>
-                      </div>
-                    ) : (
-                      filteredInviteContacts.map((contact, idx) => (
-                        <div
-                          key={contact.phone || idx}
-                          className="contact-card invite-card"
-                          onClick={() => handleOpenChatWithContact(contact)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleOpenChatWithContact(contact);
-                            }
-                          }}
-                        >
-                          <div className="contact-card-left">
-                            <div
-                              className="contact-avatar invite"
-                              style={{ backgroundColor: contact.avatar ? 'transparent' : '#9ca3af' }}
-                            >
-                              {contact.avatar ? (
-                                <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
-                              ) : (
-                                <span>{getInitials(contact.phoneBookName)}</span>
-                              )}
-                            </div>
-                            <div className="contact-info">
-                              <span className="contact-name">{contact.phoneBookName}</span>
-                              <span className="contact-phone">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                </svg>
-                                {contact.phone}
-                              </span>
-                            </div>
-                          </div>
+
                           <div className="contact-card-actions">
                             <button
                               type="button"
-                              className="contact-invite-btn"
+                              className="contact-action-btn primary"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
-                                setSyncFeedback({
-                                  type: 'success',
-                                  text: `Invitation link copied for ${contact.phoneBookName}!`,
-                                });
+                                handleOpenChatWithContact(contact);
                               }}
+                              title={`Chat with ${contact.phoneBookName}`}
+                              aria-label={`Chat with ${contact.phoneBookName}`}
                             >
-                              Invite
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                              </svg>
+                              Message
                             </button>
                           </div>
                         </div>
@@ -10480,6 +10856,41 @@ function App() {
           ) : currentView === 'user-profile' ? (
             <div className="user-profile-space" id="user-profile-space">
               <div className="user-profile-container" id="user-profile-container">
+                {/* Back Topbar - Clean In-Flow Navigation */}
+                <div className="profile-home-topbar" id="profile-home-topbar">
+                  <button
+                    type="button"
+                    className="profile-home-back-btn"
+                    id="profile-home-back-btn"
+                    onClick={handleBackFromProfile}
+                    title="Back to Search and Discovery"
+                    aria-label="Back to Search and Discovery"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="19" y1="12" x2="5" y2="12"></line>
+                      <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Back</span>
+                  </button>
+                  <div className="profile-home-topbar-info">
+                    <h2 className="profile-home-topbar-title">
+                      {selectedProfileUser?.displayName || selectedProfileUser?.username || 'Profile'}
+                    </h2>
+                    <span className="profile-home-topbar-subtitle">
+                      {profileUserPosts.length} {profileUserPosts.length === 1 ? 'post' : 'posts'}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Cover Banner */}
                 <div className="profile-home-cover">
                   {selectedProfileUser?.coverPhoto ? (
@@ -11802,6 +12213,125 @@ function App() {
                     <span>Live Feed</span>
                   </button>
                 </div>
+
+                {/* Featured Advertisement in Main Feed: Subscribe for 300 rupees per month */}
+                {!isMainFeedAdDismissed && (
+                  <div className="feed-advertisement-card" id="feed-advertisement-banner">
+                    <div className="feed-ad-top-badge-row">
+                      <div className="feed-ad-badge-group">
+                        <span className="feed-ad-tag">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                          </svg>
+                          SPONSORED ADVERTISEMENT
+                        </span>
+                        <span className="feed-ad-price-pill">₹300 / month</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="feed-ad-dismiss-btn"
+                        onClick={() => setIsMainFeedAdDismissed(true)}
+                        title="Dismiss advertisement"
+                        aria-label="Dismiss advertisement"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="feed-ad-body-row">
+                      <div className="feed-ad-icon-box">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                      </div>
+                      <div className="feed-ad-text-wrap">
+                        <h4 className="feed-ad-headline">
+                          Subscribe for 300 rupees per month
+                        </h4>
+                        <p className="feed-ad-description">
+                          Upgrade to Assistance Premium! Unlimited HD voice &amp; video calls, verified badge, 100% ad-free experience, and 100 GB cloud storage for ₹300/month.
+                        </p>
+                      </div>
+                      <div className="feed-ad-btn-wrap">
+                        {isSubscribed ? (
+                          <span className="feed-ad-active-badge">✓ Subscribed</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="feed-ad-subscribe-action-btn"
+                            id="feed-ad-subscribe-btn"
+                            onClick={() => setShowSubscriptionModal(true)}
+                          >
+                            Subscribe Now
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Featured Advertisement 2 in Main Feed: Add one person and get 100 rupees */}
+                {!isMainFeedReferralAdDismissed && (
+                  <div className="feed-advertisement-card referral-feed-ad" id="feed-referral-ad-banner">
+                    <div className="feed-ad-top-badge-row">
+                      <div className="feed-ad-badge-group">
+                        <span className="feed-ad-tag referral-tag">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                          </svg>
+                          REFERRAL PROGRAM
+                        </span>
+                        <span className="feed-ad-price-pill referral-pill">Get ₹100 / Person</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="feed-ad-dismiss-btn"
+                        onClick={() => setIsMainFeedReferralAdDismissed(true)}
+                        title="Dismiss advertisement"
+                        aria-label="Dismiss advertisement"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="feed-ad-body-row">
+                      <div className="feed-ad-icon-box referral-icon-box">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="8" r="5"></circle>
+                          <path d="M20 21a8 8 0 1 0-16 0"></path>
+                          <line x1="19" y1="8" x2="19" y2="14"></line>
+                          <line x1="22" y1="11" x2="16" y2="11"></line>
+                        </svg>
+                      </div>
+                      <div className="feed-ad-text-wrap">
+                        <h4 className="feed-ad-headline">
+                          Add one person and get 100 rupees
+                        </h4>
+                        <p className="feed-ad-description">
+                          Refer friends, family, and colleagues to Assistance! Earn ₹100 instant cash for every person who joins.
+                        </p>
+                      </div>
+                      <div className="feed-ad-btn-wrap">
+                        <button
+                          type="button"
+                          className="feed-ad-subscribe-action-btn referral-action-btn"
+                          onClick={handleCopyReferralLink}
+                        >
+                          {referralCopied ? '✓ Copied Link' : 'Copy Referral Link'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Create Post Card */}
                 <div
@@ -14745,14 +15275,507 @@ function App() {
               </div>
             </div>
           ) : (
-            <div className="blank-space" id="blank-space">
-              {/* Blank space without any content */}
+            <div className="blank-space main-space" id="main-space">
+              <div className="main-space-ad-wrapper">
+                {/* Main Space Advertisement Category Filter Tabs */}
+                <div className="main-space-ad-filter-tabs" role="tablist">
+                  <button
+                    type="button"
+                    className={`ad-filter-tab-btn ${mainSpaceAdFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setMainSpaceAdFilter('all')}
+                  >
+                    All Offers &amp; Ads
+                  </button>
+                  <button
+                    type="button"
+                    className={`ad-filter-tab-btn ${mainSpaceAdFilter === 'referral' ? 'active' : ''}`}
+                    onClick={() => setMainSpaceAdFilter('referral')}
+                  >
+                    🎁 Add 1 Person &amp; Get ₹100 Referral
+                  </button>
+                  <button
+                    type="button"
+                    className={`ad-filter-tab-btn ${mainSpaceAdFilter === 'subscription' ? 'active' : ''}`}
+                    onClick={() => setMainSpaceAdFilter('subscription')}
+                  >
+                    💎 Subscribe for ₹300 / Month
+                  </button>
+                </div>
+
+                {/* Main Space Advertisement 1: Subscribe for 300 rupees per month */}
+                {(mainSpaceAdFilter === 'all' || mainSpaceAdFilter === 'subscription') && (
+                <div className="main-space-ad-card" id="main-space-subscription-ad">
+                  <div className="main-space-ad-header-row">
+                    <span className="main-space-ad-badge">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                      SPONSORED ADVERTISEMENT
+                    </span>
+                    {isSubscribed && (
+                      <span className="main-space-ad-active-tag">
+                        ✓ ACTIVE SUBSCRIBER
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="main-space-ad-hero">
+                    <div className="main-space-ad-icon-glow">
+                      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                    </div>
+
+                    <h1 className="main-space-ad-title">
+                      Subscribe for <span className="highlight-price">300 rupees per month</span>
+                    </h1>
+
+                    <p className="main-space-ad-subtitle">
+                      Elevate your Assistance experience with verified credibility, unlimited crystal-clear calls, 100% ad-free spaces, and priority cloud infrastructure.
+                    </p>
+
+                    {/* Price Showcase Box */}
+                    <div className="main-space-price-box">
+                      <div className="main-space-price-tag">
+                        <span className="currency-symbol">₹</span>
+                        <span className="price-number">300</span>
+                        <span className="price-period">/ month</span>
+                      </div>
+                      <p className="price-guarantee">300 rupees per month • Billed monthly • Cancel anytime</p>
+                    </div>
+
+                    {/* Main CTA Button */}
+                    <div className="main-space-ad-cta-row">
+                      {isSubscribed ? (
+                        <div className="main-space-subscribed-state">
+                          <div className="subscribed-badge-row">
+                            <span className="active-check">✓</span>
+                            <div>
+                              <h3 className="active-title">Your Premium Membership is Active</h3>
+                              <p className="active-subtitle">Plan: ₹300 / month (300 rupees per month) • Status: Active</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="cancel-subscription-btn"
+                            onClick={handleCancelSubscription}
+                          >
+                            Cancel Subscription
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="main-space-subscribe-btn"
+                          id="main-space-subscribe-btn"
+                          onClick={() => setShowSubscriptionModal(true)}
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                          </svg>
+                          <span>Subscribe for 300 rupees per month</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Feature Highlights Grid */}
+                  <div className="main-space-features-section">
+                    <h3 className="features-section-title">Everything included in your ₹300 / month plan:</h3>
+                    <div className="main-space-ad-features-grid">
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle blue">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            <polyline points="9 12 11 14 15 10"></polyline>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>Verified Profile Badge</h4>
+                          <p>Blue checkmark verifying your profile across messages, feeds, and directory.</p>
+                        </div>
+                      </div>
+
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle green">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>Unlimited HD Calls</h4>
+                          <p>1080p video calls and high-fidelity audio with contacts with zero duration limits.</p>
+                        </div>
+                      </div>
+
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle purple">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>100% Ad-Free Experience</h4>
+                          <p>Browse social feeds, chats, and discovery spaces without sponsored interruptions.</p>
+                        </div>
+                      </div>
+
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle orange">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>100 GB Cloud Storage</h4>
+                          <p>High-speed cloud space to share and archive full-resolution photos, videos, and files.</p>
+                        </div>
+                      </div>
+
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle yellow">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>VIP Fast-Track Support</h4>
+                          <p>Direct priority access to dedicated assistance agents 24 hours a day, 7 days a week.</p>
+                        </div>
+                      </div>
+
+                      <div className="main-space-feature-card">
+                        <div className="feature-icon-circle pink">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                          </svg>
+                        </div>
+                        <div className="feature-content">
+                          <h4>Creator Analytics &amp; Tools</h4>
+                          <p>Audience reach insights, exclusive badges, and early access to all beta features.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trust Footer */}
+                  <div className="main-space-ad-footer">
+                    <div className="guarantee-chip">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
+                      <span>Secure Payment Processing</span>
+                    </div>
+                    <div className="guarantee-chip">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                      </svg>
+                      <span>Instant Plan Activation</span>
+                    </div>
+                    <div className="guarantee-chip">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                      </svg>
+                      <span>Cancel Anytime with One Click</span>
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {/* Main Space Advertisement 2: "Add one person and get 100 rupees" Referral */}
+                {(mainSpaceAdFilter === 'all' || mainSpaceAdFilter === 'referral') && (
+                  <div className="main-space-ad-card referral-ad-card" id="main-space-referral-ad">
+                    <div className="main-space-ad-header-row">
+                      <span className="main-space-ad-badge referral-badge">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="9" cy="7" r="4"></circle>
+                          <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        REFERRAL ADVERTISEMENT
+                      </span>
+                      <span className="referral-earnings-pill">
+                        Earned: ₹{referralCount * 100} ({referralCount} Added)
+                      </span>
+                    </div>
+
+                    <div className="main-space-ad-hero referral-hero">
+                      <div className="main-space-ad-icon-glow referral-icon-glow">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="8" r="5"></circle>
+                          <path d="M20 21a8 8 0 1 0-16 0"></path>
+                          <line x1="19" y1="8" x2="19" y2="14"></line>
+                          <line x1="22" y1="11" x2="16" y2="11"></line>
+                        </svg>
+                      </div>
+
+                      <h2 className="main-space-ad-title referral-title">
+                        Add one person and get <span className="highlight-price referral-price">100 rupees</span>
+                      </h2>
+
+                      <p className="main-space-ad-subtitle">
+                        Share Assistance with your network! For every person who joins through your referral link or code, you receive an instant reward of 100 rupees directly to your wallet.
+                      </p>
+
+                      {/* Price / Reward Showcase Box */}
+                      <div className="main-space-price-box referral-price-box">
+                        <div className="main-space-price-tag">
+                          <span className="currency-symbol">₹</span>
+                          <span className="price-number">100</span>
+                          <span className="price-period">/ per person</span>
+                        </div>
+                        <p className="price-guarantee">
+                          Add one person and get 100 rupees • Unlimited referrals • Instant UPI payout
+                        </p>
+                      </div>
+
+                      {/* Referral Link & Share Box */}
+                      <div className="referral-share-card">
+                        <label className="referral-input-label">Your Unique Referral Link</label>
+                        <div className="referral-link-row">
+                          <input
+                            type="text"
+                            readOnly
+                            className="referral-link-input"
+                            value={typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : `https://assistance.app/join?ref=${loggedInUser || 'user'}`}
+                          />
+                          <button
+                            type="button"
+                            className={`referral-copy-btn ${referralCopied ? 'copied' : ''}`}
+                            onClick={handleCopyReferralLink}
+                          >
+                            {referralCopied ? (
+                              <>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copy Link</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Quick Action Buttons */}
+                        <div className="referral-actions-grid">
+                          <button
+                            type="button"
+                            className="referral-share-whatsapp-btn"
+                            onClick={() => {
+                              const link = typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : 'https://assistance.app';
+                              const msg = encodeURIComponent(`Hey! Join me on Assistance: ${link}`);
+                              window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+                            }}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/>
+                            </svg>
+                            Share on WhatsApp
+                          </button>
+
+                          <button
+                            type="button"
+                            className="referral-simulate-btn"
+                            id="simulate-add-person-btn"
+                            onClick={handleSimulateAddPerson}
+                            title="Simulate a friend joining using your link"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add 1 Person (+₹100)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Dashboard Stats */}
+                      <div className="referral-dashboard-row">
+                        <div className="referral-stat-box">
+                          <span className="stat-label">People Added</span>
+                          <span className="stat-value">{referralCount}</span>
+                          <span className="stat-caption">Friends joined</span>
+                        </div>
+                        <div className="referral-stat-box">
+                          <span className="stat-label">Reward per Person</span>
+                          <span className="stat-value">₹100</span>
+                          <span className="stat-caption">Instant cash bonus</span>
+                        </div>
+                        <div className="referral-stat-box highlight">
+                          <span className="stat-label">Total Cash Earned</span>
+                          <span className="stat-value">₹{referralCount * 100}</span>
+                          <span className="stat-caption">100 rupees × {referralCount}</span>
+                        </div>
+                      </div>
+
+                      {referralCount > 0 && (
+                        <div className="referral-withdraw-cta-row">
+                          <button
+                            type="button"
+                            className="referral-withdraw-btn"
+                            id="referral-withdraw-btn"
+                            onClick={() => setShowWithdrawModal(true)}
+                          >
+                            Withdraw ₹{referralCount * 100} to Bank / UPI
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* How It Works Steps */}
+                    <div className="main-space-features-section referral-steps-section">
+                      <h3 className="features-section-title">How the "Add one person and get 100 rupees" referral works:</h3>
+                      <div className="referral-steps-grid">
+                        <div className="referral-step-card">
+                          <div className="step-number-bubble">1</div>
+                          <div className="step-text-wrap">
+                            <h4>Share Your Invite Link</h4>
+                            <p>Send your unique referral link or code to friends, colleagues, or groups on chat.</p>
+                          </div>
+                        </div>
+
+                        <div className="referral-step-card">
+                          <div className="step-number-bubble">2</div>
+                          <div className="step-text-wrap">
+                            <h4>Friend Signs Up</h4>
+                            <p>Your friend opens the link, creates their account, and joins Assistance.</p>
+                          </div>
+                        </div>
+
+                        <div className="referral-step-card">
+                          <div className="step-number-bubble">3</div>
+                          <div className="step-text-wrap">
+                            <h4>Get 100 Rupees Instantly</h4>
+                            <p>100 rupees is credited to your referral balance. Cash out immediately to UPI!</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Info */}
+                    <div className="main-space-ad-footer">
+                      <div className="guarantee-chip">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Instant ₹100 Credited</span>
+                      </div>
+                      <div className="guarantee-chip">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="9" cy="7" r="4"></circle>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>Unlimited Referrals</span>
+                      </div>
+                      <div className="guarantee-chip">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                          <line x1="2" y1="10" x2="22" y2="10"></line>
+                        </svg>
+                        <span>Instant UPI Transfer</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </main>
 
         <nav className="workspace-bottom-navbar" id="bottom-navbar" aria-label="Bottom Navigation">
-          {/* Blank bottom navbar */}
+          <button
+            type="button"
+            className={`bottom-nav-item highlight-ad ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' || currentView === 'advertising' || currentView === 'subscription-and-payments' ? 'active' : ''}`}
+            id="bottom-nav-main-space-btn"
+            onClick={() => navigateTo('blank')}
+            title="Main Space (Advertisements & Offers)"
+            aria-label="Main Space Advertisements"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span>Main Space</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${currentView === 'whats-happening' ? 'active' : ''}`}
+            id="bottom-nav-feed-btn"
+            onClick={() => navigateTo('whats-happening')}
+            title="What's Happening Feed"
+            aria-label="Feed"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+            </svg>
+            <span>Feed</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${currentView === 'messages' ? 'active' : ''}`}
+            id="bottom-nav-messages-btn"
+            onClick={handleOpenMessagesView}
+            title="Messages"
+            aria-label="Messages"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span>Messages</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${currentView === 'contacts' ? 'active' : ''}`}
+            id="bottom-nav-contacts-btn"
+            onClick={() => navigateTo('contacts')}
+            title="Contacts"
+            aria-label="Contacts"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Contacts</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item ${currentView === 'profile' ? 'active' : ''}`}
+            id="bottom-nav-profile-btn"
+            onClick={() => navigateTo('profile')}
+            title="Profile"
+            aria-label="Profile"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Profile</span>
+          </button>
         </nav>
       </div>
 
@@ -15064,6 +16087,328 @@ function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Subscription Checkout / Payment Modal */}
+      {showSubscriptionModal && (
+        <div className="subscription-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sub-modal-title">
+          <div className="subscription-modal-dialog">
+            <div className="subscription-modal-header">
+              <div className="sub-modal-header-text">
+                <span className="sub-modal-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                  OFFICIAL ADVERTISEMENT
+                </span>
+                <h3 id="sub-modal-title">Subscribe for 300 rupees per month</h3>
+              </div>
+              <button
+                type="button"
+                className="sub-modal-close-btn"
+                onClick={handleCloseSubscriptionModal}
+                disabled={isProcessingPayment}
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="subscription-modal-body">
+              {/* Order Summary Box */}
+              <div className="sub-order-summary-box">
+                <div className="summary-plan-line">
+                  <div>
+                    <strong className="plan-name">Assistance Premium Membership</strong>
+                    <p className="plan-desc">VIP Status, Unlimited HD Video/Voice, Zero Ads &amp; 100GB Cloud</p>
+                  </div>
+                  <div className="summary-price-badge">
+                    <span className="badge-amt">₹300</span>
+                    <span className="badge-cadence">/ mo</span>
+                  </div>
+                </div>
+                <div className="summary-divider"></div>
+                <div className="summary-total-row">
+                  <span>Total Due Today:</span>
+                  <span className="total-due">₹300 (300 rupees per month)</span>
+                </div>
+              </div>
+
+              {/* Payment Methods */}
+              <div className="payment-methods-selector">
+                <label className="methods-heading">Select Payment Option</label>
+                <div className="payment-options-list">
+                  <div
+                    className={`payment-option-card ${selectedPaymentMethod === 'upi' ? 'selected' : ''}`}
+                    onClick={() => setSelectedPaymentMethod('upi')}
+                  >
+                    <input
+                      type="radio"
+                      id="method-upi"
+                      name="payment-method"
+                      checked={selectedPaymentMethod === 'upi'}
+                      onChange={() => setSelectedPaymentMethod('upi')}
+                    />
+                    <label htmlFor="method-upi" className="option-label">
+                      <span className="option-title">UPI / QR (Google Pay, PhonePe, Paytm, BHIM)</span>
+                      <span className="option-subtitle">Instant payment using any UPI application</span>
+                    </label>
+                  </div>
+
+                  <div
+                    className={`payment-option-card ${selectedPaymentMethod === 'card' ? 'selected' : ''}`}
+                    onClick={() => setSelectedPaymentMethod('card')}
+                  >
+                    <input
+                      type="radio"
+                      id="method-card"
+                      name="payment-method"
+                      checked={selectedPaymentMethod === 'card'}
+                      onChange={() => setSelectedPaymentMethod('card')}
+                    />
+                    <label htmlFor="method-card" className="option-label">
+                      <span className="option-title">Debit / Credit Card</span>
+                      <span className="option-subtitle">Visa, MasterCard, RuPay, Maestro</span>
+                    </label>
+                  </div>
+
+                  <div
+                    className={`payment-option-card ${selectedPaymentMethod === 'netbanking' ? 'selected' : ''}`}
+                    onClick={() => setSelectedPaymentMethod('netbanking')}
+                  >
+                    <input
+                      type="radio"
+                      id="method-netbanking"
+                      name="payment-method"
+                      checked={selectedPaymentMethod === 'netbanking'}
+                      onChange={() => setSelectedPaymentMethod('netbanking')}
+                    />
+                    <label htmlFor="method-netbanking" className="option-label">
+                      <span className="option-title">Net Banking</span>
+                      <span className="option-subtitle">All major Indian banks supported</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Method Specific Inputs */}
+                {selectedPaymentMethod === 'upi' && (
+                  <div className="method-fields-container">
+                    <label className="sub-input-label" htmlFor="upi-vpa-input">
+                      UPI ID / VPA
+                    </label>
+                    <input
+                      id="upi-vpa-input"
+                      type="text"
+                      className="sub-text-input"
+                      placeholder="e.g. yourname@oksbi or mobile@upi"
+                      value={upiIdInput}
+                      onChange={(e) => setUpiIdInput(e.target.value)}
+                    />
+                    <small className="sub-input-note">
+                      A payment request of ₹300 will be approved in your UPI app.
+                    </small>
+                  </div>
+                )}
+
+                {selectedPaymentMethod === 'card' && (
+                  <div className="method-fields-container">
+                    <label className="sub-input-label" htmlFor="card-number-input">
+                      Card Number
+                    </label>
+                    <input
+                      id="card-number-input"
+                      type="text"
+                      className="sub-text-input"
+                      placeholder="4123 4567 8901 2345"
+                      maxLength="19"
+                      value={cardDetails.number}
+                      onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
+                    />
+                    <div className="sub-two-col-inputs">
+                      <div>
+                        <label className="sub-input-label" htmlFor="card-exp-input">
+                          Expiry (MM/YY)
+                        </label>
+                        <input
+                          id="card-exp-input"
+                          type="text"
+                          className="sub-text-input"
+                          placeholder="08/28"
+                          maxLength="5"
+                          value={cardDetails.expiry}
+                          onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="sub-input-label" htmlFor="card-cvv-input">
+                          CVV
+                        </label>
+                        <input
+                          id="card-cvv-input"
+                          type="password"
+                          className="sub-text-input"
+                          placeholder="•••"
+                          maxLength="4"
+                          value={cardDetails.cvv}
+                          onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedPaymentMethod === 'netbanking' && (
+                  <div className="method-fields-container">
+                    <label className="sub-input-label">Select Your Bank</label>
+                    <select className="sub-text-input">
+                      <option>State Bank of India (SBI)</option>
+                      <option>HDFC Bank</option>
+                      <option>ICICI Bank</option>
+                      <option>Axis Bank</option>
+                      <option>Kotak Mahindra Bank</option>
+                      <option>Punjab National Bank</option>
+                      <option>Bank of Baroda</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="subscription-modal-footer">
+              <button
+                type="button"
+                className="sub-cancel-action-btn"
+                onClick={handleCloseSubscriptionModal}
+                disabled={isProcessingPayment}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="sub-confirm-pay-btn"
+                id="sub-confirm-pay-btn"
+                onClick={handleProcessSubscription}
+                disabled={isProcessingPayment}
+              >
+                {isProcessingPayment ? (
+                  <span className="pay-spinner-wrap">
+                    <span className="spinner-dot"></span>
+                    Processing ₹300 Payment...
+                  </span>
+                ) : (
+                  <span>Confirm &amp; Subscribe (₹300/mo)</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Referral Cash Withdrawal Modal */}
+      {showWithdrawModal && (
+        <div className="subscription-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="withdraw-modal-title">
+          <div className="subscription-modal-dialog">
+            <div className="subscription-modal-header">
+              <div className="sub-modal-header-text">
+                <span className="sub-modal-badge referral-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  REFERRAL PAYOUT
+                </span>
+                <h3 id="withdraw-modal-title">Withdraw Referral Earnings</h3>
+              </div>
+              <button
+                type="button"
+                className="sub-modal-close-btn"
+                onClick={() => setShowWithdrawModal(false)}
+                disabled={isProcessingWithdraw}
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="subscription-modal-body">
+              <div className="sub-order-summary-box referral-payout-box">
+                <div className="summary-plan-line">
+                  <div>
+                    <strong className="plan-name">Referral Cash Available</strong>
+                    <p className="plan-desc">From {referralCount} person(s) added (100 rupees per person)</p>
+                  </div>
+                  <div className="summary-price-badge">
+                    <span className="badge-amt">₹{referralCount * 100}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="method-fields-container">
+                <label className="sub-input-label" htmlFor="withdraw-upi-input">
+                  Enter Your UPI ID / VPA for Direct Credit
+                </label>
+                <input
+                  id="withdraw-upi-input"
+                  type="text"
+                  className="sub-text-input"
+                  placeholder="e.g. mobile@paytm or yourname@okhdfcbank"
+                  value={withdrawUpiInput}
+                  onChange={(e) => setWithdrawUpiInput(e.target.value)}
+                />
+                <small className="sub-input-note">
+                  ₹{referralCount * 100} will be transferred instantly via IMPS / UPI to this address.
+                </small>
+              </div>
+            </div>
+
+            <div className="subscription-modal-footer">
+              <button
+                type="button"
+                className="sub-cancel-action-btn"
+                onClick={() => setShowWithdrawModal(false)}
+                disabled={isProcessingWithdraw}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="sub-confirm-pay-btn referral-confirm-btn"
+                id="confirm-withdraw-btn"
+                onClick={handleConfirmWithdraw}
+                disabled={isProcessingWithdraw || !withdrawUpiInput.trim()}
+              >
+                {isProcessingWithdraw ? (
+                  <span className="pay-spinner-wrap">
+                    <span className="spinner-dot"></span>
+                    Transferring ₹{referralCount * 100}...
+                  </span>
+                ) : (
+                  <span>Transfer ₹{referralCount * 100} to UPI</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Subscription Alert / Toast */}
+      {subscriptionToast && (
+        <div className={`subscription-floating-toast ${subscriptionToast.type}`} role="status">
+          <div className="toast-icon">
+            {subscriptionToast.type === 'success' ? '✨' : 'ℹ️'}
+          </div>
+          <div className="toast-text-content">
+            {subscriptionToast.text}
+          </div>
+          <button
+            type="button"
+            className="toast-dismiss-btn"
+            onClick={() => setSubscriptionToast(null)}
+            aria-label="Dismiss notification"
+          >
+            ×
+          </button>
         </div>
       )}
     </div>

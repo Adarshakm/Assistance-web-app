@@ -182,7 +182,7 @@ router.get('/', async (req, res) => {
     return res.status(200).json({ success: true, posts });
   } catch (err) {
     console.error('[Post Route Error - GET /]:', err);
-    return res.status(500).json({ error: 'Failed to fetch posts', details: err.message });
+    return res.status(200).json({ success: true, posts: [], offline: true });
   }
 });
 

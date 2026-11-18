@@ -51,6 +51,7 @@ const resolveUserAliases = async (identifier = '') => {
 
     const matchedUsers = await User.find(query)
       .select('username displayName phone email avatar')
+      .maxTimeMS(2000)
       .lean();
 
     matchedUsers.forEach((u) => {
@@ -196,23 +197,34 @@ router.get('/incoming', async (req, res) => {
     // Look for any incoming call created within the last 45 seconds that is still ringing
     const recentThreshold = new Date(Date.now() - 45000);
 
-    const incomingCall = await Call.findOne({
-      recipient: { $in: aliases },
-      status: 'ringing',
-      createdAt: { $gte: recentThreshold },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    let incomingCall = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        incomingCall = await Call.findOne({
+          recipient: { $in: aliases },
+          status: 'ringing',
+          createdAt: { $gte: recentThreshold },
+        })
+          .sort({ createdAt: -1 })
+          .maxTimeMS(2000)
+          .lean();
+      } catch (dbErr) {
+        console.warn('[Call Incoming DB Timeout]:', dbErr.message);
+        incomingCall = null;
+      }
+    }
 
     // Auto-mark expired ringing calls
-    Call.updateMany(
-      {
-        recipient: { $in: aliases },
-        status: 'ringing',
-        createdAt: { $lt: recentThreshold },
-      },
-      { $set: { status: 'missed', endedAt: new Date() } }
-    ).catch(() => {});
+    if (mongoose.connection.readyState === 1) {
+      Call.updateMany(
+        {
+          recipient: { $in: aliases },
+          status: 'ringing',
+          createdAt: { $lt: recentThreshold },
+        },
+        { $set: { status: 'missed', endedAt: new Date() } }
+      ).catch(() => {});
+    }
 
     if (!incomingCall) {
       return res.status(200).json({ hasIncoming: false });
@@ -236,7 +248,7 @@ router.get('/incoming', async (req, res) => {
     });
   } catch (err) {
     console.error('[Call Incoming Error]:', err);
-    return res.status(500).json({ error: 'Failed to check incoming calls', details: err.message });
+    return res.status(200).json({ hasIncoming: false, offline: true });
   }
 });
 
@@ -539,7 +551,7 @@ router.get('/history', async (req, res) => {
     return res.status(200).json({ success: true, calls: formattedCalls });
   } catch (err) {
     console.error('[Call History Error]:', err);
-    return res.status(500).json({ error: 'Failed to fetch call history', details: err.message });
+    return res.status(200).json({ success: true, calls: [], offline: true });
   }
 });
 

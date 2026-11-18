@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('[Get Stories Error]:', err);
-    return res.status(500).json({ success: false, error: 'Failed to fetch stories' });
+    return res.status(200).json({ success: true, stories: [], authorGroups: [], offline: true });
   }
 });
 
@@ -146,7 +146,7 @@ router.get('/archive', async (req, res) => {
     });
   } catch (err) {
     console.error('[Get Story Archive Error]:', err);
-    return res.status(500).json({ success: false, error: 'Failed to fetch story archive' });
+    return res.status(200).json({ success: true, archived: [], offline: true });
   }
 });
 
