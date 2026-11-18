@@ -1,7 +1,61 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const chatUploadsDir = path.resolve(__dirname, '../../uploads/chat');
+
+if (!fs.existsSync(chatUploadsDir)) {
+  fs.mkdirSync(chatUploadsDir, { recursive: true });
+}
+
+/**
+ * Helper to save base64 data to disk in uploads/chat directory
+ */
+const saveBase64MediaToDisk = (base64String = '', mediaType = 'image', originalFileName = '') => {
+  if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:')) {
+    return base64String;
+  }
+  try {
+    const matches = base64String.match(/^data:([A-Za-z0-9\-+\/.]+);base64,(.+)$/s);
+    if (!matches || matches.length < 3) {
+      return base64String;
+    }
+    const mimeType = matches[1].toLowerCase();
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    let ext = '';
+    if (originalFileName && path.extname(originalFileName)) {
+      ext = path.extname(originalFileName).toLowerCase();
+    } else if (mediaType === 'image') {
+      ext = mimeType.includes('png') ? '.png' : mimeType.includes('webp') ? '.webp' : mimeType.includes('gif') ? '.gif' : '.jpg';
+    } else if (mediaType === 'video') {
+      ext = mimeType.includes('webm') ? '.webm' : mimeType.includes('mov') ? '.mov' : '.mp4';
+    } else if (mediaType === 'document') {
+      ext = mimeType.includes('pdf') ? '.pdf' : mimeType.includes('word') || mimeType.includes('doc') ? '.docx' : mimeType.includes('sheet') || mimeType.includes('xls') ? '.xlsx' : '.txt';
+    } else {
+      ext = '.bin';
+    }
+
+    const safeBase = originalFileName
+      ? path.basename(originalFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30)
+      : mediaType;
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${safeBase}${ext}`;
+    const targetFilePath = path.join(chatUploadsDir, uniqueFileName);
+
+    fs.writeFileSync(targetFilePath, buffer);
+    return `/uploads/chat/${uniqueFileName}`;
+  } catch (err) {
+    console.error('[Save Base64 Media Error]:', err);
+    return base64String;
+  }
+};
 
 const router = express.Router();
 
@@ -200,6 +254,11 @@ router.post('/send', async (req, res) => {
       minute: '2-digit',
     });
 
+    let finalMediaUrl = cleanMediaUrl;
+    if (cleanMediaUrl && cleanMediaUrl.startsWith('data:')) {
+      finalMediaUrl = saveBase64MediaToDisk(cleanMediaUrl, cleanMediaType, cleanFileName);
+    }
+
     const newMsg = new Message({
       sender: targetSender,
       senderName: targetSenderName,
@@ -207,7 +266,7 @@ router.post('/send', async (req, res) => {
       recipientName: targetRecipientName,
       text: cleanText,
       mediaType: cleanMediaType,
-      mediaUrl: cleanMediaUrl,
+      mediaUrl: finalMediaUrl,
       fileName: cleanFileName,
       fileSize: cleanFileSize,
       time: formattedTime,
@@ -270,6 +329,41 @@ router.post('/send', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to send message: ' + (err.message || 'Server error'),
+    });
+  }
+});
+
+/**
+ * POST /api/chat/upload
+ * Direct media upload endpoint for images, videos, and documents
+ */
+router.post('/upload', async (req, res) => {
+  try {
+    const { media, mediaType = 'image', fileName = '', fileSize = '' } = req.body;
+    if (!media) {
+      return res.status(400).json({ success: false, error: 'No media provided.' });
+    }
+    const cleanMediaType = ['image', 'video', 'document'].includes(mediaType) ? mediaType : 'image';
+    const cleanFileName = String(fileName || '').trim();
+    const cleanFileSize = String(fileSize || '').trim();
+
+    let savedUrl = media;
+    if (typeof media === 'string' && media.startsWith('data:')) {
+      savedUrl = saveBase64MediaToDisk(media, cleanMediaType, cleanFileName);
+    }
+
+    return res.status(200).json({
+      success: true,
+      url: savedUrl,
+      mediaType: cleanMediaType,
+      fileName: cleanFileName,
+      fileSize: cleanFileSize,
+    });
+  } catch (err) {
+    console.error('[Chat Upload Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Upload failed: ' + (err.message || 'Server error'),
     });
   }
 });

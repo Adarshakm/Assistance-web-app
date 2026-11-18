@@ -1,4 +1,5 @@
 import http from 'http';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -19,6 +20,11 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
+const uploadsDirPath = path.resolve(__dirname, '../uploads');
+const chatUploadsDirPath = path.join(uploadsDirPath, 'chat');
+if (!fs.existsSync(chatUploadsDirPath)) {
+  fs.mkdirSync(chatUploadsDirPath, { recursive: true });
+}
 
 const app = express();
 app.set('trust proxy', 1);
@@ -30,8 +36,11 @@ connectDB();
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Serve uploaded media files (images, videos, documents)
+app.use('/uploads', express.static(uploadsDirPath));
 
 // Serve built frontend assets
 app.use(express.static(clientDistPath));

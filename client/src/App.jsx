@@ -5437,17 +5437,46 @@ function App() {
     // Reset value so selecting the same file again triggers change event
     e.target.value = '';
 
-    const sizeInMB = file.size / (1024 * 1024);
-    if (sizeInMB > 35) {
-      alert(`The selected file is too large (${sizeInMB.toFixed(1)} MB). Please select a file under 35 MB.`);
-      return;
-    }
-
     const formatSize = (bytes) => {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     };
+
+    const sizeInMB = file.size / (1024 * 1024);
+
+    // Compress images on client before uploading to prevent 413 or heavy network overhead on VPS
+    if (fileType === 'image') {
+      compressImageFile(file, 1600, 0.85)
+        .then((compressedDataUrl) => {
+          if (!compressedDataUrl) {
+            alert('Failed to process image. Please try another image.');
+            return;
+          }
+          const approxBytes = Math.round((compressedDataUrl.length * 3) / 4);
+          setChatAttachment({
+            fileType: 'image',
+            dataUrl: compressedDataUrl,
+            name: file.name,
+            sizeFormatted: formatSize(approxBytes),
+          });
+          setShowAttachmentMenu(false);
+        })
+        .catch(() => {
+          alert('Failed to read image.');
+        });
+      return;
+    }
+
+    if (fileType === 'video' && sizeInMB > 25) {
+      alert(`The selected video is ${sizeInMB.toFixed(1)} MB. Please select a video under 25 MB for reliable transmission.`);
+      return;
+    }
+
+    if (fileType === 'document' && sizeInMB > 20) {
+      alert(`The selected document is ${sizeInMB.toFixed(1)} MB. Please select a document under 20 MB.`);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -5583,7 +5612,11 @@ function App() {
           } catch {}
           return updated;
         });
-        alert(`Message delivery failed (${res.status}): ${errData.error || errData.message || 'Please check your connection.'}`);
+        if (res.status === 413) {
+          alert('Upload failed: File exceeds the server upload limit (413). Please choose a smaller file or update Nginx client_max_body_size.');
+        } else {
+          alert(`Message delivery failed (${res.status}): ${errData.error || errData.message || 'Please check your connection.'}`);
+        }
       }
     } catch (err) {
       console.warn('[Send Message Warning]:', err);
