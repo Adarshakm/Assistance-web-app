@@ -36,9 +36,9 @@ fi
 
 # 4. Restart Server process cleanly using PM2
 echo "🔄 Step 4/4: Reloading application with PM2..."
-# Ensure upload directory exists with proper permissions
+# Ensure upload directory exists with full write permissions
 mkdir -p "$APP_DIR/server/uploads/chat"
-chmod -R 775 "$APP_DIR/server/uploads" 2>/dev/null || true
+chmod -R 777 "$APP_DIR/server/uploads" 2>/dev/null || chmod -R 775 "$APP_DIR/server/uploads" 2>/dev/null || true
 
 # Kill any orphan process stuck on port 5000 so there are no port collisions
 fuser -k 5000/tcp 2>/dev/null || true
@@ -48,7 +48,7 @@ if command -v pm2 >/dev/null 2>&1; then
   pm2 delete all 2>/dev/null || true
   cd "$APP_DIR/server"
   pm2 start src/server.js --name "myapp" --update-env
-  pm2 save
+  pm2 save 2>/dev/null || true
   cd "$APP_DIR"
   pm2 status
 else
@@ -59,6 +59,7 @@ else
 fi
 
 # 5. Configure and reload Nginx reverse proxy
+set +e
 if command -v nginx >/dev/null 2>&1; then
   echo "🌐 Configuring Nginx reverse proxy upload limits (100MB)..."
   # Ensure Nginx allows image, video, and document payload uploads without 413 error
@@ -67,23 +68,12 @@ if command -v nginx >/dev/null 2>&1; then
     echo "client_body_buffer_size 128k;" | sudo tee -a /etc/nginx/conf.d/body_size.conf >/dev/null 2>&1 || true
   fi
 
-  # Also ensure client_max_body_size is set in nginx.conf
-  if [ -f /etc/nginx/nginx.conf ]; then
-    if ! grep -q "client_max_body_size" /etc/nginx/nginx.conf 2>/dev/null; then
-      sudo sed -i '/http {/a \    client_max_body_size 100M;' /etc/nginx/nginx.conf 2>/dev/null || true
-    else
-      sudo sed -i 's/client_max_body_size.*/client_max_body_size 100M;/g' /etc/nginx/nginx.conf 2>/dev/null || true
-    fi
-  fi
-
   if sudo nginx -t >/dev/null 2>&1; then
     sudo systemctl reload nginx 2>/dev/null || sudo service nginx reload 2>/dev/null || true
     echo "✅ Nginx reloaded successfully with 100M upload limit."
-  else
-    sudo systemctl reload nginx 2>/dev/null || true
-    echo "✅ Nginx reload attempted."
   fi
 fi
+set -e
 
 echo "=========================================="
 echo "🎉 Deployment successfully completed!"

@@ -135,6 +135,7 @@ app.use('/stories', storyRoutes);
 app.get('*', (req, res, next) => {
   if (
     req.path.startsWith('/api') ||
+    req.path.startsWith('/uploads') ||
     req.path === '/chat' || req.path.startsWith('/chat/') ||
     req.path === '/users' || req.path.startsWith('/users/') ||
     req.path === '/call' || req.path.startsWith('/call/') ||

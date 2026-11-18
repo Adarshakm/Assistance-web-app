@@ -5343,14 +5343,17 @@ function App() {
     return () => clearInterval(interval);
   }, [loggedInUser, currentView]);
 
+  const isFetchingConversationRef = useRef(false);
+
   // Fetch messages from backend for active contact
   const fetchActiveConversation = async (contact) => {
-    if (!contact) return;
+    if (!contact || isFetchingConversationRef.current) return;
     const contactKey = getActiveChatKey(contact);
     if (!contactKey) return;
     const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
     const lowerUser = currentUser.toLowerCase();
 
+    isFetchingConversationRef.current = true;
     try {
       const res = await fetch(
         `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&_t=${Date.now()}`,
@@ -5385,20 +5388,27 @@ function App() {
               updated[contact.phone] = normalized;
             }
             try {
-              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
+              const cleanHistory = {};
+              Object.keys(updated).slice(-10).forEach((k) => {
+                cleanHistory[k] = updated[k].slice(-25).map((m) => ({
+                  ...m,
+                  mediaUrl: m.mediaUrl && m.mediaUrl.startsWith('data:') ? '[data]' : m.mediaUrl,
+                }));
+              });
+              localStorage.setItem('assistance_chat_history', JSON.stringify(cleanHistory));
             } catch {}
             return updated;
           });
-          // Update recent conversations unread counts
-          fetchRecentConversations();
         }
       }
     } catch {
       // Offline fallback: keep existing local messages
+    } finally {
+      isFetchingConversationRef.current = false;
     }
   };
 
-  // Poll conversation when messages view is open (snappy 1.5s interval)
+  // Poll conversation when messages view is open
   useEffect(() => {
     if (currentView !== 'messages' || !activeChatContact) return;
 
@@ -5406,7 +5416,7 @@ function App() {
 
     const intervalId = setInterval(() => {
       fetchActiveConversation(activeChatContact);
-    }, 1500);
+    }, 2500);
 
     return () => clearInterval(intervalId);
   }, [currentView, activeChatContact, loggedInUser]);

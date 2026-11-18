@@ -22,12 +22,14 @@ const saveBase64MediaToDisk = (base64String = '', mediaType = 'image', originalF
     return base64String;
   }
   try {
-    const matches = base64String.match(/^data:([A-Za-z0-9\-+\/.]+);base64,(.+)$/s);
-    if (!matches || matches.length < 3) {
+    const commaIndex = base64String.indexOf(',');
+    if (commaIndex === -1) {
       return base64String;
     }
-    const mimeType = matches[1].toLowerCase();
-    const base64Data = matches[2];
+    const header = base64String.substring(0, commaIndex);
+    const base64Data = base64String.substring(commaIndex + 1);
+    const mimeMatch = header.match(/data:([^;]+)/);
+    const mimeType = (mimeMatch ? mimeMatch[1] : '').toLowerCase();
     const buffer = Buffer.from(base64Data, 'base64');
 
     let ext = '';
@@ -82,14 +84,22 @@ const makePhonePattern = (str = '') => {
   return slice.split('').join('\\D*');
 };
 
+const aliasCache = new Map();
+
 /**
- * Resolve all possible aliases (username, phone, email, display name) for a user
+ * Resolve all possible aliases (username, phone, email, display name) for a user with in-memory caching
  */
 const resolveUserAliases = async (identifier = '') => {
   if (!identifier) return [];
   const raw = String(identifier).trim();
   const lowerRaw = raw.toLowerCase();
   const digits = normalizeDigits(raw);
+
+  const cacheKey = lowerRaw;
+  const cached = aliasCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.aliases;
+  }
 
   const aliases = new Set([raw, lowerRaw]);
   if (digits) {
@@ -101,21 +111,33 @@ const resolveUserAliases = async (identifier = '') => {
   }
 
   try {
-    const escaped = escapeRegex(raw);
-    const query = {
+    // Fast exact match lookup first
+    const exactQuery = {
       $or: [
-        { username: { $regex: '^' + escaped + '$', $options: 'i' } },
-        { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
-        { email: { $regex: '^' + escaped + '$', $options: 'i' } },
+        { username: lowerRaw },
+        { displayName: raw },
+        { phone: raw },
+        ...(digits ? [{ phone: digits }] : []),
       ],
     };
 
-    const phonePattern = makePhonePattern(raw);
-    if (phonePattern) {
-      query.$or.push({ phone: { $regex: phonePattern } });
+    let matchedUsers = await User.find(exactQuery, 'username displayName phone email').lean();
+
+    if (!matchedUsers || matchedUsers.length === 0) {
+      const escaped = escapeRegex(raw);
+      matchedUsers = await User.find(
+        {
+          $or: [
+            { username: { $regex: '^' + escaped + '$', $options: 'i' } },
+            { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
+          ],
+        },
+        'username displayName phone email'
+      )
+        .limit(5)
+        .lean();
     }
 
-    const matchedUsers = await User.find(query, 'username displayName phone email').lean();
     for (const u of matchedUsers) {
       if (u.username) {
         aliases.add(String(u.username).trim());
@@ -139,7 +161,9 @@ const resolveUserAliases = async (identifier = '') => {
     console.warn('[Resolve User Aliases Error]:', err.message);
   }
 
-  return Array.from(aliases);
+  const result = Array.from(aliases);
+  aliasCache.set(cacheKey, { aliases: result, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return result;
 };
 
 /**
@@ -317,11 +341,15 @@ router.post('/send', async (req, res) => {
       replyMessage = await replyMsg.save();
     }
 
-    const senderAliases = await resolveUserAliases(targetSender);
+    const senderAliases = [targetSender, cleanSender];
+    const formattedSaved = {
+      ...formatMessage(saved, senderAliases),
+      isSent: true,
+    };
 
     return res.status(201).json({
       success: true,
-      message: formatMessage(saved, senderAliases),
+      message: formattedSaved,
       reply: replyMessage ? formatMessage(replyMessage, senderAliases) : null,
     });
   } catch (err) {
@@ -579,29 +607,38 @@ router.get('/recent', async (req, res) => {
 
     const conversations = Array.from(conversationMap.values());
 
-    // Enrich conversations with registered user details (avatar, display name, status, phone)
-    for (const conv of conversations) {
+    // Enrich conversations with registered user details in a single fast batch query
+    const contactIdentifiers = conversations.map((c) => c.contact).filter(Boolean);
+    if (contactIdentifiers.length > 0) {
       try {
-        const escapedContact = escapeRegex(conv.contact);
-        const query = {
-          $or: [
-            { username: { $regex: '^' + escapedContact + '$', $options: 'i' } },
-            { displayName: { $regex: '^' + escapedContact + '$', $options: 'i' } },
-            { email: { $regex: '^' + escapedContact + '$', $options: 'i' } },
-          ],
-        };
-        const cPattern = makePhonePattern(conv.contact);
-        if (cPattern) {
-          query.$or.push({ phone: { $regex: cPattern } });
+        const foundUsers = await User.find(
+          {
+            $or: [
+              { username: { $in: contactIdentifiers } },
+              { displayName: { $in: contactIdentifiers } },
+              { phone: { $in: contactIdentifiers } },
+            ],
+          },
+          'username displayName avatar phone status'
+        ).lean();
+
+        const userLookup = new Map();
+        for (const u of foundUsers) {
+          if (u.username) userLookup.set(u.username.toLowerCase(), u);
+          if (u.displayName) userLookup.set(u.displayName.toLowerCase(), u);
+          if (u.phone) userLookup.set(u.phone, u);
         }
 
-        const u = await User.findOne(query, 'username displayName avatar phone status').lean();
-        if (u) {
-          conv.contactName = u.displayName || u.username || conv.contactName;
-          conv.username = u.username;
-          conv.phone = u.phone;
-          conv.avatar = u.avatar || null;
-          conv.status = u.status || 'Active on Assistance';
+        for (const conv of conversations) {
+          const lowerC = String(conv.contact).toLowerCase();
+          const u = userLookup.get(lowerC) || userLookup.get(conv.contact);
+          if (u) {
+            conv.contactName = u.displayName || u.username || conv.contactName;
+            conv.username = u.username;
+            conv.phone = u.phone;
+            conv.avatar = u.avatar || null;
+            conv.status = u.status || 'Active on Assistance';
+          }
         }
       } catch (e) {
         // Fallback
