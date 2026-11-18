@@ -4524,6 +4524,12 @@ function App() {
   const [messageInputText, setMessageInputText] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSimulatingReply, setIsSimulatingReply] = useState(false);
+  const [chatAttachment, setChatAttachment] = useState(null); // { fileType: 'image' | 'video' | 'document', dataUrl, name, sizeFormatted }
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const chatImageInputRef = useRef(null);
+  const chatVideoInputRef = useRef(null);
+  const chatDocInputRef = useRef(null);
+  const chatAttachmentPopoverRef = useRef(null);
   const messagesEndRef = useRef(null);
   const [incomingToast, setIncomingToast] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
@@ -5405,10 +5411,69 @@ function App() {
     return () => clearInterval(intervalId);
   }, [currentView, activeChatContact, loggedInUser]);
 
+  useEffect(() => {
+    if (!showAttachmentMenu) return;
+    const handleClickOutside = (e) => {
+      if (
+        chatAttachmentPopoverRef.current &&
+        !chatAttachmentPopoverRef.current.contains(e.target) &&
+        !e.target.closest('#chat-attach-toggle-btn')
+      ) {
+        setShowAttachmentMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showAttachmentMenu]);
+
+  const handleChatFileSelect = (e, fileType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset value so selecting the same file again triggers change event
+    e.target.value = '';
+
+    const sizeInMB = file.size / (1024 * 1024);
+    if (sizeInMB > 35) {
+      alert(`The selected file is too large (${sizeInMB.toFixed(1)} MB). Please select a file under 35 MB.`);
+      return;
+    }
+
+    const formatSize = (bytes) => {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setChatAttachment({
+        fileType,
+        dataUrl: reader.result,
+        name: file.name,
+        sizeFormatted: formatSize(file.size),
+      });
+      setShowAttachmentMenu(false);
+    };
+    reader.onerror = () => {
+      alert('Failed to read the selected file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSendChatMessage = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     const text = messageInputText.trim();
-    if (!text || !activeChatContact || isSendingMessage) return;
+    if ((!text && !chatAttachment) || !activeChatContact || isSendingMessage) return;
+
+    const attachmentToSend = chatAttachment;
+    setChatAttachment(null);
+    setShowAttachmentMenu(false);
+    setMessageInputText('');
 
     const contactKey = getActiveChatKey(activeChatContact);
     const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
@@ -5425,6 +5490,10 @@ function App() {
       recipient: contactKey,
       recipientName: recipientName,
       text: text,
+      mediaType: attachmentToSend ? attachmentToSend.fileType : 'text',
+      mediaUrl: attachmentToSend ? attachmentToSend.dataUrl : '',
+      fileName: attachmentToSend ? attachmentToSend.name : '',
+      fileSize: attachmentToSend ? attachmentToSend.sizeFormatted : '',
       time: formattedTime,
       timestamp: Date.now(),
       createdAt: new Date().toISOString(),
@@ -5443,7 +5512,6 @@ function App() {
       return updated;
     });
 
-    setMessageInputText('');
     setIsSendingMessage(true);
 
     try {
@@ -5456,6 +5524,10 @@ function App() {
           recipient: contactKey,
           recipientName: recipientName,
           text: text,
+          mediaType: attachmentToSend ? attachmentToSend.fileType : 'text',
+          mediaUrl: attachmentToSend ? attachmentToSend.dataUrl : '',
+          fileName: attachmentToSend ? attachmentToSend.name : '',
+          fileSize: attachmentToSend ? attachmentToSend.sizeFormatted : '',
         }),
       });
 
@@ -16088,14 +16160,100 @@ function App() {
                                 </div>
                               )}
                               <div
-                                className={`chat-bubble ${isSent ? 'sent' : 'received'}`}
+                                className={`chat-bubble ${isSent ? 'sent' : 'received'} ${
+                                  msg.mediaType && msg.mediaType !== 'text' ? 'chat-bubble-media' : ''
+                                }`}
                               >
                                 {!isSent && (
                                   <span className="chat-bubble-sender-name">
                                     {msg.senderName || activeChatContact.name}
                                   </span>
                                 )}
-                                <p className="chat-bubble-text">{msg.text}</p>
+
+                                {/* Image Attachment */}
+                                {msg.mediaType === 'image' && msg.mediaUrl && (
+                                  <div className="chat-bubble-media-wrapper chat-media-img-wrap">
+                                    <img
+                                      src={msg.mediaUrl}
+                                      alt={msg.fileName || 'Photo'}
+                                      className="chat-bubble-image"
+                                      onClick={() => window.open(msg.mediaUrl, '_blank')}
+                                      loading="lazy"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Video Attachment */}
+                                {msg.mediaType === 'video' && msg.mediaUrl && (
+                                  <div className="chat-bubble-media-wrapper chat-media-video-wrap">
+                                    <video
+                                      src={msg.mediaUrl}
+                                      controls
+                                      playsInline
+                                      preload="metadata"
+                                      className="chat-bubble-video"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* Document Attachment */}
+                                {msg.mediaType === 'document' && msg.mediaUrl && (
+                                  <div className="chat-bubble-doc-card">
+                                    <div className="chat-bubble-doc-icon">
+                                      <svg
+                                        width="24"
+                                        height="24"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                      </svg>
+                                    </div>
+                                    <div className="chat-bubble-doc-info">
+                                      <span className="chat-bubble-doc-name" title={msg.fileName || 'Document'}>
+                                        {msg.fileName || 'Document'}
+                                      </span>
+                                      {msg.fileSize && (
+                                        <span className="chat-bubble-doc-size">{msg.fileSize}</span>
+                                      )}
+                                    </div>
+                                    <a
+                                      href={msg.mediaUrl}
+                                      download={msg.fileName || 'document'}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="chat-bubble-doc-dl"
+                                      title="Download Document"
+                                      aria-label="Download Document"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <svg
+                                        width="18"
+                                        height="18"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                      </svg>
+                                    </a>
+                                  </div>
+                                )}
+
+                                {msg.text ? <p className="chat-bubble-text">{msg.text}</p> : null}
                                 <span className="chat-bubble-time">{msg.time}</span>
                               </div>
                             </div>
@@ -16106,35 +16264,248 @@ function App() {
                     </div>
 
                     <form className="chat-box-input-form" onSubmit={handleSendChatMessage}>
+                      {/* Hidden File Inputs for Images, Videos, and Documents */}
                       <input
-                        type="text"
-                        className="chat-box-input"
-                        placeholder={`Message ${activeChatContact.name}...`}
-                        value={messageInputText}
-                        onChange={(e) => setMessageInputText(e.target.value)}
-                        autoFocus
+                        ref={chatImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleChatFileSelect(e, 'image')}
                       />
-                      <button
-                        type="submit"
-                        className="chat-box-send-btn"
-                        disabled={!messageInputText.trim()}
-                        aria-label="Send message"
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                      <input
+                        ref={chatVideoInputRef}
+                        type="file"
+                        accept="video/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleChatFileSelect(e, 'video')}
+                      />
+                      <input
+                        ref={chatDocInputRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.csv,text/*,application/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleChatFileSelect(e, 'document')}
+                      />
+
+                      {/* Staged Attachment Preview Bar */}
+                      {chatAttachment && (
+                        <div className="chat-staged-bar" id="chat-staged-attachment-bar">
+                          <div className="chat-staged-left">
+                            {chatAttachment.fileType === 'image' && (
+                              <img
+                                src={chatAttachment.dataUrl}
+                                alt="Preview"
+                                className="chat-staged-thumb"
+                              />
+                            )}
+                            {chatAttachment.fileType === 'video' && (
+                              <video
+                                src={chatAttachment.dataUrl}
+                                className="chat-staged-thumb"
+                                muted
+                              />
+                            )}
+                            {chatAttachment.fileType === 'document' && (
+                              <div className="chat-staged-doc-icon">
+                                <svg
+                                  width="20"
+                                  height="20"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                  <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                              </div>
+                            )}
+                            <div className="chat-staged-info">
+                              <span className="chat-staged-badge">
+                                {chatAttachment.fileType === 'image'
+                                  ? 'Image'
+                                  : chatAttachment.fileType === 'video'
+                                  ? 'Video'
+                                  : 'Document'}
+                              </span>
+                              <span className="chat-staged-filename" title={chatAttachment.name}>
+                                {chatAttachment.name}
+                              </span>
+                              {chatAttachment.sizeFormatted && (
+                                <span className="chat-staged-filesize">{chatAttachment.sizeFormatted}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="chat-staged-close-btn"
+                            onClick={() => setChatAttachment(null)}
+                            title="Remove attachment"
+                            aria-label="Remove attachment"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="chat-input-controls-row">
+                        {/* Options to Send Images, Videos, Documents */}
+                        <div className="chat-attachment-menu-container">
+                          <button
+                            type="button"
+                            className={`chat-attach-toggle-btn ${showAttachmentMenu ? 'active' : ''}`}
+                            id="chat-attach-toggle-btn"
+                            onClick={() => setShowAttachmentMenu((prev) => !prev)}
+                            title="Send Image, Video, or Document"
+                            aria-label="Send media or document"
+                          >
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                          </button>
+
+                          {showAttachmentMenu && (
+                            <div
+                              ref={chatAttachmentPopoverRef}
+                              className="chat-attachment-popover"
+                              id="chat-attachment-popover"
+                            >
+                              <div className="chat-attach-popover-title">Send Option</div>
+
+                              <button
+                                type="button"
+                                className="chat-attach-item-btn item-image"
+                                id="chat-attach-images-btn"
+                                onClick={() => {
+                                  setShowAttachmentMenu(false);
+                                  chatImageInputRef.current?.click();
+                                }}
+                              >
+                                <span className="chat-attach-icon-circle circle-image">
+                                  <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                  </svg>
+                                </span>
+                                <span className="chat-attach-text">Image</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="chat-attach-item-btn item-video"
+                                id="chat-attach-videos-btn"
+                                onClick={() => {
+                                  setShowAttachmentMenu(false);
+                                  chatVideoInputRef.current?.click();
+                                }}
+                              >
+                                <span className="chat-attach-icon-circle circle-video">
+                                  <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                                  </svg>
+                                </span>
+                                <span className="chat-attach-text">Video</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className="chat-attach-item-btn item-document"
+                                id="chat-attach-documents-btn"
+                                onClick={() => {
+                                  setShowAttachmentMenu(false);
+                                  chatDocInputRef.current?.click();
+                                }}
+                              >
+                                <span className="chat-attach-icon-circle circle-document">
+                                  <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                  </svg>
+                                </span>
+                                <span className="chat-attach-text">Document</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          className="chat-box-input"
+                          placeholder={
+                            chatAttachment
+                              ? `Add a caption for this ${chatAttachment.fileType}...`
+                              : `Message ${activeChatContact.name}...`
+                          }
+                          value={messageInputText}
+                          onChange={(e) => setMessageInputText(e.target.value)}
+                          autoFocus
+                        />
+
+                        <button
+                          type="submit"
+                          className="chat-box-send-btn"
+                          disabled={!messageInputText.trim() && !chatAttachment}
+                          aria-label="Send message"
                         >
-                          <line x1="22" y1="2" x2="11" y2="13"></line>
-                          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                        <span>Send</span>
-                      </button>
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                          </svg>
+                          <span>Send</span>
+                        </button>
+                      </div>
                     </form>
                   </>
                 ) : (

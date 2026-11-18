@@ -28,8 +28,25 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
       trim: true,
+      default: '',
+    },
+    mediaType: {
+      type: String,
+      enum: ['text', 'image', 'video', 'document'],
+      default: 'text',
+    },
+    mediaUrl: {
+      type: String,
+      default: '',
+    },
+    fileName: {
+      type: String,
+      default: '',
+    },
+    fileSize: {
+      type: String,
+      default: '',
     },
     time: {
       type: String,

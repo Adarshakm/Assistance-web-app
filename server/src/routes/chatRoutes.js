@@ -111,6 +111,10 @@ const formatMessage = (msg, userAliases = []) => {
     recipient: msg?.recipient || '',
     recipientName: msg?.recipientName || msg?.recipient || '',
     text: msg?.text || '',
+    mediaType: msg?.mediaType || 'text',
+    mediaUrl: msg?.mediaUrl || '',
+    fileName: msg?.fileName || '',
+    fileSize: msg?.fileSize || '',
     time:
       msg?.time ||
       (msg?.createdAt
@@ -124,22 +128,26 @@ const formatMessage = (msg, userAliases = []) => {
 
 /**
  * POST /api/chat/send
- * Send a direct message between sender and recipient
+ * Send a direct message between sender and recipient (text, image, video, document)
  */
 router.post('/send', async (req, res) => {
   try {
-    const { sender, senderName, recipient, recipientName, text, autoReply } = req.body;
+    const { sender, senderName, recipient, recipientName, text, mediaType, mediaUrl, fileName, fileSize, autoReply } = req.body;
 
-    if (!sender || !recipient || !text || !text.trim()) {
+    const cleanSender = sender ? String(sender).trim().toLowerCase() : '';
+    const cleanRecipient = recipient ? String(recipient).trim().toLowerCase() : '';
+    const cleanText = text ? String(text).trim() : '';
+    const cleanMediaType = mediaType && ['image', 'video', 'document'].includes(mediaType) ? mediaType : 'text';
+    const cleanMediaUrl = mediaUrl ? String(mediaUrl) : '';
+    const cleanFileName = fileName ? String(fileName).trim() : '';
+    const cleanFileSize = fileSize ? String(fileSize).trim() : '';
+
+    if (!cleanSender || !cleanRecipient || (!cleanText && !cleanMediaUrl)) {
       return res.status(400).json({
         success: false,
-        error: 'sender, recipient, and text are required fields.',
+        error: 'sender, recipient, and either message text or media are required.',
       });
     }
-
-    const cleanSender = String(sender).trim().toLowerCase();
-    const cleanRecipient = String(recipient).trim().toLowerCase();
-    const cleanText = String(text).trim();
 
     // Map recipient and sender to registered accounts if matching
     let targetRecipient = cleanRecipient;
@@ -198,6 +206,10 @@ router.post('/send', async (req, res) => {
       recipient: targetRecipient,
       recipientName: targetRecipientName,
       text: cleanText,
+      mediaType: cleanMediaType,
+      mediaUrl: cleanMediaUrl,
+      fileName: cleanFileName,
+      fileSize: cleanFileSize,
       time: formattedTime,
       read: false,
     });
@@ -207,13 +219,32 @@ router.post('/send', async (req, res) => {
     let replyMessage = null;
     // Optional automated reply for instant test demonstration
     if (autoReply) {
-      const replyTexts = [
+      let replyTexts = [
         `Hey ${targetSenderName}! Thanks for your message: "${cleanText}"`,
         `Got it! I am online now.`,
         `Hi there! Hope you are doing great today!`,
         `Thanks for reaching out! Let me know if you need any assistance.`,
         `Hello! Nice to connect with you on Assistance!`,
       ];
+      if (cleanMediaType === 'image') {
+        replyTexts = [
+          `Great photo, ${targetSenderName}! Thanks for sharing!`,
+          `Got the image! Looks amazing.`,
+          `Nice picture! 👍`,
+        ];
+      } else if (cleanMediaType === 'video') {
+        replyTexts = [
+          `Received your video, ${targetSenderName}! Thanks for sending!`,
+          `Awesome clip! 🎥`,
+          `Got the video! Playing it now.`,
+        ];
+      } else if (cleanMediaType === 'document') {
+        replyTexts = [
+          `Received your document "${cleanFileName || 'document'}"! Thanks!`,
+          `Got the file! Downloading it now. 📄`,
+          `Thank you for sending the document, ${targetSenderName}.`,
+        ];
+      }
       const randomText = replyTexts[Math.floor(Math.random() * replyTexts.length)];
       const replyMsg = new Message({
         sender: targetRecipient,
@@ -427,11 +458,19 @@ router.get('/recent', async (req, res) => {
 
       if (!otherUser || otherUser === 'unknown') continue;
 
+      let lastSnippet = msg.text || '';
+      if (!lastSnippet) {
+        if (msg.mediaType === 'image') lastSnippet = '📷 Photo';
+        else if (msg.mediaType === 'video') lastSnippet = '🎥 Video';
+        else if (msg.mediaType === 'document') lastSnippet = `📄 ${msg.fileName || 'Document'}`;
+      }
+
       if (!conversationMap.has(otherUser)) {
         conversationMap.set(otherUser, {
           contact: otherUser,
           contactName: otherName || otherUser,
-          lastMessage: msg.text || '',
+          lastMessage: lastSnippet,
+          lastMediaType: msg.mediaType || 'text',
           lastTime: msg.time || '',
           lastTimestamp: msg.createdAt || new Date(),
           lastSender: rawSender,
