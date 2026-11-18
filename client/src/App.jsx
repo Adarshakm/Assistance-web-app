@@ -237,6 +237,94 @@ const STORY_SAMPLE_PRESETS = [
 const DEFAULT_ACTIVE_STORIES = [];
 const DEFAULT_ARCHIVED_STORIES = [];
 
+
+const INITIAL_CONTACT_STATUSES = [
+  {
+    id: 'status_init_1',
+    type: 'text',
+    author: 'Sophia Patel',
+    authorUsername: 'sophiap',
+    authorPhone: '+1 (555) 345-6789',
+    authorAvatar: null,
+    text: '☕ Working remotely today! Enjoying a hot cup of coffee & deep focus vibes ✨',
+    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+    fontFamily: 'sans',
+    textColor: '#ffffff',
+    timestamp: Date.now() - 1000 * 60 * 15,
+    timeFormatted: '15m ago',
+    viewsCount: 8,
+  },
+  {
+    id: 'status_init_2',
+    type: 'image',
+    author: 'Olivia Taylor',
+    authorUsername: 'oliviat',
+    authorPhone: '+1 (555) 567-8901',
+    authorAvatar: null,
+    mediaUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
+    caption: 'Exploring beautiful mountain trails this weekend 🌲⛰️',
+    timestamp: Date.now() - 1000 * 60 * 65,
+    timeFormatted: '1h ago',
+    viewsCount: 14,
+  },
+  {
+    id: 'status_init_3',
+    type: 'video',
+    author: 'David Miller',
+    authorUsername: 'davidm',
+    authorPhone: '+1 (555) 678-9012',
+    authorAvatar: null,
+    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    caption: 'Cinematic sunset timelapse from today 🌅🔥',
+    duration: '0:15',
+    timestamp: Date.now() - 1000 * 60 * 140,
+    timeFormatted: '2h ago',
+    viewsCount: 19,
+  },
+  {
+    id: 'status_init_4',
+    type: 'text',
+    author: 'Liam Smith',
+    authorUsername: 'liamsmith',
+    authorPhone: '+1 (555) 456-7890',
+    authorAvatar: null,
+    text: 'Design review meeting in 15 mins. DM me for urgent matters 📝',
+    background: 'linear-gradient(135deg, #059669, #10b981)',
+    fontFamily: 'serif',
+    textColor: '#ffffff',
+    timestamp: Date.now() - 1000 * 60 * 200,
+    timeFormatted: '3h ago',
+    viewsCount: 11,
+  },
+  {
+    id: 'status_init_5',
+    type: 'image',
+    author: 'Alex Rivera',
+    authorUsername: 'alexr',
+    authorPhone: '+1 (555) 234-5678',
+    authorAvatar: null,
+    mediaUrl: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80',
+    caption: 'Shipping new features! Online and building 🚀💻',
+    timestamp: Date.now() - 1000 * 60 * 260,
+    timeFormatted: '4h ago',
+    viewsCount: 23,
+  },
+  {
+    id: 'status_init_6',
+    type: 'video',
+    author: 'Sophia Patel',
+    authorUsername: 'sophiap',
+    authorPhone: '+1 (555) 345-6789',
+    authorAvatar: null,
+    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    caption: 'Quick drone view over the coast 🌊🌴',
+    duration: '0:15',
+    timestamp: Date.now() - 1000 * 60 * 320,
+    timeFormatted: '5h ago',
+    viewsCount: 17,
+  },
+];
+
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     if (
@@ -4348,6 +4436,60 @@ function App() {
   const [newContactAvatar, setNewContactAvatar] = useState('');
   const contactAvatarInputRef = useRef(null);
 
+  // --- Contact Status Features: Text Status, Image Status, Video Status ---
+  const [contactStatusesList, setContactStatusesList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_contact_statuses_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return typeof INITIAL_CONTACT_STATUSES !== 'undefined' ? INITIAL_CONTACT_STATUSES : [];
+  });
+
+  const [myStatusesList, setMyStatusesList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('assistance_my_contact_statuses_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  const [statusTypeFilter, setStatusTypeFilter] = useState('all'); // 'all' | 'text' | 'image' | 'video'
+  const [statusComposerType, setStatusComposerType] = useState(null); // null | 'text' | 'image' | 'video'
+  const [activeStatusViewItem, setActiveStatusViewItem] = useState(null);
+  const [statusViewProgress, setStatusViewProgress] = useState(0);
+  const [statusViewPaused, setStatusViewPaused] = useState(false);
+  const [statusReplyInput, setStatusReplyInput] = useState('');
+  const [statusFeedback, setStatusFeedback] = useState(null);
+
+  // Text Status Composer Form State
+  const [textStatusInput, setTextStatusInput] = useState('');
+  const [textStatusBg, setTextStatusBg] = useState('linear-gradient(135deg, #4f46e5, #7c3aed)');
+  const [textStatusFont, setTextStatusFont] = useState('sans');
+  const [textStatusColor, setTextStatusColor] = useState('#ffffff');
+
+  // Image Status Composer Form State
+  const [imageStatusPreview, setImageStatusPreview] = useState(null);
+  const [imageStatusCaption, setImageStatusCaption] = useState('');
+  const statusImageInputRef = useRef(null);
+
+  // Video Status Composer Form State
+  const [videoStatusPreview, setVideoStatusPreview] = useState(null);
+  const [videoStatusCaption, setVideoStatusCaption] = useState('');
+  const statusVideoInputRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('assistance_my_contact_statuses_v2', JSON.stringify(myStatusesList));
+    } catch {}
+  }, [myStatusesList]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('assistance_contact_statuses_v2', JSON.stringify(contactStatusesList));
+    } catch {}
+  }, [contactStatusesList]);
+
+
   const [activeChatContact, setActiveChatContact] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_active_chat_contact');
@@ -5955,6 +6097,150 @@ function App() {
     });
   }, [effectiveRegisteredList, contactsSearchQuery]);
 
+  const allAvailableStatuses = useMemo(() => {
+    return [...myStatusesList, ...contactStatusesList];
+  }, [myStatusesList, contactStatusesList]);
+
+  const filteredStatuses = useMemo(() => {
+    const q = (contactsSearchQuery || '').trim().toLowerCase();
+    return allAvailableStatuses.filter((s) => {
+      if (statusTypeFilter !== 'all' && s.type !== statusTypeFilter) {
+        return false;
+      }
+      if (!q) return true;
+      const authorMatch = String(s.author || '').toLowerCase().includes(q);
+      const userMatch = String(s.authorUsername || '').toLowerCase().includes(q);
+      const textMatch = String(s.text || '').toLowerCase().includes(q);
+      const captionMatch = String(s.caption || '').toLowerCase().includes(q);
+      return authorMatch || userMatch || textMatch || captionMatch;
+    });
+  }, [allAvailableStatuses, statusTypeFilter, contactsSearchQuery]);
+
+  const countByStatusType = useMemo(() => {
+    return {
+      all: allAvailableStatuses.length,
+      text: allAvailableStatuses.filter((s) => s.type === 'text').length,
+      image: allAvailableStatuses.filter((s) => s.type === 'image').length,
+      video: allAvailableStatuses.filter((s) => s.type === 'video').length,
+    };
+  }, [allAvailableStatuses]);
+
+  // Status Viewer Timer auto-advance
+  useEffect(() => {
+    if (!activeStatusViewItem || statusViewPaused) return;
+    const interval = setInterval(() => {
+      setStatusViewProgress((prev) => {
+        if (prev >= 100) {
+          const list = filteredStatuses.length > 0 ? filteredStatuses : allAvailableStatuses;
+          const currentIdx = list.findIndex((s) => s.id === activeStatusViewItem.id);
+          if (currentIdx !== -1 && currentIdx < list.length - 1) {
+            setActiveStatusViewItem(list[currentIdx + 1]);
+            return 0;
+          } else {
+            setActiveStatusViewItem(null);
+            return 0;
+          }
+        }
+        return prev + 2;
+      });
+    }, 100);
+    return () => clearInterval(interval);
+  }, [activeStatusViewItem, statusViewPaused, filteredStatuses, allAvailableStatuses]);
+
+  const handleNextStatus = () => {
+    if (!activeStatusViewItem) return;
+    const list = filteredStatuses.length > 0 ? filteredStatuses : allAvailableStatuses;
+    const idx = list.findIndex((s) => s.id === activeStatusViewItem.id);
+    if (idx !== -1 && idx < list.length - 1) {
+      setActiveStatusViewItem(list[idx + 1]);
+      setStatusViewProgress(0);
+    } else {
+      setActiveStatusViewItem(null);
+    }
+  };
+
+  const handlePrevStatus = () => {
+    if (!activeStatusViewItem) return;
+    const list = filteredStatuses.length > 0 ? filteredStatuses : allAvailableStatuses;
+    const idx = list.findIndex((s) => s.id === activeStatusViewItem.id);
+    if (idx > 0) {
+      setActiveStatusViewItem(list[idx - 1]);
+      setStatusViewProgress(0);
+    }
+  };
+
+  const handlePostTextStatus = (e) => {
+    if (e) e.preventDefault();
+    if (!textStatusInput.trim()) return;
+    const newStatus = {
+      id: `status_txt_${Date.now()}`,
+      type: 'text',
+      author: loggedInUser || 'My Status',
+      authorUsername: (loggedInUser || 'user').toLowerCase().replace(/\s+/g, '_'),
+      authorAvatar: (profilePicture || null) || null,
+      text: textStatusInput.trim(),
+      background: textStatusBg,
+      fontFamily: textStatusFont,
+      textColor: textStatusColor,
+      timestamp: Date.now(),
+      timeFormatted: 'Just now',
+      viewsCount: 0,
+    };
+    setMyStatusesList((prev) => [newStatus, ...prev]);
+    setTextStatusInput('');
+    setStatusComposerType(null);
+    setStatusFeedback({ type: 'success', text: 'Text status posted successfully!' });
+    setTimeout(() => setStatusFeedback(null), 3000);
+  };
+
+  const handlePostImageStatus = (e) => {
+    if (e) e.preventDefault();
+    if (!imageStatusPreview) return;
+    const newStatus = {
+      id: `status_img_${Date.now()}`,
+      type: 'image',
+      author: loggedInUser || 'My Status',
+      authorUsername: (loggedInUser || 'user').toLowerCase().replace(/\s+/g, '_'),
+      authorAvatar: (profilePicture || null) || null,
+      mediaUrl: imageStatusPreview,
+      caption: imageStatusCaption.trim(),
+      timestamp: Date.now(),
+      timeFormatted: 'Just now',
+      viewsCount: 0,
+    };
+    setMyStatusesList((prev) => [newStatus, ...prev]);
+    setImageStatusPreview(null);
+    setImageStatusCaption('');
+    setStatusComposerType(null);
+    setStatusFeedback({ type: 'success', text: 'Image status posted successfully!' });
+    setTimeout(() => setStatusFeedback(null), 3000);
+  };
+
+  const handlePostVideoStatus = (e) => {
+    if (e) e.preventDefault();
+    if (!videoStatusPreview) return;
+    const newStatus = {
+      id: `status_vid_${Date.now()}`,
+      type: 'video',
+      author: loggedInUser || 'My Status',
+      authorUsername: (loggedInUser || 'user').toLowerCase().replace(/\s+/g, '_'),
+      authorAvatar: (profilePicture || null) || null,
+      mediaUrl: videoStatusPreview,
+      caption: videoStatusCaption.trim(),
+      duration: '0:15',
+      timestamp: Date.now(),
+      timeFormatted: 'Just now',
+      viewsCount: 0,
+    };
+    setMyStatusesList((prev) => [newStatus, ...prev]);
+    setVideoStatusPreview(null);
+    setVideoStatusCaption('');
+    setStatusComposerType(null);
+    setStatusFeedback({ type: 'success', text: 'Video status posted successfully!' });
+    setTimeout(() => setStatusFeedback(null), 3000);
+  };
+
+
   // Helper to compute mutual friends between logged in user and target user
   const getMutualFriends = useCallback(
     (targetUser) => {
@@ -7207,87 +7493,89 @@ function App() {
                 <div className="contacts-header-wrapper">
                   <div className="contacts-title-col">
                     <h1 className="heading contacts-heading" id="contacts-heading">
-                      Contacts on Assistance
+                      {contactsFilterTab === 'status' ? 'Status Updates' : 'Contacts on Assistance'}
                     </h1>
                     <p className="contacts-subheading">
-                      Synced from phone contacts
+                      {contactsFilterTab === 'status' ? 'Text, image, and video status from your contacts' : 'Synced from phone contacts'}
                     </p>
                   </div>
 
-                  <div className="contacts-header-actions">
-                    <button
-                      type="button"
-                      className="contacts-sync-btn"
-                      id="sync-contacts-btn"
-                      onClick={handleDeviceContactSync}
-                      disabled={isSyncingContacts}
-                      title="Sync Phone Contacts with Assistance"
-                    >
-                      <svg
-                        className={isSyncingContacts ? 'spin' : ''}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                  {contactsFilterTab === 'contacts' && (
+                    <div className="contacts-header-actions">
+                      <button
+                        type="button"
+                        className="contacts-sync-btn"
+                        id="sync-contacts-btn"
+                        onClick={handleDeviceContactSync}
+                        disabled={isSyncingContacts}
+                        title="Sync Phone Contacts with Assistance"
                       >
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                      </svg>
-                      {isSyncingContacts ? 'Syncing...' : 'Sync Contacts'}
-                    </button>
+                        <svg
+                          className={isSyncingContacts ? 'spin' : ''}
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                        </svg>
+                        {isSyncingContacts ? 'Syncing...' : 'Sync Contacts'}
+                      </button>
 
-                    <button
-                      type="button"
-                      className="contacts-add-btn"
-                      id="add-phone-contact-btn"
-                      onClick={openAddContactModal}
-                      title="Add a phone contact to sync"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      <button
+                        type="button"
+                        className="contacts-add-btn"
+                        id="add-phone-contact-btn"
+                        onClick={openAddContactModal}
+                        title="Add a phone contact to sync"
                       >
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                        <circle cx="8.5" cy="7" r="4" />
-                        <line x1="20" y1="8" x2="20" y2="14" />
-                        <line x1="23" y1="11" x2="17" y2="11" />
-                      </svg>
-                      Add Contact
-                    </button>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                          <circle cx="8.5" cy="7" r="4" />
+                          <line x1="20" y1="8" x2="20" y2="14" />
+                          <line x1="23" y1="11" x2="17" y2="11" />
+                        </svg>
+                        Add Contact
+                      </button>
 
-                    <button
-                      type="button"
-                      className="contacts-add-btn"
-                      id="export-contacts-btn"
-                      onClick={handleExportContacts}
-                      title="Export Contacts"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      <button
+                        type="button"
+                        className="contacts-add-btn"
+                        id="export-contacts-btn"
+                        onClick={handleExportContacts}
+                        title="Export Contacts"
                       >
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Export Contacts
-                    </button>
-                  </div>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export Contacts
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sync Feedback Message */}
@@ -7359,7 +7647,7 @@ function App() {
                     id="contacts-tab-status"
                   >
                     <span className="contacts-tab-label">Status</span>
-                    <span className="contacts-tab-badge">{filteredStatusContacts.length}</span>
+                    <span className="contacts-tab-badge">{allAvailableStatuses.length}</span>
                   </button>
                 </div>
 
@@ -7520,95 +7808,798 @@ function App() {
                     )}
                   </div>
                 ) : (
-                  /* Status Section */
-                  <div className="contacts-list scrollable-contacts-list" id="status-list">
-                    {filteredStatusContacts.length === 0 ? (
-                      <div className="contacts-empty-state">
-                        <div className="contacts-empty-icon">
-                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M12 6v6l4 2"></path>
-                          </svg>
+                  /* Status Section: Text Status, Image Status, Video Status */
+                  <div className="status-section-container" id="status-main-container">
+                    {/* Status Type Bar: All, Text Status, Image Status, Video Status */}
+                    <div className="status-type-filter-bar" id="status-type-filter-bar">
+                      <button
+                        type="button"
+                        className={`status-type-pill ${statusTypeFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setStatusTypeFilter('all')}
+                        id="status-filter-all"
+                      >
+                        <span>All</span>
+                        <span className="status-type-badge">{countByStatusType.all}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`status-type-pill ${statusTypeFilter === 'text' ? 'active' : ''}`}
+                        onClick={() => setStatusTypeFilter('text')}
+                        id="status-filter-text"
+                      >
+                        <span className="status-type-icon">📝</span>
+                        <span>Text Status</span>
+                        <span className="status-type-badge">{countByStatusType.text}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`status-type-pill ${statusTypeFilter === 'image' ? 'active' : ''}`}
+                        onClick={() => setStatusTypeFilter('image')}
+                        id="status-filter-image"
+                      >
+                        <span className="status-type-icon">🖼️</span>
+                        <span>Image Status</span>
+                        <span className="status-type-badge">{countByStatusType.image}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`status-type-pill ${statusTypeFilter === 'video' ? 'active' : ''}`}
+                        onClick={() => setStatusTypeFilter('video')}
+                        id="status-filter-video"
+                      >
+                        <span className="status-type-icon">🎬</span>
+                        <span>Video Status</span>
+                        <span className="status-type-badge">{countByStatusType.video}</span>
+                      </button>
+                    </div>
+
+                    {/* My Status Card with 3 Creation Actions: Text, Image, Video */}
+                    <div className="my-status-box" id="my-status-box">
+                      <div
+                        className="my-status-left"
+                        onClick={() => {
+                          if (myStatusesList.length > 0) {
+                            setActiveStatusViewItem(myStatusesList[0]);
+                            setStatusViewProgress(0);
+                          } else {
+                            setStatusComposerType('text');
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className={`my-status-avatar-wrapper ${myStatusesList.length > 0 ? 'has-status' : ''}`}>
+                          <div
+                            className="contact-avatar my-status-avatar"
+                            style={{ backgroundColor: (profilePicture || null) ? 'transparent' : '#10b981' }}
+                          >
+                            {(profilePicture || null) ? (
+                              <img src={(profilePicture || null)} alt="My Status" className="contact-avatar-img" />
+                            ) : (
+                              <span>{getInitials(loggedInUser || 'You')}</span>
+                            )}
+                          </div>
+                          {myStatusesList.length > 0 ? (
+                            <span className="my-status-active-badge">{myStatusesList.length}</span>
+                          ) : (
+                            <span className="my-status-add-plus">+</span>
+                          )}
                         </div>
-                        <h3 className="contacts-empty-title">
-                          {contactsSearchQuery ? 'No matching status updates' : 'No status updates yet'}
-                        </h3>
-                        <p className="contacts-empty-text">
-                          {contactsSearchQuery
-                            ? `No status found matching "${contactsSearchQuery}"`
-                            : 'Status updates from your contacts will appear here.'}
-                        </p>
+                        <div className="my-status-info">
+                          <div className="my-status-title">My Status</div>
+                          <div className="my-status-sub">
+                            {myStatusesList.length > 0
+                              ? `${myStatusesList.length} active status update${myStatusesList.length > 1 ? 's' : ''} • Tap to view`
+                              : 'Tap below to share Text, Image, or Video status'}
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      filteredStatusContacts.map((contact) => (
-                        <div
-                          key={contact.id || contact.username}
-                          className="contact-card status-card"
-                          onClick={() => handleOpenChatWithContact(contact)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleOpenChatWithContact(contact);
-                            }
-                          }}
+
+                      <div className="my-status-action-buttons">
+                        <button
+                          type="button"
+                          className="status-create-btn text-status-btn"
+                          onClick={() => setStatusComposerType('text')}
+                          title="Create Text Status"
+                          id="btn-create-text-status"
                         >
-                          <div className="contact-card-left">
-                            <div
-                              className="contact-avatar status-avatar"
-                              style={{
-                                backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username),
-                              }}
-                            >
-                              {contact.avatar ? (
-                                <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
-                              ) : (
-                                <span>{getInitials(contact.phoneBookName || contact.username)}</span>
-                              )}
-                              <span className="status-ring" title="Active Status"></span>
-                            </div>
+                          <span className="btn-icon">✏️</span>
+                          <span className="btn-label">Text</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="status-create-btn image-status-btn"
+                          onClick={() => setStatusComposerType('image')}
+                          title="Create Image Status"
+                          id="btn-create-image-status"
+                        >
+                          <span className="btn-icon">📷</span>
+                          <span className="btn-label">Image</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="status-create-btn video-status-btn"
+                          onClick={() => setStatusComposerType('video')}
+                          title="Create Video Status"
+                          id="btn-create-video-status"
+                        >
+                          <span className="btn-icon">🎥</span>
+                          <span className="btn-label">Video</span>
+                        </button>
+                      </div>
+                    </div>
 
-                            <div className="contact-info">
-                              <div className="contact-name-row">
-                                <span className="contact-name">{contact.phoneBookName}</span>
-                                {contact.username && (
-                                  <span className="contact-username">@{contact.username}</span>
+                    {/* Feedback Toast */}
+                    {statusFeedback && (
+                      <div className={`status-feedback-banner ${statusFeedback.type}`}>
+                        {statusFeedback.text}
+                      </div>
+                    )}
+
+                    {/* Status Updates List */}
+                    <div className="status-updates-header">
+                      <span className="status-updates-title">
+                        {statusTypeFilter === 'all'
+                          ? 'Recent Status Updates'
+                          : statusTypeFilter === 'text'
+                          ? 'Text Statuses'
+                          : statusTypeFilter === 'image'
+                          ? 'Image Statuses'
+                          : 'Video Statuses'}
+                      </span>
+                      <span className="status-updates-count">{filteredStatuses.length}</span>
+                    </div>
+
+                    <div className="contacts-list scrollable-contacts-list status-items-list" id="status-list">
+                      {filteredStatuses.length === 0 ? (
+                        <div className="contacts-empty-state">
+                          <div className="contacts-empty-icon">
+                            <span style={{ fontSize: '2.5rem' }}>
+                              {statusTypeFilter === 'text' ? '📝' : statusTypeFilter === 'image' ? '🖼️' : statusTypeFilter === 'video' ? '🎬' : '⏱️'}
+                            </span>
+                          </div>
+                          <h3 className="contacts-empty-title">
+                            {contactsSearchQuery
+                              ? `No ${statusTypeFilter === 'all' ? 'status' : statusTypeFilter + ' status'} matching "${contactsSearchQuery}"`
+                              : `No ${statusTypeFilter === 'all' ? 'status' : statusTypeFilter + ' status'} updates available`}
+                          </h3>
+                          <p className="contacts-empty-text">
+                            Post your own text, image, or video status using the buttons above!
+                          </p>
+                        </div>
+                      ) : (
+                        filteredStatuses.map((statusItem) => (
+                          <div
+                            key={statusItem.id}
+                            className={`contact-card status-feed-card status-card-${statusItem.type}`}
+                            onClick={() => {
+                              setActiveStatusViewItem(statusItem);
+                              setStatusViewProgress(0);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            <div className="contact-card-left">
+                              <div
+                                className={`contact-avatar status-avatar-ring status-ring-${statusItem.type}`}
+                                style={{
+                                  backgroundColor: statusItem.authorAvatar
+                                    ? 'transparent'
+                                    : getAvatarColor(statusItem.author),
+                                }}
+                              >
+                                {statusItem.authorAvatar ? (
+                                  <img src={statusItem.authorAvatar} alt={statusItem.author} className="contact-avatar-img" />
+                                ) : (
+                                  <span>{getInitials(statusItem.author)}</span>
                                 )}
-                              </div>
-
-                              <div className="status-bubble-text" title={contact.status}>
-                                {contact.status}
-                              </div>
-
-                              <div className="contact-meta-row">
-                                <span className="status-time-text">
-                                  {contact.registeredAt || 'Active recently'}
+                                <span className={`status-type-mini-indicator indicator-${statusItem.type}`} title={`${statusItem.type} status`}>
+                                  {statusItem.type === 'text' ? '📝' : statusItem.type === 'image' ? '🖼️' : '🎬'}
                                 </span>
                               </div>
+
+                              <div className="contact-info">
+                                <div className="contact-name-row">
+                                  <span className="contact-name">{statusItem.author}</span>
+                                  {statusItem.authorUsername && (
+                                    <span className="contact-username">@{statusItem.authorUsername}</span>
+                                  )}
+                                  <span className={`status-tag-pill tag-${statusItem.type}`}>
+                                    {statusItem.type === 'text' && 'Text Status'}
+                                    {statusItem.type === 'image' && 'Image Status'}
+                                    {statusItem.type === 'video' && 'Video Status'}
+                                  </span>
+                                </div>
+
+                                {statusItem.type === 'text' && (
+                                  <div
+                                    className="status-preview-snippet-text"
+                                    style={{ background: statusItem.background, color: statusItem.textColor || '#ffffff' }}
+                                  >
+                                    "{statusItem.text}"
+                                  </div>
+                                )}
+
+                                {statusItem.type === 'image' && (
+                                  <div className="status-preview-snippet-media">
+                                    <img src={statusItem.mediaUrl} alt="Status thumbnail" className="status-preview-thumb-img" />
+                                    <span className="status-preview-caption-text">
+                                      {statusItem.caption || 'Photo status'}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {statusItem.type === 'video' && (
+                                  <div className="status-preview-snippet-media">
+                                    <div className="status-preview-video-thumb">
+                                      <span className="status-video-play-glyph">▶</span>
+                                      {statusItem.duration && <span className="status-video-dur-tag">{statusItem.duration}</span>}
+                                    </div>
+                                    <span className="status-preview-caption-text">
+                                      {statusItem.caption || 'Video status'}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div className="contact-meta-row">
+                                  <span className="status-time-text">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"></circle>
+                                      <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    {statusItem.timeFormatted || 'Recent'}
+                                  </span>
+                                  {statusItem.viewsCount !== undefined && (
+                                    <span className="status-views-meta">
+                                      • {statusItem.viewsCount} views
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="contact-card-actions">
+                              <button
+                                type="button"
+                                className="status-view-open-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveStatusViewItem(statusItem);
+                                  setStatusViewProgress(0);
+                                }}
+                              >
+                                View
+                              </button>
                             </div>
                           </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                          <div className="contact-card-actions">
-                            <button
-                              type="button"
-                              className="contact-action-btn primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenChatWithContact(contact);
-                              }}
-                              title={`Chat with ${contact.phoneBookName}`}
-                              aria-label={`Chat with ${contact.phoneBookName}`}
-                            >
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                              </svg>
-                              Message
-                            </button>
+                {/* 1. Text Status Composer Modal */}
+                {statusComposerType === 'text' && (
+                  <div className="status-modal-backdrop" onClick={() => setStatusComposerType(null)}>
+                    <div className="status-modal text-status-modal" onClick={(e) => e.stopPropagation()}>
+                      <div className="status-modal-header">
+                        <div className="status-modal-title-wrap">
+                          <span className="status-modal-icon">✏️</span>
+                          <h3>Create Text Status</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="status-modal-close"
+                          onClick={() => setStatusComposerType(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <form onSubmit={handlePostTextStatus} className="status-composer-body">
+                        <div className="status-composer-preview-label">Live Preview</div>
+                        <div
+                          className="text-status-live-card"
+                          style={{
+                            background: textStatusBg,
+                            color: textStatusColor,
+                            fontFamily: textStatusFont === 'serif' ? 'Georgia, serif' : textStatusFont === 'monospace' ? 'monospace' : textStatusFont === 'cursive' ? 'cursive' : 'inherit',
+                          }}
+                        >
+                          <div className="live-card-author">{loggedInUser || 'My Status'}</div>
+                          <div className="live-card-text">
+                            {textStatusInput.trim() || 'Type your status update below...'}
                           </div>
                         </div>
-                      ))
-                    )}
+
+                        <div className="composer-field">
+                          <div className="composer-label-row">
+                            <label className="composer-label">Status Message</label>
+                            <span className="composer-counter">{textStatusInput.length}/280</span>
+                          </div>
+                          <textarea
+                            className="composer-textarea"
+                            rows="3"
+                            maxLength={280}
+                            placeholder="What is on your mind? Share a thought, quote, or update..."
+                            value={textStatusInput}
+                            onChange={(e) => setTextStatusInput(e.target.value)}
+                            autoFocus
+                            required
+                          />
+                        </div>
+
+                        <div className="composer-field">
+                          <label className="composer-label">Choose Background Gradient</label>
+                          <div className="status-gradient-palette">
+                            {[
+                              { id: 'indigo', bg: 'linear-gradient(135deg, #4f46e5, #7c3aed)' },
+                              { id: 'emerald', bg: 'linear-gradient(135deg, #059669, #10b981)' },
+                              { id: 'sunset', bg: 'linear-gradient(135deg, #ea580c, #f43f5e)' },
+                              { id: 'ocean', bg: 'linear-gradient(135deg, #0284c7, #2563eb)' },
+                              { id: 'rose', bg: 'linear-gradient(135deg, #db2777, #9333ea)' },
+                              { id: 'dark', bg: 'linear-gradient(135deg, #1f2937, #111827)' },
+                            ].map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className={`gradient-swatch ${textStatusBg === item.bg ? 'selected' : ''}`}
+                                style={{ background: item.bg }}
+                                onClick={() => setTextStatusBg(item.bg)}
+                                title={item.id}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="composer-field">
+                          <label className="composer-label">Font Style</label>
+                          <div className="status-font-options">
+                            {[
+                              { id: 'sans', label: 'Modern Sans' },
+                              { id: 'serif', label: 'Classic Serif' },
+                              { id: 'cursive', label: 'Handwriting' },
+                              { id: 'monospace', label: 'Code Mono' },
+                            ].map((f) => (
+                              <button
+                                key={f.id}
+                                type="button"
+                                className={`font-option-btn ${textStatusFont === f.id ? 'active' : ''}`}
+                                onClick={() => setTextStatusFont(f.id)}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="status-modal-footer">
+                          <button
+                            type="button"
+                            className="status-cancel-btn"
+                            onClick={() => setStatusComposerType(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="status-submit-btn text-submit"
+                            disabled={!textStatusInput.trim()}
+                          >
+                            Share Text Status
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Image Status Composer Modal */}
+                {statusComposerType === 'image' && (
+                  <div className="status-modal-backdrop" onClick={() => setStatusComposerType(null)}>
+                    <div className="status-modal image-status-modal" onClick={(e) => e.stopPropagation()}>
+                      <div className="status-modal-header">
+                        <div className="status-modal-title-wrap">
+                          <span className="status-modal-icon">📷</span>
+                          <h3>Create Image Status</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="status-modal-close"
+                          onClick={() => setStatusComposerType(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <form onSubmit={handlePostImageStatus} className="status-composer-body">
+                        {imageStatusPreview ? (
+                          <div className="status-media-preview-box">
+                            <img src={imageStatusPreview} alt="Status Preview" className="status-media-preview-img" />
+                            <button
+                              type="button"
+                              className="status-media-remove-btn"
+                              onClick={() => setImageStatusPreview(null)}
+                              title="Remove image"
+                            >
+                              ✕ Change Image
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className="status-upload-dropzone"
+                            onClick={() => statusImageInputRef.current?.click()}
+                          >
+                            <input
+                              type="file"
+                              ref={statusImageInputRef}
+                              accept="image/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => setImageStatusPreview(reader.result);
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                            <div className="dropzone-icon">📷</div>
+                            <div className="dropzone-text">Click to upload photo from your device</div>
+                            <div className="dropzone-sub">Supports JPG, PNG, WebP or GIF</div>
+                          </div>
+                        )}
+
+                        {!imageStatusPreview && (
+                          <div className="composer-field">
+                            <label className="composer-label">Or choose a quick photo preset:</label>
+                            <div className="sample-media-grid">
+                              {[
+                                { label: 'Mountain Trail', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80' },
+                                { label: 'Work Desk', url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80' },
+                                { label: 'City Night', url: 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=800&auto=format&fit=crop&q=80' },
+                              ].map((p, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  className="sample-media-pill"
+                                  onClick={() => setImageStatusPreview(p.url)}
+                                >
+                                  <img src={p.url} alt={p.label} className="sample-media-thumb" />
+                                  <span>{p.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="composer-field">
+                          <label className="composer-label">Caption (Optional)</label>
+                          <input
+                            type="text"
+                            className="composer-input"
+                            maxLength={140}
+                            placeholder="Add a caption to your photo..."
+                            value={imageStatusCaption}
+                            onChange={(e) => setImageStatusCaption(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="status-modal-footer">
+                          <button
+                            type="button"
+                            className="status-cancel-btn"
+                            onClick={() => setStatusComposerType(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="status-submit-btn image-submit"
+                            disabled={!imageStatusPreview}
+                          >
+                            Share Image Status
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Video Status Composer Modal */}
+                {statusComposerType === 'video' && (
+                  <div className="status-modal-backdrop" onClick={() => setStatusComposerType(null)}>
+                    <div className="status-modal video-status-modal" onClick={(e) => e.stopPropagation()}>
+                      <div className="status-modal-header">
+                        <div className="status-modal-title-wrap">
+                          <span className="status-modal-icon">🎥</span>
+                          <h3>Create Video Status</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="status-modal-close"
+                          onClick={() => setStatusComposerType(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <form onSubmit={handlePostVideoStatus} className="status-composer-body">
+                        {videoStatusPreview ? (
+                          <div className="status-media-preview-box">
+                            <video src={videoStatusPreview} controls className="status-media-preview-video" autoPlay muted loop />
+                            <button
+                              type="button"
+                              className="status-media-remove-btn"
+                              onClick={() => setVideoStatusPreview(null)}
+                              title="Remove video"
+                            >
+                              ✕ Change Video
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className="status-upload-dropzone"
+                            onClick={() => statusVideoInputRef.current?.click()}
+                          >
+                            <input
+                              type="file"
+                              ref={statusVideoInputRef}
+                              accept="video/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const url = URL.createObjectURL(file);
+                                  setVideoStatusPreview(url);
+                                }
+                              }}
+                            />
+                            <div className="dropzone-icon">🎬</div>
+                            <div className="dropzone-text">Click to upload video from your device</div>
+                            <div className="dropzone-sub">Supports MP4, WebM (up to 30 seconds)</div>
+                          </div>
+                        )}
+
+                        {!videoStatusPreview && (
+                          <div className="composer-field">
+                            <label className="composer-label">Or choose a sample video:</label>
+                            <div className="sample-media-grid">
+                              {[
+                                { label: 'Campfire', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' },
+                                { label: 'Ocean Waves', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4' },
+                                { label: 'Sunny Day', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4' },
+                              ].map((v, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  className="sample-media-pill"
+                                  onClick={() => setVideoStatusPreview(v.url)}
+                                >
+                                  <span className="sample-video-icon">▶</span>
+                                  <span>{v.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="composer-field">
+                          <label className="composer-label">Caption (Optional)</label>
+                          <input
+                            type="text"
+                            className="composer-input"
+                            maxLength={140}
+                            placeholder="Add a caption to your video..."
+                            value={videoStatusCaption}
+                            onChange={(e) => setVideoStatusCaption(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="status-modal-footer">
+                          <button
+                            type="button"
+                            className="status-cancel-btn"
+                            onClick={() => setStatusComposerType(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="status-submit-btn video-submit"
+                            disabled={!videoStatusPreview}
+                          >
+                            Share Video Status
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Fullscreen Interactive Status Viewer Modal */}
+                {activeStatusViewItem && (
+                  <div
+                    className="status-viewer-backdrop"
+                    onClick={() => setActiveStatusViewItem(null)}
+                    onMouseDown={() => setStatusViewPaused(true)}
+                    onMouseUp={() => setStatusViewPaused(false)}
+                    onTouchStart={() => setStatusViewPaused(true)}
+                    onTouchEnd={() => setStatusViewPaused(false)}
+                  >
+                    <div className="status-viewer-modal" onClick={(e) => e.stopPropagation()}>
+                      <div className="status-viewer-progress-bar-bg">
+                        <div
+                          className="status-viewer-progress-bar-fill"
+                          style={{ width: `${statusViewProgress}%` }}
+                        />
+                      </div>
+
+                      <div className="status-viewer-header">
+                        <div className="status-viewer-author-info">
+                          <div
+                            className="contact-avatar status-viewer-avatar"
+                            style={{
+                              backgroundColor: activeStatusViewItem.authorAvatar
+                                ? 'transparent'
+                                : getAvatarColor(activeStatusViewItem.author),
+                            }}
+                          >
+                            {activeStatusViewItem.authorAvatar ? (
+                              <img src={activeStatusViewItem.authorAvatar} alt={activeStatusViewItem.author} className="contact-avatar-img" />
+                            ) : (
+                              <span>{getInitials(activeStatusViewItem.author)}</span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="status-viewer-author-name">
+                              {activeStatusViewItem.author}
+                              <span className={`status-viewer-type-pill pill-${activeStatusViewItem.type}`}>
+                                {activeStatusViewItem.type === 'text' && '📝 Text Status'}
+                                {activeStatusViewItem.type === 'image' && '🖼️ Image Status'}
+                                {activeStatusViewItem.type === 'video' && '🎬 Video Status'}
+                              </span>
+                            </div>
+                            <div className="status-viewer-time">
+                              {activeStatusViewItem.timeFormatted || 'Active status'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="status-viewer-controls">
+                          <button
+                            type="button"
+                            className="status-viewer-close-btn"
+                            onClick={() => setActiveStatusViewItem(null)}
+                            title="Close viewer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="status-viewer-main-content">
+                        <button
+                          type="button"
+                          className="status-nav-arrow left"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePrevStatus();
+                          }}
+                          title="Previous status"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          className="status-nav-arrow right"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNextStatus();
+                          }}
+                          title="Next status"
+                        >
+                          ›
+                        </button>
+
+                        {activeStatusViewItem.type === 'text' && (
+                          <div
+                            className="status-fullscreen-text-card"
+                            style={{
+                              background: activeStatusViewItem.background || 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                              color: activeStatusViewItem.textColor || '#ffffff',
+                              fontFamily: activeStatusViewItem.fontFamily === 'serif' ? 'Georgia, serif' : activeStatusViewItem.fontFamily === 'monospace' ? 'monospace' : activeStatusViewItem.fontFamily === 'cursive' ? 'cursive' : 'inherit',
+                            }}
+                          >
+                            <div className="fullscreen-text-content">
+                              {activeStatusViewItem.text}
+                            </div>
+                          </div>
+                        )}
+
+                        {activeStatusViewItem.type === 'image' && (
+                          <div className="status-fullscreen-media-container">
+                            <img
+                              src={activeStatusViewItem.mediaUrl}
+                              alt="Status"
+                              className="status-fullscreen-media-img"
+                            />
+                            {activeStatusViewItem.caption && (
+                              <div className="status-media-overlay-caption">
+                                {activeStatusViewItem.caption}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {activeStatusViewItem.type === 'video' && (
+                          <div className="status-fullscreen-media-container">
+                            <video
+                              src={activeStatusViewItem.mediaUrl}
+                              className="status-fullscreen-media-video"
+                              autoPlay
+                              controls
+                              playsInline
+                            />
+                            {activeStatusViewItem.caption && (
+                              <div className="status-media-overlay-caption">
+                                {activeStatusViewItem.caption}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="status-viewer-bottom-bar" onClick={(e) => e.stopPropagation()}>
+                        <div className="status-emoji-reactions">
+                          {['❤️', '🔥', '👏', '😂', '😮'].map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="status-reaction-emoji-btn"
+                              onClick={() => {
+                                setStatusFeedback({ type: 'success', text: `Sent ${emoji} reaction!` });
+                                setTimeout(() => setStatusFeedback(null), 2500);
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="status-reply-form">
+                          <input
+                            type="text"
+                            className="status-reply-input"
+                            placeholder={`Reply to ${activeStatusViewItem.author}...`}
+                            value={statusReplyInput}
+                            onChange={(e) => setStatusReplyInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && statusReplyInput.trim()) {
+                                e.preventDefault();
+                                setStatusFeedback({ type: 'success', text: `Reply sent to ${activeStatusViewItem.author}!` });
+                                setStatusReplyInput('');
+                                setTimeout(() => setStatusFeedback(null), 2500);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="status-reply-send-btn"
+                            disabled={!statusReplyInput.trim()}
+                            onClick={() => {
+                              if (statusReplyInput.trim()) {
+                                setStatusFeedback({ type: 'success', text: `Reply sent to ${activeStatusViewItem.author}!` });
+                                setStatusReplyInput('');
+                                setTimeout(() => setStatusFeedback(null), 2500);
+                              }
+                            }}
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -15747,9 +16738,12 @@ function App() {
 
           <button
             type="button"
-            className={`bottom-nav-item ${currentView === 'contacts' ? 'active' : ''}`}
+            className={`bottom-nav-item ${currentView === 'contacts' && contactsFilterTab === 'contacts' ? 'active' : ''}`}
             id="bottom-nav-contacts-btn"
-            onClick={() => navigateTo('contacts')}
+            onClick={() => {
+              navigateTo('contacts');
+              setContactsFilterTab('contacts');
+            }}
             title="Contacts"
             aria-label="Contacts"
           >
@@ -15760,6 +16754,24 @@ function App() {
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
             <span>Contacts</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item highlight-status ${currentView === 'contacts' && contactsFilterTab === 'status' ? 'active' : ''}`}
+            id="bottom-nav-status-btn"
+            onClick={() => {
+              navigateTo('contacts');
+              setContactsFilterTab('status');
+            }}
+            title="Status Updates (Text, Image, Video)"
+            aria-label="Status Updates"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Status</span>
           </button>
 
           <button
