@@ -573,7 +573,13 @@ function App() {
       window.location.pathname === '/voice-and-video-call' ||
       window.location.hash === '#voice-and-video-call' ||
       window.location.pathname === '/voice-video-call' ||
-      window.location.hash === '#voice-video-call'
+      window.location.hash === '#voice-video-call' ||
+      window.location.pathname === '/calls' ||
+      window.location.hash === '#calls' ||
+      window.location.pathname === '/voice-call' ||
+      window.location.hash === '#voice-call' ||
+      window.location.pathname === '/video-call' ||
+      window.location.hash === '#video-call'
     ) {
       return 'voice-and-video-call';
     }
@@ -910,7 +916,13 @@ function App() {
         window.location.pathname === '/voice-and-video-call' ||
         window.location.hash === '#voice-and-video-call' ||
         window.location.pathname === '/voice-video-call' ||
-        window.location.hash === '#voice-video-call'
+        window.location.hash === '#voice-video-call' ||
+        window.location.pathname === '/calls' ||
+        window.location.hash === '#calls' ||
+        window.location.pathname === '/voice-call' ||
+        window.location.hash === '#voice-call' ||
+        window.location.pathname === '/video-call' ||
+        window.location.hash === '#video-call'
       ) {
         setCurrentView('voice-and-video-call');
       } else if (window.location.pathname === '/blank' || window.location.hash === '#blank') {
@@ -4526,6 +4538,20 @@ function App() {
   const callRingRef = useRef(null);
   const incomingRingRef = useRef(null);
   const callTimerRef = useRef(null);
+
+  // --- Voice and Video Call Page Features ---
+  const [callPageTab, setCallPageTab] = useState('voice'); // 'voice' | 'video' | 'history'
+  const [callDialInput, setCallDialInput] = useState('');
+  const [callSearchQuery, setCallSearchQuery] = useState('');
+  const [isCameraTesting, setIsCameraTesting] = useState(false);
+  const camTestVideoRef = useRef(null);
+  const camTestStreamRef = useRef(null);
+
+  const [isMicTesting, setIsMicTesting] = useState(false);
+  const [micTestLevel, setMicTestLevel] = useState(0);
+  const micTestStreamRef = useRef(null);
+  const micTestIntervalRef = useRef(null);
+
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
 
@@ -5001,6 +5027,109 @@ function App() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const handleDialPadPress = (char) => {
+    setCallDialInput((prev) => prev + char);
+  };
+
+  const handleDialPadBackspace = () => {
+    setCallDialInput((prev) => prev.slice(0, -1));
+  };
+
+  const handleStartCallFromDialer = (type = 'voice') => {
+    const raw = callDialInput.trim();
+    if (!raw) return;
+    const match = (effectiveRegisteredList || []).find(
+      (c) =>
+        c.username?.toLowerCase() === raw.toLowerCase() ||
+        c.phoneBookName?.toLowerCase() === raw.toLowerCase() ||
+        c.phone === raw
+    );
+    const target = match || { name: raw, username: raw, phone: raw };
+    handleStartCall(type, target);
+  };
+
+  const handleToggleCameraTest = async () => {
+    if (isCameraTesting) {
+      if (camTestStreamRef.current) {
+        camTestStreamRef.current.getTracks().forEach((t) => t.stop());
+        camTestStreamRef.current = null;
+      }
+      setIsCameraTesting(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        camTestStreamRef.current = stream;
+        if (camTestVideoRef.current) {
+          camTestVideoRef.current.srcObject = stream;
+          camTestVideoRef.current.play().catch(() => {});
+        }
+        setIsCameraTesting(true);
+      } catch (err) {
+        console.warn('Camera test error:', err.message);
+      }
+    }
+  };
+
+  const handleToggleMicTest = async () => {
+    if (isMicTesting) {
+      if (micTestStreamRef.current) {
+        micTestStreamRef.current.getTracks().forEach((t) => t.stop());
+        micTestStreamRef.current = null;
+      }
+      if (micTestIntervalRef.current) {
+        clearInterval(micTestIntervalRef.current);
+        micTestIntervalRef.current = null;
+      }
+      setIsMicTesting(false);
+      setMicTestLevel(0);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        micTestStreamRef.current = stream;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const src = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          src.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          setIsMicTesting(true);
+          micTestIntervalRef.current = setInterval(() => {
+            analyser.getByteFrequencyData(data);
+            const avg = data.reduce((a, b) => a + b, 0) / data.length;
+            setMicTestLevel(Math.min(100, Math.round(avg * 1.5)));
+          }, 80);
+        } else {
+          setIsMicTesting(true);
+          setMicTestLevel(35);
+        }
+      } catch (err) {
+        console.warn('Mic test error:', err.message);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (currentView !== 'voice-and-video-call' || activeCall) {
+      if (camTestStreamRef.current) {
+        camTestStreamRef.current.getTracks().forEach((t) => t.stop());
+        camTestStreamRef.current = null;
+      }
+      setIsCameraTesting(false);
+      if (micTestStreamRef.current) {
+        micTestStreamRef.current.getTracks().forEach((t) => t.stop());
+        micTestStreamRef.current = null;
+      }
+      if (micTestIntervalRef.current) {
+        clearInterval(micTestIntervalRef.current);
+        micTestIntervalRef.current = null;
+      }
+      setIsMicTesting(false);
+      setMicTestLevel(0);
+    }
+  }, [currentView, activeCall]);
 
   const playIncomingChime = () => {
     try {
@@ -6096,6 +6225,18 @@ function App() {
       return nameMatch || userMatch || statusMatch || phoneMatch;
     });
   }, [effectiveRegisteredList, contactsSearchQuery]);
+
+  const filteredCallContacts = useMemo(() => {
+    const q = (callSearchQuery || '').trim().toLowerCase();
+    return (effectiveRegisteredList || []).filter((contact) => {
+      if (!contact) return false;
+      if (!q) return true;
+      const nameMatch = String(contact.phoneBookName || contact.name || '').toLowerCase().includes(q);
+      const userMatch = String(contact.username || '').toLowerCase().includes(q);
+      const phoneMatch = String(contact.phone || '').includes(q);
+      return nameMatch || userMatch || phoneMatch;
+    });
+  }, [effectiveRegisteredList, callSearchQuery]);
 
   const allAvailableStatuses = useMemo(() => {
     return [...myStatusesList, ...contactStatusesList];
@@ -7311,6 +7452,22 @@ function App() {
                   <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
                 <span>Friends-only feed</span>
+              </button>
+
+              <button
+                type="button"
+                className={`navbar-item ${currentView === 'voice-and-video-call' ? 'active' : ''}`}
+                id="navbar-voice-and-video-call-btn"
+                onClick={() =>
+                  navigateTo(currentView === 'voice-and-video-call' ? 'blank' : 'voice-and-video-call')
+                }
+                title="Voice and Video Calls"
+                aria-label="Voice and Video Calls"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <span>Calls</span>
               </button>
             </div>
 
@@ -16121,10 +16278,11 @@ function App() {
             </div>
           ) : currentView === 'voice-and-video-call' ? (
             <div className="call-hub-space" id="call-hub-space">
+              {/* Header */}
               <div className="call-hub-header">
                 <div className="call-hub-title-wrap">
                   <h2 className="call-hub-title">Voice & Video Calls</h2>
-                  <p className="call-hub-subtitle">High-quality, peer-to-peer real-time voice calling</p>
+                  <p className="call-hub-subtitle">High-definition peer-to-peer voice and video communication</p>
                 </div>
                 <button
                   type="button"
@@ -16144,126 +16302,508 @@ function App() {
                 </button>
               </div>
 
-              {/* Quick Call Row */}
-              <div className="call-hub-card">
-                <h3 className="call-hub-section-title">Quick Call Contacts</h3>
-                <div className="call-quick-contacts-list">
-                  {registeredContacts.length === 0 && registeredFriends.length === 0 ? (
-                    <p className="call-empty-quick">No registered contacts yet. Sync or add contacts to call directly!</p>
-                  ) : (
-                    [...new Map([...registeredFriends.map(f => [f.name, f]), ...registeredContacts.map(c => [c.name, c])]).values()].slice(0, 8).map((contact, idx) => (
-                      <div key={idx} className="quick-call-item">
-                        <div
-                          className="quick-call-avatar"
-                          style={{
-                            backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.name || contact.username),
-                          }}
-                        >
-                          {contact.avatar ? (
-                            <img src={contact.avatar} alt={contact.name} />
-                          ) : (
-                            <span>{getInitials(contact.name || contact.username)}</span>
+              {/* Mode Tabs: Voice Call, Video Call, Recent Calls */}
+              <div className="call-mode-tabs-bar" role="tablist">
+                <button
+                  type="button"
+                  className={`call-mode-tab-btn voice-tab ${callPageTab === 'voice' ? 'active' : ''}`}
+                  onClick={() => setCallPageTab('voice')}
+                  id="tab-voice-call"
+                >
+                  <span className="tab-icon">📞</span>
+                  <span className="tab-label">Voice Call</span>
+                </button>
+                <button
+                  type="button"
+                  className={`call-mode-tab-btn video-tab ${callPageTab === 'video' ? 'active' : ''}`}
+                  onClick={() => setCallPageTab('video')}
+                  id="tab-video-call"
+                >
+                  <span className="tab-icon">📹</span>
+                  <span className="tab-label">Video Call</span>
+                </button>
+                <button
+                  type="button"
+                  className={`call-mode-tab-btn history-tab ${callPageTab === 'history' ? 'active' : ''}`}
+                  onClick={() => setCallPageTab('history')}
+                  id="tab-call-history"
+                >
+                  <span className="tab-icon">🕒</span>
+                  <span className="tab-label">Recent Calls</span>
+                  {callHistory.length > 0 && (
+                    <span className="tab-badge">{callHistory.length}</span>
+                  )}
+                </button>
+              </div>
+
+              {/* TAB 1: VOICE CALL FEATURE PANEL */}
+              {callPageTab === 'voice' && (
+                <div className="call-feature-panel voice-panel" id="voice-call-panel">
+                  {/* Voice Call Dialer Card */}
+                  <div className="call-hub-card dialer-card">
+                    <div className="call-panel-header">
+                      <div className="call-panel-title-group">
+                        <span className="call-panel-badge voice">📞 Voice Call Feature</span>
+                        <h3 className="call-panel-title">Start a Voice Call</h3>
+                      </div>
+                      <div className="voice-audio-status-pill">
+                        <span className="status-dot-green"></span>
+                        <span>HD Audio 48kHz</span>
+                      </div>
+                    </div>
+
+                    <div className="call-dialer-layout">
+                      <div className="call-dialer-input-section">
+                        <div className="call-dialer-input-wrapper">
+                          <input
+                            type="text"
+                            className="call-dialer-input"
+                            placeholder="Enter username, phone, or name..."
+                            value={callDialInput}
+                            onChange={(e) => setCallDialInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && callDialInput.trim()) {
+                                handleStartCallFromDialer('voice');
+                              }
+                            }}
+                            id="voice-call-dial-input"
+                          />
+                          {callDialInput && (
+                            <button
+                              type="button"
+                              className="dialer-clear-btn"
+                              onClick={() => setCallDialInput('')}
+                              title="Clear input"
+                            >
+                              ✕
+                            </button>
                           )}
                         </div>
-                        <div className="quick-call-info">
-                          <span className="quick-call-name">{contact.name}</span>
-                          <span className="quick-call-handle">@{contact.username || contact.name}</span>
+
+                        {/* Interactive Keypad */}
+                        <div className="dialpad-grid">
+                          {[
+                            { num: '1', sub: '' },
+                            { num: '2', sub: 'ABC' },
+                            { num: '3', sub: 'DEF' },
+                            { num: '4', sub: 'GHI' },
+                            { num: '5', sub: 'JKL' },
+                            { num: '6', sub: 'MNO' },
+                            { num: '7', sub: 'PQRS' },
+                            { num: '8', sub: 'TUV' },
+                            { num: '9', sub: 'WXYZ' },
+                            { num: '*', sub: '' },
+                            { num: '0', sub: '+' },
+                            { num: '#', sub: '' },
+                          ].map((key) => (
+                            <button
+                              key={key.num}
+                              type="button"
+                              className="dialpad-key"
+                              onClick={() => handleDialPadPress(key.num)}
+                            >
+                              <span className="key-num">{key.num}</span>
+                              {key.sub && <span className="key-sub">{key.sub}</span>}
+                            </button>
+                          ))}
                         </div>
-                        <div className="quick-call-btn-group">
+
+                        <div className="dialer-actions-row">
+                          {callDialInput && (
+                            <button
+                              type="button"
+                              className="dialpad-backspace-btn"
+                              onClick={handleDialPadBackspace}
+                              title="Backspace"
+                            >
+                              ⌫
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="quick-call-action-btn voice"
+                            className="start-call-main-btn voice"
+                            disabled={!callDialInput.trim()}
+                            onClick={() => handleStartCallFromDialer('voice')}
+                            id="start-voice-call-btn"
+                          >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            <span>Start Voice Call</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Microphone Test & Voice Settings */}
+                      <div className="voice-call-sidebar-tools">
+                        <div className="voice-tool-box">
+                          <h4 className="voice-tool-title">Microphone Test</h4>
+                          <p className="voice-tool-desc">Test your microphone input before making a call</p>
+                          <div className="mic-test-visualizer-wrap">
+                            <div className="mic-waveform-bars">
+                              {[1, 2, 3, 4, 5, 6, 7].map((b) => (
+                                <span
+                                  key={b}
+                                  className="mic-bar"
+                                  style={{
+                                    height: isMicTesting ? `${Math.max(8, Math.min(42, (micTestLevel * (0.5 + (b % 3) * 0.3))))}px` : '6px',
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <span className="mic-level-label">
+                              {isMicTesting ? `Level: ${micTestLevel}%` : 'Mic idle'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={`tool-action-btn ${isMicTesting ? 'active' : ''}`}
+                            onClick={handleToggleMicTest}
+                          >
+                            {isMicTesting ? 'Stop Mic Test' : 'Test Microphone'}
+                          </button>
+                        </div>
+
+                        <div className="voice-features-checklist">
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Noise Suppression Enabled</span>
+                          </div>
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Acoustic Echo Cancellation</span>
+                          </div>
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Automatic Gain Control</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contacts for Voice Call */}
+                  <div className="call-hub-card">
+                    <div className="call-section-header-row">
+                      <h3 className="call-hub-section-title">
+                        <span>Contacts to Voice Call</span>
+                        <span className="call-section-count">({filteredCallContacts.length})</span>
+                      </h3>
+                      <input
+                        type="text"
+                        className="call-contacts-search"
+                        placeholder="Filter contacts..."
+                        value={callSearchQuery}
+                        onChange={(e) => setCallSearchQuery(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="call-contacts-grid">
+                      {filteredCallContacts.map((contact) => (
+                        <div key={contact.id || contact.username} className="call-contact-card">
+                          <div
+                            className="call-contact-avatar"
+                            style={{ backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username) }}
+                          >
+                            {contact.avatar ? (
+                              <img src={contact.avatar} alt={contact.phoneBookName} />
+                            ) : (
+                              <span>{getInitials(contact.phoneBookName || contact.username)}</span>
+                            )}
+                          </div>
+                          <div className="call-contact-details">
+                            <span className="call-contact-name">{contact.phoneBookName}</span>
+                            <span className="call-contact-sub">@{contact.username}</span>
+                            {contact.phone && <span className="call-contact-phone">{contact.phone}</span>}
+                          </div>
+                          <button
+                            type="button"
+                            className="direct-call-btn voice"
                             onClick={() => handleStartCall('voice', contact)}
-                            title={`Voice call with ${contact.name}`}
-                            aria-label={`Voice call with ${contact.name}`}
+                            title={`Voice call ${contact.phoneBookName}`}
                           >
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                             </svg>
-                            <span>Voice</span>
+                            <span>Voice Call</span>
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: VIDEO CALL FEATURE PANEL */}
+              {callPageTab === 'video' && (
+                <div className="call-feature-panel video-panel" id="video-call-panel">
+                  {/* Video Call Launcher Card */}
+                  <div className="call-hub-card video-launcher-card">
+                    <div className="call-panel-header">
+                      <div className="call-panel-title-group">
+                        <span className="call-panel-badge video">📹 Video Call Feature</span>
+                        <h3 className="call-panel-title">Start a Video Call</h3>
+                      </div>
+                      <div className="video-stream-status-pill">
+                        <span className="status-dot-blue"></span>
+                        <span>HD 1080p Video</span>
+                      </div>
+                    </div>
+
+                    <div className="video-call-layout">
+                      {/* Left: Camera Preview & Test */}
+                      <div className="video-preview-test-box">
+                        <div className="video-preview-viewport">
+                          <video
+                            ref={camTestVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className={`cam-test-element ${isCameraTesting ? 'active' : 'hidden'}`}
+                          />
+                          {!isCameraTesting && (
+                            <div className="cam-placeholder-view">
+                              <span className="cam-placeholder-icon">📹</span>
+                              <span className="cam-placeholder-text">Camera Preview</span>
+                              <span className="cam-placeholder-sub">Click below to test your camera before calling</span>
+                            </div>
+                          )}
+                          {isCameraTesting && (
+                            <span className="cam-live-indicator">LIVE PREVIEW</span>
+                          )}
+                        </div>
+                        <div className="cam-preview-controls-row">
                           <button
                             type="button"
-                            className="quick-call-action-btn video"
+                            className={`tool-action-btn ${isCameraTesting ? 'active danger' : 'primary'}`}
+                            onClick={handleToggleCameraTest}
+                          >
+                            {isCameraTesting ? 'Turn Off Camera Test' : 'Test Camera Preview'}
+                          </button>
+                          {hasMultipleCameras && isCameraTesting && (
+                            <button
+                              type="button"
+                              className="tool-action-btn"
+                              onClick={() => voiceCallService.switchCamera()}
+                            >
+                              Flip Camera
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Direct Video Call Input & Start */}
+                      <div className="video-call-controls-box">
+                        <label className="video-call-input-label">Call Any User or Phone Number</label>
+                        <div className="call-dialer-input-wrapper">
+                          <input
+                            type="text"
+                            className="call-dialer-input"
+                            placeholder="Enter username or contact name..."
+                            value={callDialInput}
+                            onChange={(e) => setCallDialInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && callDialInput.trim()) {
+                                handleStartCallFromDialer('video');
+                              }
+                            }}
+                            id="video-call-dial-input"
+                          />
+                          {callDialInput && (
+                            <button
+                              type="button"
+                              className="dialer-clear-btn"
+                              onClick={() => setCallDialInput('')}
+                              title="Clear input"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="start-call-main-btn video"
+                          disabled={!callDialInput.trim()}
+                          onClick={() => handleStartCallFromDialer('video')}
+                          id="start-video-call-btn"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                          <span>Start Video Call</span>
+                        </button>
+
+                        <div className="video-features-checklist">
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Picture-in-Picture (PiP) Window</span>
+                          </div>
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Fullscreen Immersive Mode</span>
+                          </div>
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Front / Back Camera Switching</span>
+                          </div>
+                          <div className="feature-check-item">
+                            <span className="check-icon">✓</span>
+                            <span>Instant Mute &amp; Video Toggle</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contacts for Video Call */}
+                  <div className="call-hub-card">
+                    <div className="call-section-header-row">
+                      <h3 className="call-hub-section-title">
+                        <span>Contacts to Video Call</span>
+                        <span className="call-section-count">({filteredCallContacts.length})</span>
+                      </h3>
+                      <input
+                        type="text"
+                        className="call-contacts-search"
+                        placeholder="Filter contacts..."
+                        value={callSearchQuery}
+                        onChange={(e) => setCallSearchQuery(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="call-contacts-grid">
+                      {filteredCallContacts.map((contact) => (
+                        <div key={contact.id || contact.username} className="call-contact-card video-card">
+                          <div
+                            className="call-contact-avatar video"
+                            style={{ backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username) }}
+                          >
+                            {contact.avatar ? (
+                              <img src={contact.avatar} alt={contact.phoneBookName} />
+                            ) : (
+                              <span>{getInitials(contact.phoneBookName || contact.username)}</span>
+                            )}
+                          </div>
+                          <div className="call-contact-details">
+                            <span className="call-contact-name">{contact.phoneBookName}</span>
+                            <span className="call-contact-sub">@{contact.username}</span>
+                            {contact.phone && <span className="call-contact-phone">{contact.phone}</span>}
+                          </div>
+                          <button
+                            type="button"
+                            className="direct-call-btn video"
                             onClick={() => handleStartCall('video', contact)}
-                            title={`Video call with ${contact.name}`}
-                            aria-label={`Video call with ${contact.name}`}
+                            title={`Video call ${contact.phoneBookName}`}
                           >
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                               <polygon points="23 7 16 12 23 17 23 7"></polygon>
                               <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
                             </svg>
-                            <span>Video</span>
+                            <span>Video Call</span>
                           </button>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Call History Card */}
-              <div className="call-hub-card">
-                <h3 className="call-hub-section-title">Recent Calls</h3>
-                {callHistory.length === 0 ? (
-                  <div className="call-hub-empty-state">
-                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                    </svg>
-                    <p className="call-empty-title">No recent calls</p>
-                    <p className="call-empty-subtitle">Your completed and missed voice calls will show up here</p>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <div className="call-history-list">
-                    {callHistory.map((call) => (
-                      <div key={call.id} className="call-history-item">
-                        <div
-                          className="call-history-avatar"
-                          style={{
-                            backgroundColor: call.contactAvatar ? 'transparent' : getAvatarColor(call.contactName),
-                          }}
-                        >
-                          {call.contactAvatar ? (
-                            <img src={call.contactAvatar} alt={call.contactName} />
-                          ) : (
-                            <span>{getInitials(call.contactName)}</span>
-                          )}
-                        </div>
-                        <div className="call-history-details">
-                          <div className="call-history-main-row">
-                            <span className="call-history-name">{call.contactName}</span>
-                            <span className="call-history-time">
-                              {new Date(call.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className="call-history-meta-row">
-                            <span className={`call-type-badge ${call.isOutgoing ? 'outgoing' : 'incoming'} ${call.status}`}>
-                              {call.isOutgoing ? '↗ Outgoing' : '↙ Incoming'} • {call.status === 'connected' || call.status === 'ended' ? `${formatCallDuration(call.duration)}` : call.status}
-                            </span>
-                          </div>
-                        </div>
+                </div>
+              )}
+
+              {/* TAB 3: CALL HISTORY (VOICE & VIDEO) */}
+              {callPageTab === 'history' && (
+                <div className="call-feature-panel history-panel" id="call-history-panel">
+                  <div className="call-hub-card">
+                    <div className="call-section-header-row">
+                      <h3 className="call-hub-section-title">
+                        <span>Call Logs</span>
+                        <span className="call-section-count">({callHistory.length})</span>
+                      </h3>
+                      {callHistory.length > 0 && (
                         <button
                           type="button"
-                          className="call-history-redial-btn"
-                          onClick={() =>
-                            handleStartCall(call.type || 'voice', {
-                              name: call.contactName,
-                              username: call.contactUsername,
-                              avatar: call.contactAvatar,
-                            })
-                          }
-                          title={`Call back ${call.contactName}`}
-                          aria-label={`Call back ${call.contactName}`}
+                          className="clear-call-history-btn"
+                          onClick={() => setCallHistory([])}
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                          </svg>
+                          Clear Call History
                         </button>
+                      )}
+                    </div>
+
+                    {callHistory.length === 0 ? (
+                      <div className="call-hub-empty-state">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#525252" strokeWidth="1.5">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        <p className="call-empty-title">No recent calls</p>
+                        <p className="call-empty-subtitle">Your completed and missed voice and video calls will appear here</p>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="call-history-list">
+                        {callHistory.map((call) => (
+                          <div key={call.id} className="call-history-item">
+                            <div
+                              className="call-history-avatar"
+                              style={{
+                                backgroundColor: call.contactAvatar ? 'transparent' : getAvatarColor(call.contactName),
+                              }}
+                            >
+                              {call.contactAvatar ? (
+                                <img src={call.contactAvatar} alt={call.contactName} />
+                              ) : (
+                                <span>{getInitials(call.contactName)}</span>
+                              )}
+                            </div>
+                            <div className="call-history-details">
+                              <div className="call-history-main-row">
+                                <span className="call-history-name">{call.contactName}</span>
+                                <span className="call-history-time">
+                                  {new Date(call.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <div className="call-history-meta-row">
+                                <span className={`call-type-badge ${call.isOutgoing ? 'outgoing' : 'incoming'} ${call.status}`}>
+                                  {call.type === 'video' ? '📹 Video' : '📞 Voice'} • {call.isOutgoing ? '↗ Outgoing' : '↙ Incoming'} • {call.status === 'connected' || call.status === 'ended' ? `${formatCallDuration(call.duration)}` : call.status}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="call-history-actions-group">
+                              <button
+                                type="button"
+                                className="call-redial-btn voice"
+                                onClick={() =>
+                                  handleStartCall('voice', {
+                                    name: call.contactName,
+                                    username: call.contactUsername,
+                                    avatar: call.contactAvatar,
+                                  })
+                                }
+                                title={`Voice Call ${call.contactName}`}
+                              >
+                                📞 Voice
+                              </button>
+                              <button
+                                type="button"
+                                className="call-redial-btn video"
+                                onClick={() =>
+                                  handleStartCall('video', {
+                                    name: call.contactName,
+                                    username: call.contactUsername,
+                                    avatar: call.contactAvatar,
+                                  })
+                                }
+                                title={`Video Call ${call.contactName}`}
+                              >
+                                📹 Video
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="blank-space main-space" id="main-space">
@@ -16734,6 +17274,20 @@ function App() {
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             </svg>
             <span>Messages</span>
+          </button>
+
+          <button
+            type="button"
+            className={`bottom-nav-item highlight-call ${currentView === 'voice-and-video-call' ? 'active' : ''}`}
+            id="bottom-nav-calls-btn"
+            onClick={() => navigateTo('voice-and-video-call')}
+            title="Voice & Video Calls"
+            aria-label="Voice & Video Calls"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            <span>Calls</span>
           </button>
 
           <button

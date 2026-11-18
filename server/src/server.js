@@ -126,11 +126,11 @@ app.use('/stories', storyRoutes);
 app.get('*', (req, res, next) => {
   if (
     req.path.startsWith('/api') ||
-    req.path.startsWith('/chat') ||
-    req.path.startsWith('/users') ||
-    req.path.startsWith('/call') ||
-    req.path.startsWith('/posts') ||
-    req.path.startsWith('/stories')
+    req.path === '/chat' || req.path.startsWith('/chat/') ||
+    req.path === '/users' || req.path.startsWith('/users/') ||
+    req.path === '/call' || req.path.startsWith('/call/') ||
+    req.path === '/posts' || req.path.startsWith('/posts/') ||
+    req.path === '/stories' || req.path.startsWith('/stories/')
   ) {
     return next();
   }
