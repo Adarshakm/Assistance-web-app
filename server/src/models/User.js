@@ -136,6 +136,11 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Indexes for fast exact-match lookups and alias resolution
+userSchema.index({ phone: 1 });
+userSchema.index({ displayName: 1 });
+userSchema.index({ email: 1 });
+
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 export default User;

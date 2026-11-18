@@ -234,37 +234,39 @@ router.post('/send', async (req, res) => {
     let targetSenderName = senderName || cleanSender;
 
     try {
-      const escapedRecipient = escapeRegex(cleanRecipient);
-      const rQuery = {
-        $or: [
-          { username: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
-          { displayName: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
-          { email: { $regex: '^' + escapedRecipient + '$', $options: 'i' } },
-        ],
-      };
-      const rPattern = makePhonePattern(cleanRecipient);
-      if (rPattern) {
-        rQuery.$or.push({ phone: { $regex: rPattern } });
-      }
-      const foundRecipient = await User.findOne(rQuery, 'username displayName phone').lean();
+      const recipientLower = cleanRecipient.toLowerCase();
+      const rDigits = normalizeDigits(cleanRecipient);
+      const foundRecipient = await User.findOne(
+        {
+          $or: [
+            { username: recipientLower },
+            { displayName: cleanRecipient },
+            { email: recipientLower },
+            { phone: cleanRecipient },
+            ...(rDigits ? [{ phone: rDigits }] : []),
+          ],
+        },
+        'username displayName phone'
+      ).lean();
       if (foundRecipient && foundRecipient.username) {
         targetRecipient = foundRecipient.username.toLowerCase();
         targetRecipientName = foundRecipient.displayName || foundRecipient.username;
       }
 
-      const escapedSender = escapeRegex(cleanSender);
-      const sQuery = {
-        $or: [
-          { username: { $regex: '^' + escapedSender + '$', $options: 'i' } },
-          { displayName: { $regex: '^' + escapedSender + '$', $options: 'i' } },
-          { email: { $regex: '^' + escapedSender + '$', $options: 'i' } },
-        ],
-      };
-      const sPattern = makePhonePattern(cleanSender);
-      if (sPattern) {
-        sQuery.$or.push({ phone: { $regex: sPattern } });
-      }
-      const foundSender = await User.findOne(sQuery, 'username displayName phone').lean();
+      const senderLower = cleanSender.toLowerCase();
+      const sDigits = normalizeDigits(cleanSender);
+      const foundSender = await User.findOne(
+        {
+          $or: [
+            { username: senderLower },
+            { displayName: cleanSender },
+            { email: senderLower },
+            { phone: cleanSender },
+            ...(sDigits ? [{ phone: sDigits }] : []),
+          ],
+        },
+        'username displayName phone'
+      ).lean();
       if (foundSender && foundSender.username) {
         targetSender = foundSender.username.toLowerCase();
         targetSenderName = foundSender.displayName || foundSender.username;

@@ -4693,12 +4693,17 @@ function App() {
     } catch {}
   }, []);
 
-  // Poll for incoming calls
+  const isPollingCallsRef = useRef(false);
+
+  // Poll for incoming calls sequentially
   useEffect(() => {
     if (!loggedInUser) return;
     let isMounted = true;
+    let timerId = null;
 
     const pollIncomingCalls = async () => {
+      if (isPollingCallsRef.current || !isMounted) return;
+      isPollingCallsRef.current = true;
       try {
         if (activeCall) return;
         const result = await voiceCallService.constructor.checkIncomingCall(loggedInUser);
@@ -4720,14 +4725,20 @@ function App() {
         }
       } catch (err) {
         // ignore polling errors
+      } finally {
+        isPollingCallsRef.current = false;
+        if (isMounted) {
+          const delay = typeof document !== 'undefined' && document.hidden ? 7000 : 3500;
+          timerId = setTimeout(pollIncomingCalls, delay);
+        }
       }
     };
 
     pollIncomingCalls();
-    const interval = setInterval(pollIncomingCalls, 2200);
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (timerId) clearTimeout(timerId);
+      isPollingCallsRef.current = false;
     };
   }, [loggedInUser, activeCall, incomingCall]);
 
@@ -5271,13 +5282,17 @@ function App() {
     navigateTo('messages');
   };
 
+  const isFetchingRecentRef = useRef(false);
+
   // Fetch recent conversations for inbox and unread badges
-  const fetchRecentConversations = async () => {
+  const fetchRecentConversations = async (signal) => {
     const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim();
-    if (!currentUser) return;
+    if (!currentUser || isFetchingRecentRef.current) return;
+    isFetchingRecentRef.current = true;
     try {
       const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}&_t=${Date.now()}`, {
         cache: 'no-store',
+        signal: signal || undefined,
       });
       if (res.ok) {
         const data = await res.json();
@@ -5334,19 +5349,16 @@ function App() {
       }
     } catch {
       // Ignore background poll errors
+    } finally {
+      isFetchingRecentRef.current = false;
     }
   };
 
-  useEffect(() => {
-    fetchRecentConversations();
-    const interval = setInterval(fetchRecentConversations, 2500);
-    return () => clearInterval(interval);
-  }, [loggedInUser, currentView]);
-
   const isFetchingConversationRef = useRef(false);
+  const activeConversationAbortRef = useRef(null);
 
   // Fetch messages from backend for active contact
-  const fetchActiveConversation = async (contact) => {
+  const fetchActiveConversation = async (contact, signal) => {
     if (!contact || isFetchingConversationRef.current) return;
     const contactKey = getActiveChatKey(contact);
     if (!contactKey) return;
@@ -5357,7 +5369,10 @@ function App() {
     try {
       const res = await fetch(
         `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&_t=${Date.now()}`,
-        { cache: 'no-store' }
+        { 
+          cache: 'no-store',
+          signal: signal || undefined,
+        }
       );
       if (res.ok) {
         const data = await res.json();
@@ -5375,6 +5390,17 @@ function App() {
           });
 
           setChatMessages((prev) => {
+            const existing = prev[contactKey] || [];
+            // Optimization: if message count and latest message status are identical, skip state update to prevent re-render loops
+            if (
+              existing.length === normalized.length &&
+              existing.length > 0 &&
+              existing[existing.length - 1]?.id === normalized[normalized.length - 1]?.id &&
+              existing[existing.length - 1]?.read === normalized[normalized.length - 1]?.read
+            ) {
+              return prev;
+            }
+
             const updated = {
               ...prev,
               [contactKey]: normalized,
@@ -5401,25 +5427,84 @@ function App() {
           });
         }
       }
-    } catch {
-      // Offline fallback: keep existing local messages
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        // Offline fallback: keep existing local messages
+      }
     } finally {
       isFetchingConversationRef.current = false;
     }
   };
 
-  // Poll conversation when messages view is open
+  // Poll recent conversations sequentially with dynamic interval
   useEffect(() => {
-    if (currentView !== 'messages' || !activeChatContact) return;
+    let isCancelled = false;
+    let timerId = null;
+    let abortCtrl = null;
 
-    fetchActiveConversation(activeChatContact);
+    const pollRecent = async () => {
+      if (isCancelled || !loggedInUser) return;
+      abortCtrl = new AbortController();
+      try {
+        await fetchRecentConversations(abortCtrl.signal);
+      } catch (err) {
+        // handled
+      }
+      if (!isCancelled) {
+        // If active chat is open, poll recent conversations less frequently (12s) to prioritize active chat sockets
+        const isActiveChatOpen = currentView === 'messages' && !!activeChatContact;
+        const delay = isActiveChatOpen ? 12000 : (typeof document !== 'undefined' && document.hidden ? 10000 : 4500);
+        timerId = setTimeout(pollRecent, delay);
+      }
+    };
 
-    const intervalId = setInterval(() => {
-      fetchActiveConversation(activeChatContact);
-    }, 2500);
+    pollRecent();
 
-    return () => clearInterval(intervalId);
-  }, [currentView, activeChatContact, loggedInUser]);
+    return () => {
+      isCancelled = true;
+      if (abortCtrl) abortCtrl.abort();
+      if (timerId) clearTimeout(timerId);
+      isFetchingRecentRef.current = false;
+    };
+  }, [loggedInUser, currentView, activeChatContact ? getActiveChatKey(activeChatContact) : 'none']);
+
+  // Poll active conversation sequentially with AbortController
+  const activeChatKey = getActiveChatKey(activeChatContact);
+
+  useEffect(() => {
+    if (currentView !== 'messages' || !activeChatKey) return;
+
+    let isCancelled = false;
+    let timerId = null;
+    let abortCtrl = null;
+
+    const pollConversation = async () => {
+      if (isCancelled) return;
+      abortCtrl = new AbortController();
+      activeConversationAbortRef.current = abortCtrl;
+
+      try {
+        await fetchActiveConversation(activeChatContact, abortCtrl.signal);
+      } catch (err) {
+        // Handled in fetchActiveConversation
+      }
+
+      if (!isCancelled) {
+        // Throttled sequential delay: 8s if document is hidden, 3s if active
+        const delay = typeof document !== 'undefined' && document.hidden ? 8000 : 3000;
+        timerId = setTimeout(pollConversation, delay);
+      }
+    };
+
+    pollConversation();
+
+    return () => {
+      isCancelled = true;
+      if (abortCtrl) abortCtrl.abort();
+      if (timerId) clearTimeout(timerId);
+      isFetchingConversationRef.current = false;
+    };
+  }, [currentView, activeChatKey, loggedInUser]);
 
   useEffect(() => {
     if (!showAttachmentMenu) return;
