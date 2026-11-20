@@ -19138,18 +19138,19 @@ body.light-theme .social-modal-footer {
 }
 
 .community-card-banner {
-  min-height: 64px;
+  min-height: 72px;
   border-radius: 13px 13px 0 0;
   background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
   padding: 0.75rem 1rem;
   position: relative;
+  z-index: 1;
   box-sizing: border-box;
 }
 
 .community-badge-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
@@ -19187,32 +19188,41 @@ body.light-theme .social-modal-footer {
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
+  position: relative;
 }
 
 .community-card-avatar-wrap {
-  margin-top: -32px;
+  position: relative;
+  z-index: 10;
+  margin-top: -36px;
   margin-bottom: 0.85rem;
-  display: inline-block;
+  display: inline-flex;
   align-self: flex-start;
+  width: fit-content;
 }
 
 .community-avatar-img,
 .community-avatar-placeholder {
-  width: 58px;
-  height: 58px;
-  border-radius: 12px;
-  border: 3px solid #18181b;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  border: 3.5px solid #18181b;
+  background: #18181b;
   display: flex;
   align-items: center;
   justify-content: center;
   object-fit: cover;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .community-avatar-placeholder {
   color: #ffffff;
   font-weight: 700;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
 }
 
 .community-card-name {
@@ -19482,12 +19492,32 @@ body.light-theme .social-modal-footer {
 }
 
 .community-avatar-preview {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
   cursor: pointer;
   overflow: hidden;
   flex-shrink: 0;
+  border: 2px dashed #3f3f46;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #27272a;
+  transition: border-color 0.15s ease;
+}
+
+.community-avatar-preview:hover {
+  border-color: #3b82f6;
+}
+
+.community-avatar-preview .community-avatar-img,
+.community-avatar-preview .community-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: none;
 }
 
 .community-avatar-picker-actions {

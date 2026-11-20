@@ -121,7 +121,10 @@ const resolveUserAliases = async (identifier = '') => {
       ],
     };
 
-    let matchedUsers = await User.find(exactQuery, 'username displayName phone email').lean();
+    let matchedUsers = await User.find(exactQuery, 'username displayName phone email')
+      .limit(5)
+      .maxTimeMS(3000)
+      .lean();
 
     if (!matchedUsers || matchedUsers.length === 0) {
       const escaped = escapeRegex(raw);
@@ -135,6 +138,7 @@ const resolveUserAliases = async (identifier = '') => {
         'username displayName phone email'
       )
         .limit(5)
+        .maxTimeMS(3000)
         .lean();
     }
 
@@ -175,10 +179,10 @@ const formatMessage = (msg, userAliases = []) => {
   const isMe =
     Array.isArray(userAliases) && userAliases.length > 0
       ? Boolean(
-          userAliases.includes(senderStr) ||
-            userAliases.includes(String(msg?.sender || '').trim()) ||
-            (digits && userAliases.includes(digits))
-        )
+        userAliases.includes(senderStr) ||
+        userAliases.includes(String(msg?.sender || '').trim()) ||
+        (digits && userAliases.includes(digits))
+      )
       : false;
 
   return {
@@ -356,6 +360,7 @@ router.post('/send', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Send]:', err);
+    if (res.headersSent) return;
     return res.status(500).json({
       success: false,
       error: 'Failed to send message: ' + (err.message || 'Server error'),
@@ -391,6 +396,7 @@ router.post('/upload', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat Upload Error]:', err);
+    if (res.headersSent) return;
     return res.status(500).json({
       success: false,
       error: 'Upload failed: ' + (err.message || 'Server error'),
@@ -418,29 +424,27 @@ router.get('/conversation', async (req, res) => {
 
     const user1Aliases = await resolveUserAliases(user1);
     const user2Aliases = await resolveUserAliases(user2);
+    const cleanUser1Aliases = Array.from(new Set(user1Aliases.map((a) => String(a || '').trim()).filter(Boolean)));
+    const cleanUser2Aliases = Array.from(new Set(user2Aliases.map((a) => String(a || '').trim()).filter(Boolean)));
 
     const messages = await Message.find({
-      $and: [
-        {
-          $or: [
-            { sender: { $in: user1Aliases }, recipient: { $in: user2Aliases } },
-            { sender: { $in: user2Aliases }, recipient: { $in: user1Aliases } },
-          ],
-        },
-        { sender: { $type: 'string', $ne: '' } },
-        { recipient: { $type: 'string', $ne: '' } },
+      $or: [
+        { sender: { $in: cleanUser1Aliases }, recipient: { $in: cleanUser2Aliases } },
+        { sender: { $in: cleanUser2Aliases }, recipient: { $in: cleanUser1Aliases } },
       ],
     })
       .sort({ createdAt: 1 })
+      .limit(300)
+      .maxTimeMS(4000)
       .lean();
 
     // Mark messages received by user1 as read in the background
     Message.updateMany(
-      { sender: { $in: user2Aliases }, recipient: { $in: user1Aliases }, read: false },
+      { sender: { $in: cleanUser2Aliases }, recipient: { $in: cleanUser1Aliases }, read: false },
       { $set: { read: true } }
     ).catch((e) => console.error('[Chat Read Update Error]:', e));
 
-    const formatted = messages.map((m) => formatMessage(m, user1Aliases));
+    const formatted = messages.map((m) => formatMessage(m, cleanUser1Aliases));
 
     return res.status(200).json({
       success: true,
@@ -449,6 +453,7 @@ router.get('/conversation', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Conversation]:', err);
+    if (res.headersSent) return;
     return res.status(200).json({
       success: true,
       count: 0,
@@ -515,6 +520,7 @@ router.post('/simulate-reply', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Simulate Reply]:', err);
+    if (res.headersSent) return;
     return res.status(500).json({
       success: false,
       error: 'Failed to simulate reply: ' + (err.message || 'Server error'),
@@ -541,17 +547,16 @@ router.get('/recent', async (req, res) => {
     }
 
     const userAliases = await resolveUserAliases(user);
+    const cleanAliases = Array.from(
+      new Set(userAliases.map((a) => String(a || '').trim()).filter((a) => a.length > 0))
+    );
 
     const messages = await Message.find({
-      $and: [
-        {
-          $or: [{ sender: { $in: userAliases } }, { recipient: { $in: userAliases } }],
-        },
-        { sender: { $type: 'string', $ne: '' } },
-        { recipient: { $type: 'string', $ne: '' } },
-      ],
+      $or: [{ sender: { $in: cleanAliases } }, { recipient: { $in: cleanAliases } }],
     })
       .sort({ createdAt: -1 })
+      .limit(100)
+      .maxTimeMS(4000)
       .lean();
 
     const conversationMap = new Map();
@@ -568,9 +573,9 @@ router.get('/recent', async (req, res) => {
 
       const senderDigits = normalizeDigits(rawSender);
       const isSender = Boolean(
-        userAliases.includes(lowerSender) ||
-        userAliases.includes(rawSender) ||
-        (senderDigits && userAliases.includes(senderDigits))
+        cleanAliases.includes(lowerSender) ||
+        cleanAliases.includes(rawSender) ||
+        (senderDigits && cleanAliases.includes(senderDigits))
       );
 
       const otherUser = isSender
@@ -622,7 +627,10 @@ router.get('/recent', async (req, res) => {
             ],
           },
           'username displayName avatar phone status'
-        ).lean();
+        )
+          .limit(contactIdentifiers.length)
+          .maxTimeMS(3000)
+          .lean();
 
         const userLookup = new Map();
         for (const u of foundUsers) {
@@ -655,7 +663,8 @@ router.get('/recent', async (req, res) => {
       conversations,
     });
   } catch (err) {
-    console.error('[Chat API Error - Recent]:', err);
+    console.error('[Chat API Error - Recent]:', err.message || err);
+    if (res.headersSent) return;
     return res.status(200).json({
       success: true,
       totalUnread: 0,
@@ -697,6 +706,7 @@ router.delete('/conversation', async (req, res) => {
     });
   } catch (err) {
     console.error('[Chat API Error - Delete Conversation]:', err);
+    if (res.headersSent) return;
     return res.status(500).json({
       success: false,
       error: 'Failed to clear conversation: ' + (err.message || 'Server error'),

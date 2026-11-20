@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 // Fail fast on disconnected queries instead of buffering for 10000ms
 mongoose.set('bufferTimeoutMS', 2500);
+mongoose.set('autoIndex', false);
 
 let isConnecting = false;
 
@@ -16,12 +17,13 @@ const connectDB = async () => {
 
     const conn = await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      socketTimeoutMS: 15000,
       connectTimeoutMS: 10000,
       maxIdleTimeMS: 30000,
       heartbeatFrequencyMS: 10000,
-      maxPoolSize: 15,
-      minPoolSize: 1,
+      maxPoolSize: 6,
+      minPoolSize: 0,
+      autoIndex: false,
     });
     console.log(`[MongoDB] Connected: ${conn.connection.host}`);
   } catch (error) {

@@ -16646,15 +16646,26 @@ function App() {
                           <div className="community-card-body">
                             <div className="community-card-avatar-wrap">
                               {community.avatar ? (
-                                <img src={community.avatar} alt={community.name} className="community-avatar-img" />
-                              ) : (
-                                <div
-                                  className="community-avatar-placeholder"
-                                  style={{ backgroundColor: getAvatarColor(community.name) }}
-                                >
-                                  {getInitials(community.name)}
-                                </div>
-                              )}
+                                <img
+                                  src={community.avatar}
+                                  alt={community.name}
+                                  className="community-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.parentElement?.querySelector('.community-avatar-placeholder');
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="community-avatar-placeholder"
+                                style={{
+                                  backgroundColor: getAvatarColor(community.name),
+                                  display: community.avatar ? 'none' : 'flex',
+                                }}
+                              >
+                                {getInitials(community.name)}
+                              </div>
                             </div>
 
                             <h3 className="community-card-name" title={community.name}>{community.name}</h3>
@@ -16789,7 +16800,14 @@ function App() {
                               title="Click to choose community icon"
                             >
                               {newCommunityAvatar ? (
-                                <img src={newCommunityAvatar} alt="Community avatar" className="community-avatar-img" />
+                                <img
+                                  src={newCommunityAvatar}
+                                  alt="Community avatar"
+                                  className="community-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
                               ) : (
                                 <div
                                   className="community-avatar-placeholder"
@@ -17008,7 +17026,14 @@ function App() {
                               title="Click to choose community icon"
                             >
                               {editCommunityAvatar ? (
-                                <img src={editCommunityAvatar} alt="Community avatar" className="community-avatar-img" />
+                                <img
+                                  src={editCommunityAvatar}
+                                  alt="Community avatar"
+                                  className="community-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
                               ) : (
                                 <div
                                   className="community-avatar-placeholder"
