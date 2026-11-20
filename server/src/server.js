@@ -13,6 +13,7 @@ import chatRoutes from './routes/chatRoutes.js';
 import callRoutes from './routes/callRoutes.js';
 import postRoutes from './routes/postRoutes.js';
 import storyRoutes from './routes/storyRoutes.js';
+import communityRoutes from './routes/communityRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -22,8 +23,12 @@ const __dirname = path.dirname(__filename);
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 const uploadsDirPath = path.resolve(__dirname, '../uploads');
 const chatUploadsDirPath = path.join(uploadsDirPath, 'chat');
+const communityUploadsDirPath = path.join(uploadsDirPath, 'communities');
 if (!fs.existsSync(chatUploadsDirPath)) {
   fs.mkdirSync(chatUploadsDirPath, { recursive: true });
+}
+if (!fs.existsSync(communityUploadsDirPath)) {
+  fs.mkdirSync(communityUploadsDirPath, { recursive: true });
 }
 
 const app = express();
@@ -68,12 +73,15 @@ app.get('/health', (req, res) => {
 });
 
 // Fast fallback when database is disconnected or connecting (prevents 10000ms buffering timeouts)
-app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories'], (req, res, next) => {
+app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities'], (req, res, next) => {
   if (req.path === '/health' || req.path === '/api/health') return next();
 
   if (mongoose.connection.readyState !== 1) {
     if (req.method === 'GET') {
       const fullPath = (req.baseUrl + req.path).toLowerCase();
+      if (fullPath.includes('communit')) {
+        return res.status(200).json({ success: true, count: 0, communities: [], offline: true });
+      }
       if (fullPath.includes('post')) {
         return res.status(200).json({ success: true, posts: [], offline: true });
       }
@@ -130,6 +138,8 @@ app.use('/api/posts', postRoutes);
 app.use('/posts', postRoutes);
 app.use('/api/stories', storyRoutes);
 app.use('/stories', storyRoutes);
+app.use('/api/communities', communityRoutes);
+app.use('/communities', communityRoutes);
 
 // Catch-all for Single Page Application routing (non-API routes)
 app.get('*', (req, res, next) => {
@@ -140,7 +150,8 @@ app.get('*', (req, res, next) => {
     req.path === '/users' || req.path.startsWith('/users/') ||
     req.path === '/call' || req.path.startsWith('/call/') ||
     req.path === '/posts' || req.path.startsWith('/posts/') ||
-    req.path === '/stories' || req.path.startsWith('/stories/')
+    req.path === '/stories' || req.path.startsWith('/stories/') ||
+    req.path === '/communities' || req.path.startsWith('/communities/')
   ) {
     return next();
   }

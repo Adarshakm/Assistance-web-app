@@ -6969,6 +6969,309 @@ function App() {
     return list;
   }, [allCommunityVideos, trendingVideos, myVideosPosts, videoSharingTab, videoCategoryFilter, videoSearchQuery]);
 
+  // ==========================================
+  // COMMUNITIES FEATURE STATE & HANDLERS
+  // ==========================================
+  const [communitiesList, setCommunitiesList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_communities') || localStorage.getItem('assistance_communities');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Create Community State
+  const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
+  const [newCommunityName, setNewCommunityName] = useState('');
+  const [newCommunityDesc, setNewCommunityDesc] = useState('');
+  const [newCommunityCategory, setNewCommunityCategory] = useState('General');
+  const [newCommunityPrivacy, setNewCommunityPrivacy] = useState('public');
+  const [newCommunityAvatar, setNewCommunityAvatar] = useState('');
+  const [isSubmittingCommunity, setIsSubmittingCommunity] = useState(false);
+  const [communityFeedback, setCommunityFeedback] = useState(null);
+  const communityAvatarInputRef = useRef(null);
+
+  // Edit Community State
+  const [editingCommunity, setEditingCommunity] = useState(null);
+  const [editCommunityName, setEditCommunityName] = useState('');
+  const [editCommunityDesc, setEditCommunityDesc] = useState('');
+  const [editCommunityCategory, setEditCommunityCategory] = useState('General');
+  const [editCommunityPrivacy, setEditCommunityPrivacy] = useState('public');
+  const [editCommunityAvatar, setEditCommunityAvatar] = useState('');
+  const [isSubmittingEditCommunity, setIsSubmittingEditCommunity] = useState(false);
+  const [editCommunityFeedback, setEditCommunityFeedback] = useState(null);
+  const editCommunityAvatarInputRef = useRef(null);
+
+  const fetchCommunities = useCallback(async () => {
+    try {
+      const res = await fetch('/api/communities');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.communities)) {
+          setCommunitiesList(data.communities);
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(data.communities));
+          } catch {}
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentView === 'communities') {
+      fetchCommunities();
+    }
+  }, [currentView, fetchCommunities]);
+
+  const handleOpenCreateCommunity = () => {
+    setNewCommunityName('');
+    setNewCommunityDesc('');
+    setNewCommunityCategory('General');
+    setNewCommunityPrivacy('public');
+    setNewCommunityAvatar('');
+    setCommunityFeedback(null);
+    setShowCreateCommunityModal(true);
+  };
+
+  const handleCloseCreateCommunity = () => {
+    setShowCreateCommunityModal(false);
+    setCommunityFeedback(null);
+  };
+
+  const handleCommunityAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewCommunityAvatar(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreateCommunitySubmit = async (e) => {
+    if (e) e.preventDefault();
+    const cleanName = newCommunityName.trim();
+    if (!cleanName) {
+      setCommunityFeedback({ type: 'error', text: 'Community name is required.' });
+      return;
+    }
+    if (cleanName.length < 2) {
+      setCommunityFeedback({ type: 'error', text: 'Community name must be at least 2 characters.' });
+      return;
+    }
+
+    setIsSubmittingCommunity(true);
+    setCommunityFeedback(null);
+
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+    const currentDisplayName = displayName || currentUser;
+
+    const payload = {
+      name: cleanName,
+      description: newCommunityDesc.trim(),
+      category: newCommunityCategory,
+      privacy: newCommunityPrivacy,
+      avatar: newCommunityAvatar || '',
+      creator: currentUser,
+      creatorName: currentDisplayName,
+    };
+
+    try {
+      const res = await fetch('/api/communities/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.community) {
+        setCommunitiesList((prev) => {
+          const updated = [data.community, ...prev.filter((c) => (c._id || c.id) !== (data.community._id || data.community.id))];
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+        setCommunityFeedback({ type: 'success', text: `Community "${cleanName}" created successfully! 🎉` });
+        setTimeout(() => {
+          handleCloseCreateCommunity();
+        }, 900);
+      } else {
+        setCommunityFeedback({ type: 'error', text: data.error || data.message || 'Failed to create community.' });
+      }
+    } catch {
+      // Offline fallback: save locally
+      const localCommunity = {
+        _id: 'local-' + Date.now(),
+        name: cleanName,
+        description: newCommunityDesc.trim(),
+        category: newCommunityCategory,
+        privacy: newCommunityPrivacy,
+        avatar: newCommunityAvatar || '',
+        creator: currentUser,
+        creatorName: currentDisplayName,
+        memberCount: 1,
+        createdAt: new Date().toISOString(),
+      };
+      setCommunitiesList((prev) => {
+        const updated = [localCommunity, ...prev];
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      setCommunityFeedback({ type: 'success', text: `Community "${cleanName}" created successfully!` });
+      setTimeout(() => {
+        handleCloseCreateCommunity();
+      }, 900);
+    } finally {
+      setIsSubmittingCommunity(false);
+    }
+  };
+
+  const handleOpenEditCommunity = (community) => {
+    if (!community) return;
+    setEditingCommunity(community);
+    setEditCommunityName(community.name || '');
+    setEditCommunityDesc(community.description || '');
+    setEditCommunityCategory(community.category || 'General');
+    setEditCommunityPrivacy(community.privacy || 'public');
+    setEditCommunityAvatar(community.avatar || '');
+    setEditCommunityFeedback(null);
+  };
+
+  const handleCloseEditCommunity = () => {
+    setEditingCommunity(null);
+    setEditCommunityFeedback(null);
+  };
+
+  const handleEditCommunityAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setEditCommunityAvatar(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditCommunitySubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!editingCommunity) return;
+
+    const commId = editingCommunity._id || editingCommunity.id;
+    const cleanName = editCommunityName.trim();
+    if (!cleanName) {
+      setEditCommunityFeedback({ type: 'error', text: 'Community name is required.' });
+      return;
+    }
+    if (cleanName.length < 2) {
+      setEditCommunityFeedback({ type: 'error', text: 'Community name must be at least 2 characters.' });
+      return;
+    }
+
+    setIsSubmittingEditCommunity(true);
+    setEditCommunityFeedback(null);
+
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+
+    const payload = {
+      name: cleanName,
+      description: editCommunityDesc.trim(),
+      category: editCommunityCategory,
+      privacy: editCommunityPrivacy,
+      avatar: editCommunityAvatar || '',
+      user: currentUser,
+    };
+
+    try {
+      const res = await fetch(`/api/communities/${commId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.community) {
+        setCommunitiesList((prev) => {
+          const updated = prev.map((c) =>
+            ((c._id || c.id) === (data.community._id || data.community.id || commId))
+              ? { ...c, ...data.community }
+              : c
+          );
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+        setEditCommunityFeedback({ type: 'success', text: 'Community details updated successfully! ✨' });
+        setTimeout(() => {
+          handleCloseEditCommunity();
+        }, 800);
+      } else {
+        setEditCommunityFeedback({
+          type: 'error',
+          text: data.error || data.message || 'Failed to update community details.',
+        });
+      }
+    } catch {
+      // Offline fallback: update local state
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) =>
+          ((c._id || c.id) === commId)
+            ? {
+                ...c,
+                name: cleanName,
+                description: editCommunityDesc.trim(),
+                category: editCommunityCategory,
+                privacy: editCommunityPrivacy,
+                avatar: editCommunityAvatar || '',
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        );
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      setEditCommunityFeedback({ type: 'success', text: 'Community details updated successfully!' });
+      setTimeout(() => {
+        handleCloseEditCommunity();
+      }, 800);
+    } finally {
+      setIsSubmittingEditCommunity(false);
+    }
+  };
+
+  const handleDeleteCommunity = async (communityId) => {
+    if (!window.confirm('Are you sure you want to delete this community?')) return;
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+    try {
+      await fetch(`/api/communities/${communityId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: currentUser }),
+      });
+    } catch {}
+    setCommunitiesList((prev) => {
+      const updated = prev.filter((c) => (c._id || c.id) !== communityId);
+      try {
+        localStorage.setItem('planet_communities', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
   if (
     currentView === 'messages' ||
     currentView === 'blank' ||
@@ -16085,6 +16388,590 @@ function App() {
                           );
                         })()}
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : currentView === 'communities' ? (
+            <div className="communities-space" id="communities-space">
+              <div className="communities-container" id="communities-container">
+                {/* Header with Title and Create Community Button */}
+                <div className="communities-header-wrapper">
+                  <div className="communities-title-col">
+                    <h1 className="heading communities-heading" id="communities-heading">
+                      Communities
+                    </h1>
+                    <p className="communities-subheading">
+                      Connect with people who share your interests
+                    </p>
+                  </div>
+
+                  <div className="communities-header-actions">
+                    <button
+                      type="button"
+                      className="create-community-btn"
+                      id="create-community-header-btn"
+                      onClick={handleOpenCreateCommunity}
+                      title="Create a new community"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      <span>Create Community</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Main Content Area */}
+                {communitiesList.length === 0 ? (
+                  <div className="communities-empty-state" id="communities-empty-state">
+                    <div className="communities-empty-icon-wrap">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                      </svg>
+                    </div>
+                    <h3 className="communities-empty-title">No communities created yet</h3>
+                    <p className="communities-empty-subtitle">
+                      Create your first community to bring people together around shared passions and discussions.
+                    </p>
+                    <button
+                      type="button"
+                      className="create-community-btn large"
+                      id="create-first-community-btn"
+                      onClick={handleOpenCreateCommunity}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      <span>Create Communities</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="communities-grid" id="communities-grid">
+                    {communitiesList.map((community) => {
+                      const commId = community._id || community.id;
+                      const isCreator = Boolean(
+                        loggedInUser &&
+                        community.creator &&
+                        loggedInUser.toLowerCase() === community.creator.toLowerCase()
+                      );
+                      return (
+                        <div key={commId} className="community-card" id={`community-card-${commId}`}>
+                          <div className="community-card-banner">
+                            <div className="community-badge-row">
+                              <span className="community-category-pill">{community.category || 'General'}</span>
+                              <span className={`community-privacy-pill ${community.privacy || 'public'}`}>
+                                {community.privacy === 'private' ? '🔒 Private' : '🌐 Public'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="community-card-body">
+                            <div className="community-card-avatar-wrap">
+                              {community.avatar ? (
+                                <img src={community.avatar} alt={community.name} className="community-avatar-img" />
+                              ) : (
+                                <div
+                                  className="community-avatar-placeholder"
+                                  style={{ backgroundColor: getAvatarColor(community.name) }}
+                                >
+                                  {getInitials(community.name)}
+                                </div>
+                              )}
+                            </div>
+
+                            <h3 className="community-card-name" title={community.name}>{community.name}</h3>
+                            <p className="community-card-desc">
+                              {community.description || 'Welcome to our community! Connect and collaborate with members.'}
+                            </p>
+
+                            <div className="community-card-meta">
+                              <span className="community-members-count">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                  <circle cx="9" cy="7" r="4"></circle>
+                                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                {community.memberCount || 1} {community.memberCount === 1 ? 'member' : 'members'}
+                              </span>
+                              {isCreator && (
+                                <span className="community-creator-badge">Created by you</span>
+                              )}
+                            </div>
+
+                            {isCreator && (
+                              <div className="community-card-actions">
+                                <button
+                                  type="button"
+                                  className="community-edit-btn"
+                                  id={`edit-community-btn-${commId}`}
+                                  onClick={() => handleOpenEditCommunity(community)}
+                                  title="Edit community details"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  </svg>
+                                  <span>Edit Details</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="community-delete-btn"
+                                  id={`delete-community-btn-${commId}`}
+                                  onClick={() => handleDeleteCommunity(commId)}
+                                  title="Delete community"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* MODAL: CREATE COMMUNITY */}
+                {showCreateCommunityModal && (
+                  <div
+                    className="community-modal-overlay"
+                    onClick={handleCloseCreateCommunity}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="create-community-modal-title"
+                  >
+                    <div
+                      className="community-modal-card"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="community-modal-header">
+                        <div>
+                          <h2 className="community-modal-title" id="create-community-modal-title">
+                            Create Communities
+                          </h2>
+                          <p className="community-modal-subtitle">
+                            Create a new space to connect, share, and collaborate with others.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="community-modal-close-btn"
+                          onClick={handleCloseCreateCommunity}
+                          aria-label="Close"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleCreateCommunitySubmit} className="community-modal-form">
+                        {/* Avatar Picker */}
+                        <div className="form-group community-avatar-upload-group">
+                          <label className="input-label">Community Icon</label>
+                          <div className="community-avatar-picker-row">
+                            <div
+                              className="community-avatar-preview"
+                              onClick={() => communityAvatarInputRef.current?.click()}
+                              title="Click to choose community icon"
+                            >
+                              {newCommunityAvatar ? (
+                                <img src={newCommunityAvatar} alt="Community avatar" className="community-avatar-img" />
+                              ) : (
+                                <div
+                                  className="community-avatar-placeholder"
+                                  style={{ backgroundColor: newCommunityName ? getAvatarColor(newCommunityName) : '#3b82f6' }}
+                                >
+                                  {newCommunityName ? getInitials(newCommunityName) : (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                      <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              ref={communityAvatarInputRef}
+                              type="file"
+                              id="community-avatar-input"
+                              accept="image/*"
+                              className="hidden-file-input"
+                              onChange={handleCommunityAvatarChange}
+                            />
+                            <div className="community-avatar-picker-actions">
+                              <button
+                                type="button"
+                                className="community-file-btn"
+                                onClick={() => communityAvatarInputRef.current?.click()}
+                              >
+                                {newCommunityAvatar ? 'Change Photo' : 'Upload Icon'}
+                              </button>
+                              {newCommunityAvatar && (
+                                <button
+                                  type="button"
+                                  className="community-file-remove-btn"
+                                  onClick={() => setNewCommunityAvatar('')}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                              <small className="field-hint">PNG, JPG or WebP up to 5MB</small>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Community Name */}
+                        <div className="form-group">
+                          <div className="label-with-counter">
+                            <label className="input-label" htmlFor="community-name-input">
+                              Community Name <span className="required-star">*</span>
+                            </label>
+                            <span className="char-counter">{newCommunityName.length}/60</span>
+                          </div>
+                          <input
+                            type="text"
+                            id="community-name-input"
+                            className="input-field"
+                            placeholder="e.g. Next.js Developers, AI Builders, Fitness Club"
+                            value={newCommunityName}
+                            maxLength={60}
+                            onChange={(e) => setNewCommunityName(e.target.value)}
+                            required
+                            autoFocus
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div className="form-group">
+                          <div className="label-with-counter">
+                            <label className="input-label" htmlFor="community-desc-input">
+                              Description
+                            </label>
+                            <span className="char-counter">{newCommunityDesc.length}/500</span>
+                          </div>
+                          <textarea
+                            id="community-desc-input"
+                            className="input-field community-textarea"
+                            placeholder="What is this community about? Share your mission, rules, or topics..."
+                            rows={3}
+                            maxLength={500}
+                            value={newCommunityDesc}
+                            onChange={(e) => setNewCommunityDesc(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Category and Privacy Grid */}
+                        <div className="community-form-grid">
+                          <div className="form-group">
+                            <label className="input-label" htmlFor="community-category-select">Category</label>
+                            <select
+                              id="community-category-select"
+                              className="input-field community-select"
+                              value={newCommunityCategory}
+                              onChange={(e) => setNewCommunityCategory(e.target.value)}
+                            >
+                              <option value="General">General</option>
+                              <option value="Technology">Technology & Code</option>
+                              <option value="Design & Art">Design & Creative</option>
+                              <option value="Business">Business & Startups</option>
+                              <option value="Gaming">Gaming & Esports</option>
+                              <option value="Education">Science & Education</option>
+                              <option value="Fitness">Health & Fitness</option>
+                              <option value="Lifestyle">Music & Lifestyle</option>
+                            </select>
+                          </div>
+
+                          <div className="form-group">
+                            <label className="input-label">Privacy</label>
+                            <div className="community-privacy-toggle-row">
+                              <label
+                                className={`privacy-toggle-option ${newCommunityPrivacy === 'public' ? 'selected' : ''}`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="communityPrivacy"
+                                  value="public"
+                                  checked={newCommunityPrivacy === 'public'}
+                                  onChange={() => setNewCommunityPrivacy('public')}
+                                />
+                                <div>
+                                  <strong>🌐 Public</strong>
+                                  <small>Anyone can discover and join</small>
+                                </div>
+                              </label>
+
+                              <label
+                                className={`privacy-toggle-option ${newCommunityPrivacy === 'private' ? 'selected' : ''}`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="communityPrivacy"
+                                  value="private"
+                                  checked={newCommunityPrivacy === 'private'}
+                                  onChange={() => setNewCommunityPrivacy('private')}
+                                />
+                                <div>
+                                  <strong>🔒 Private</strong>
+                                  <small>Only invited members can join</small>
+                                </div>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Feedback message */}
+                        {communityFeedback && (
+                          <div className={`community-feedback-banner ${communityFeedback.type}`} role="alert">
+                            {communityFeedback.text}
+                          </div>
+                        )}
+
+                        {/* Modal Footer */}
+                        <div className="community-modal-footer">
+                          <button
+                            type="button"
+                            className="community-cancel-btn"
+                            onClick={handleCloseCreateCommunity}
+                            disabled={isSubmittingCommunity}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="community-submit-btn"
+                            id="submit-create-community-btn"
+                            disabled={isSubmittingCommunity || !newCommunityName.trim()}
+                          >
+                            {isSubmittingCommunity ? 'Creating...' : 'Create Community'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* MODAL: EDIT COMMUNITY DETAILS */}
+                {editingCommunity && (
+                  <div
+                    className="community-modal-overlay"
+                    onClick={handleCloseEditCommunity}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="edit-community-modal-title"
+                  >
+                    <div
+                      className="community-modal-card"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="community-modal-header">
+                        <div>
+                          <h2 className="community-modal-title" id="edit-community-modal-title">
+                            Edit Community Details
+                          </h2>
+                          <p className="community-modal-subtitle">
+                            Update your community name, description, category, privacy, or icon.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="community-modal-close-btn"
+                          onClick={handleCloseEditCommunity}
+                          aria-label="Close"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleEditCommunitySubmit} className="community-modal-form">
+                        {/* Avatar Picker */}
+                        <div className="form-group community-avatar-upload-group">
+                          <label className="input-label">Community Icon</label>
+                          <div className="community-avatar-picker-row">
+                            <div
+                              className="community-avatar-preview"
+                              onClick={() => editCommunityAvatarInputRef.current?.click()}
+                              title="Click to choose community icon"
+                            >
+                              {editCommunityAvatar ? (
+                                <img src={editCommunityAvatar} alt="Community avatar" className="community-avatar-img" />
+                              ) : (
+                                <div
+                                  className="community-avatar-placeholder"
+                                  style={{ backgroundColor: editCommunityName ? getAvatarColor(editCommunityName) : '#3b82f6' }}
+                                >
+                                  {editCommunityName ? getInitials(editCommunityName) : (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                      <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              ref={editCommunityAvatarInputRef}
+                              type="file"
+                              id="edit-community-avatar-input"
+                              accept="image/*"
+                              className="hidden-file-input"
+                              onChange={handleEditCommunityAvatarChange}
+                            />
+                            <div className="community-avatar-picker-actions">
+                              <button
+                                type="button"
+                                className="community-file-btn"
+                                onClick={() => editCommunityAvatarInputRef.current?.click()}
+                              >
+                                {editCommunityAvatar ? 'Change Photo' : 'Upload Icon'}
+                              </button>
+                              {editCommunityAvatar && (
+                                <button
+                                  type="button"
+                                  className="community-file-remove-btn"
+                                  onClick={() => setEditCommunityAvatar('')}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                              <small className="field-hint">PNG, JPG or WebP up to 5MB</small>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Community Name */}
+                        <div className="form-group">
+                          <div className="label-with-counter">
+                            <label className="input-label" htmlFor="edit-community-name-input">
+                              Community Name <span className="required-star">*</span>
+                            </label>
+                            <span className="char-counter">{editCommunityName.length}/60</span>
+                          </div>
+                          <input
+                            type="text"
+                            id="edit-community-name-input"
+                            className="input-field"
+                            placeholder="e.g. Next.js Developers, AI Builders"
+                            value={editCommunityName}
+                            maxLength={60}
+                            onChange={(e) => setEditCommunityName(e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div className="form-group">
+                          <div className="label-with-counter">
+                            <label className="input-label" htmlFor="edit-community-desc-input">
+                              Description
+                            </label>
+                            <span className="char-counter">{editCommunityDesc.length}/500</span>
+                          </div>
+                          <textarea
+                            id="edit-community-desc-input"
+                            className="input-field community-textarea"
+                            placeholder="What is this community about? Share mission, rules, or topics..."
+                            rows={3}
+                            maxLength={500}
+                            value={editCommunityDesc}
+                            onChange={(e) => setEditCommunityDesc(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Category and Privacy Grid */}
+                        <div className="community-form-grid">
+                          <div className="form-group">
+                            <label className="input-label" htmlFor="edit-community-category-select">Category</label>
+                            <select
+                              id="edit-community-category-select"
+                              className="input-field community-select"
+                              value={editCommunityCategory}
+                              onChange={(e) => setEditCommunityCategory(e.target.value)}
+                            >
+                              <option value="General">General</option>
+                              <option value="Technology">Technology & Code</option>
+                              <option value="Design & Art">Design & Creative</option>
+                              <option value="Business">Business & Startups</option>
+                              <option value="Gaming">Gaming & Esports</option>
+                              <option value="Education">Science & Education</option>
+                              <option value="Fitness">Health & Fitness</option>
+                              <option value="Lifestyle">Music & Lifestyle</option>
+                            </select>
+                          </div>
+
+                          <div className="form-group">
+                            <label className="input-label">Privacy</label>
+                            <div className="community-privacy-toggle-row">
+                              <label
+                                className={`privacy-toggle-option ${editCommunityPrivacy === 'public' ? 'selected' : ''}`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="editCommunityPrivacy"
+                                  value="public"
+                                  checked={editCommunityPrivacy === 'public'}
+                                  onChange={() => setEditCommunityPrivacy('public')}
+                                />
+                                <div>
+                                  <strong>🌐 Public</strong>
+                                  <small>Anyone can discover and join</small>
+                                </div>
+                              </label>
+
+                              <label
+                                className={`privacy-toggle-option ${editCommunityPrivacy === 'private' ? 'selected' : ''}`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="editCommunityPrivacy"
+                                  value="private"
+                                  checked={editCommunityPrivacy === 'private'}
+                                  onChange={() => setEditCommunityPrivacy('private')}
+                                />
+                                <div>
+                                  <strong>🔒 Private</strong>
+                                  <small>Only invited members can join</small>
+                                </div>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Feedback message */}
+                        {editCommunityFeedback && (
+                          <div className={`community-feedback-banner ${editCommunityFeedback.type}`} role="alert">
+                            {editCommunityFeedback.text}
+                          </div>
+                        )}
+
+                        {/* Modal Footer */}
+                        <div className="community-modal-footer">
+                          <button
+                            type="button"
+                            className="community-cancel-btn"
+                            onClick={handleCloseEditCommunity}
+                            disabled={isSubmittingEditCommunity}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="community-submit-btn"
+                            id="submit-edit-community-btn"
+                            disabled={isSubmittingEditCommunity || !editCommunityName.trim()}
+                          >
+                            {isSubmittingEditCommunity ? 'Saving...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </form>
                     </div>
                   </div>
                 )}
