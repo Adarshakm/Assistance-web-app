@@ -80,7 +80,7 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
   if (mongoose.connection.readyState !== 1) {
     if (req.method === 'GET') {
       const fullPath = (req.baseUrl + req.path).toLowerCase();
-      if (fullPath.includes('livestream')) {
+      if (fullPath.includes('livestream') || fullPath.includes('storie') || fullPath.includes('story')) {
         return next();
       }
       if (fullPath.includes('communit')) {
@@ -88,9 +88,6 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
       }
       if (fullPath.includes('post')) {
         return res.status(200).json({ success: true, posts: [], offline: true });
-      }
-      if (fullPath.includes('storie')) {
-        return res.status(200).json({ success: true, stories: [], authorGroups: [], offline: true });
       }
       if (fullPath.includes('chat')) {
         return res.status(200).json({ success: true, messages: [], recent: [], conversations: [], offline: true });
@@ -104,7 +101,7 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
       return res.status(200).json({ success: true, offline: true });
     }
     const fullPath = (req.baseUrl + req.path).toLowerCase();
-    if (fullPath.includes('livestream') || fullPath.includes('communit')) {
+    if (fullPath.includes('livestream') || fullPath.includes('communit') || fullPath.includes('storie') || fullPath.includes('story')) {
       return next();
     }
     if (fullPath.includes('sync-contacts')) {
