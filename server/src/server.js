@@ -14,6 +14,7 @@ import callRoutes from './routes/callRoutes.js';
 import postRoutes from './routes/postRoutes.js';
 import storyRoutes from './routes/storyRoutes.js';
 import communityRoutes from './routes/communityRoutes.js';
+import livestreamRoutes from './routes/livestreamRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -73,12 +74,15 @@ app.get('/health', (req, res) => {
 });
 
 // Fast fallback when database is disconnected or connecting (prevents 10000ms buffering timeouts)
-app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities'], (req, res, next) => {
+app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities', '/livestreams'], (req, res, next) => {
   if (req.path === '/health' || req.path === '/api/health') return next();
 
   if (mongoose.connection.readyState !== 1) {
     if (req.method === 'GET') {
       const fullPath = (req.baseUrl + req.path).toLowerCase();
+      if (fullPath.includes('livestream')) {
+        return next();
+      }
       if (fullPath.includes('communit')) {
         return res.status(200).json({ success: true, count: 0, communities: [], offline: true });
       }
@@ -100,6 +104,9 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
       return res.status(200).json({ success: true, offline: true });
     }
     const fullPath = (req.baseUrl + req.path).toLowerCase();
+    if (fullPath.includes('livestream') || fullPath.includes('communit')) {
+      return next();
+    }
     if (fullPath.includes('sync-contacts')) {
       const { contacts = [] } = req.body || {};
       return res.status(200).json({
@@ -140,6 +147,8 @@ app.use('/api/stories', storyRoutes);
 app.use('/stories', storyRoutes);
 app.use('/api/communities', communityRoutes);
 app.use('/communities', communityRoutes);
+app.use('/api/livestreams', livestreamRoutes);
+app.use('/livestreams', livestreamRoutes);
 
 // Catch-all for Single Page Application routing (non-API routes)
 app.get('*', (req, res, next) => {
@@ -151,7 +160,8 @@ app.get('*', (req, res, next) => {
     req.path === '/call' || req.path.startsWith('/call/') ||
     req.path === '/posts' || req.path.startsWith('/posts/') ||
     req.path === '/stories' || req.path.startsWith('/stories/') ||
-    req.path === '/communities' || req.path.startsWith('/communities/')
+    req.path === '/communities' || req.path.startsWith('/communities/') ||
+    req.path === '/livestreams' || req.path.startsWith('/livestreams/')
   ) {
     return next();
   }

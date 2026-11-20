@@ -7433,6 +7433,419 @@ function App() {
     }
   };
 
+  // ==========================================
+  // LIVE STREAM FEATURE STATE & HANDLERS
+  // ==========================================
+  const [liveStreamsList, setLiveStreamsList] = useState([]);
+  const [isLoadingLiveStreams, setIsLoadingLiveStreams] = useState(false);
+  const [liveCategoryFilter, setLiveCategoryFilter] = useState('All');
+
+  // Go Live Setup State
+  const [showGoLiveModal, setShowGoLiveModal] = useState(false);
+  const [newStreamTitle, setNewStreamTitle] = useState('');
+  const [newStreamCategory, setNewStreamCategory] = useState('General');
+  const [isStartingBroadcast, setIsStartingBroadcast] = useState(false);
+  const [goLiveError, setGoLiveError] = useState(null);
+
+  // Active Broadcaster State
+  const [myBroadcastStream, setMyBroadcastStream] = useState(null);
+  const [broadcastDuration, setBroadcastDuration] = useState(0);
+  const [isBroadcastCamOn, setIsBroadcastCamOn] = useState(true);
+  const [isBroadcastMicOn, setIsBroadcastMicOn] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [broadcastChatInput, setBroadcastChatInput] = useState('');
+  const [broadcastReactions, setBroadcastReactions] = useState([]);
+
+  // Active Watcher State
+  const [activeWatchingStream, setActiveWatchingStream] = useState(null);
+  const [watchingChatInput, setWatchingChatInput] = useState('');
+  const [watchingReactions, setWatchingReactions] = useState([]);
+
+  // Media Refs
+  const broadcasterVideoRef = useRef(null);
+  const broadcasterMediaStreamRef = useRef(null);
+  const broadcastTimerRef = useRef(null);
+
+  const fetchLiveStreams = useCallback(async () => {
+    setIsLoadingLiveStreams(true);
+    try {
+      const res = await fetch('/api/livestreams');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.streams) {
+          setLiveStreamsList(data.streams);
+        }
+      }
+    } catch (err) {
+      console.warn('[Fetch Live Streams Error]:', err);
+    } finally {
+      setIsLoadingLiveStreams(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentView === 'live-stream') {
+      fetchLiveStreams();
+    }
+  }, [currentView, fetchLiveStreams]);
+
+  useEffect(() => {
+    return () => {
+      if (broadcastTimerRef.current) clearInterval(broadcastTimerRef.current);
+      if (broadcasterMediaStreamRef.current) {
+        try {
+          broadcasterMediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        } catch {}
+      }
+    };
+  }, []);
+
+  const formatBroadcastDuration = (totalSeconds) => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const triggerFloatingReaction = (emoji, isBroadcaster = false) => {
+    const reaction = {
+      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      emoji,
+      left: Math.floor(Math.random() * 55 + 20),
+    };
+    if (isBroadcaster) {
+      setBroadcastReactions((prev) => [...prev.slice(-15), reaction]);
+    } else {
+      setWatchingReactions((prev) => [...prev.slice(-15), reaction]);
+    }
+    setTimeout(() => {
+      if (isBroadcaster) {
+        setBroadcastReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+      } else {
+        setWatchingReactions((prev) => prev.filter((r) => r.id !== reaction.id));
+      }
+    }, 2200);
+  };
+
+  const handleStartBroadcast = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newStreamTitle.trim()) {
+      setGoLiveError('Please enter a stream title.');
+      return;
+    }
+    setGoLiveError(null);
+    setIsStartingBroadcast(true);
+
+    let localStream = null;
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        }).catch(async (camErr) => {
+          console.warn('[Camera error, trying audio-only]:', camErr);
+          return await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+        });
+      }
+    } catch (mediaErr) {
+      console.warn('[Media permission error]:', mediaErr);
+      localStream = null;
+    }
+
+    const hostUser = (loggedInUser || localStorage.getItem('assistance_user') || 'Creator').trim();
+    const hostPic = profilePicture || localStorage.getItem('assistance_profile_picture') || '';
+
+    try {
+      const res = await fetch('/api/livestreams/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newStreamTitle.trim(),
+          category: newStreamCategory,
+          host: hostUser,
+          hostName: hostUser,
+          hostAvatar: hostPic,
+        }),
+      });
+
+      const data = await res.json();
+      const createdStream = (data.success && data.stream) ? data.stream : {
+        _id: 'live_' + Date.now(),
+        title: newStreamTitle.trim(),
+        category: newStreamCategory,
+        host: hostUser,
+        hostName: hostUser,
+        hostAvatar: hostPic,
+        status: 'live',
+        viewerCount: 1,
+        likesCount: 0,
+        comments: [
+          {
+            id: 'c_welcome',
+            user: 'system',
+            userName: 'Planet Live',
+            text: 'Welcome to your live broadcast! Live chat is now open.',
+            createdAt: new Date(),
+          }
+        ],
+        startedAt: new Date(),
+      };
+
+      broadcasterMediaStreamRef.current = localStream;
+      setMyBroadcastStream(createdStream);
+      setShowGoLiveModal(false);
+      setNewStreamTitle('');
+      setIsBroadcastCamOn(!!(localStream && localStream.getVideoTracks().length > 0 && localStream.getVideoTracks()[0].enabled));
+      setIsBroadcastMicOn(!!(localStream && localStream.getAudioTracks().length > 0 && localStream.getAudioTracks()[0].enabled));
+      setBroadcastDuration(0);
+
+      setLiveStreamsList((prev) => [
+        createdStream,
+        ...prev.filter((s) => (s._id || s.id) !== (createdStream._id || createdStream.id)),
+      ]);
+
+      if (broadcastTimerRef.current) clearInterval(broadcastTimerRef.current);
+      broadcastTimerRef.current = setInterval(() => {
+        setBroadcastDuration((d) => d + 1);
+      }, 1000);
+
+      setTimeout(() => {
+        if (broadcasterVideoRef.current && localStream) {
+          try {
+            broadcasterVideoRef.current.srcObject = localStream;
+            broadcasterVideoRef.current.play().catch(() => {});
+          } catch {}
+        }
+      }, 200);
+    } catch (err) {
+      console.error('[Error starting broadcast]:', err);
+      setGoLiveError('Failed to start broadcast. Please try again.');
+    } finally {
+      setIsStartingBroadcast(false);
+    }
+  };
+
+  const handleToggleCamera = () => {
+    if (broadcasterMediaStreamRef.current) {
+      const videoTracks = broadcasterMediaStreamRef.current.getVideoTracks();
+      if (videoTracks.length > 0) {
+        const nextState = !videoTracks[0].enabled;
+        videoTracks.forEach((t) => { t.enabled = nextState; });
+        setIsBroadcastCamOn(nextState);
+      } else {
+        setIsBroadcastCamOn((prev) => !prev);
+      }
+    } else {
+      setIsBroadcastCamOn((prev) => !prev);
+    }
+  };
+
+  const handleToggleMic = () => {
+    if (broadcasterMediaStreamRef.current) {
+      const audioTracks = broadcasterMediaStreamRef.current.getAudioTracks();
+      if (audioTracks.length > 0) {
+        const nextState = !audioTracks[0].enabled;
+        audioTracks.forEach((t) => { t.enabled = nextState; });
+        setIsBroadcastMicOn(nextState);
+      } else {
+        setIsBroadcastMicOn((prev) => !prev);
+      }
+    } else {
+      setIsBroadcastMicOn((prev) => !prev);
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (broadcasterMediaStreamRef.current) {
+        try {
+          const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() => null);
+          if (camStream && broadcasterVideoRef.current) {
+            broadcasterVideoRef.current.srcObject = camStream;
+            broadcasterMediaStreamRef.current = camStream;
+            setIsBroadcastCamOn(true);
+          }
+        } catch {}
+      }
+      setIsScreenSharing(false);
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          if (broadcasterVideoRef.current) {
+            broadcasterVideoRef.current.srcObject = screenStream;
+          }
+          const screenTrack = screenStream.getVideoTracks()[0];
+          if (screenTrack) {
+            screenTrack.onended = () => {
+              setIsScreenSharing(false);
+            };
+          }
+          setIsScreenSharing(true);
+        }
+      } catch (err) {
+        console.warn('[Screen share cancelled]:', err);
+      }
+    }
+  };
+
+  const handleEndBroadcast = async () => {
+    if (!myBroadcastStream) return;
+    const streamId = myBroadcastStream._id || myBroadcastStream.id;
+
+    if (broadcasterMediaStreamRef.current) {
+      try {
+        broadcasterMediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      } catch {}
+      broadcasterMediaStreamRef.current = null;
+    }
+    if (broadcasterVideoRef.current) {
+      try {
+        broadcasterVideoRef.current.srcObject = null;
+      } catch {}
+    }
+
+    if (broadcastTimerRef.current) {
+      clearInterval(broadcastTimerRef.current);
+      broadcastTimerRef.current = null;
+    }
+
+    const hostUser = (loggedInUser || localStorage.getItem('assistance_user') || 'Creator').trim();
+    try {
+      await fetch(`/api/livestreams/${streamId}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: hostUser }),
+      });
+    } catch {}
+
+    setMyBroadcastStream(null);
+    setBroadcastDuration(0);
+    setIsScreenSharing(false);
+    setLiveStreamsList((prev) => prev.filter((s) => (s._id || s.id) !== streamId));
+  };
+
+  const handleSendBroadcastComment = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!broadcastChatInput.trim() || !myBroadcastStream) return;
+
+    const streamId = myBroadcastStream._id || myBroadcastStream.id;
+    const hostUser = (loggedInUser || localStorage.getItem('assistance_user') || 'Creator').trim();
+    const commentText = broadcastChatInput.trim();
+    setBroadcastChatInput('');
+
+    const newComment = {
+      id: 'c_' + Date.now(),
+      user: hostUser,
+      userName: hostUser,
+      text: commentText,
+      createdAt: new Date(),
+    };
+
+    setMyBroadcastStream((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        comments: [...(prev.comments || []), newComment],
+      };
+    });
+
+    try {
+      await fetch(`/api/livestreams/${streamId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: hostUser,
+          userName: hostUser,
+          text: commentText,
+        }),
+      });
+    } catch {}
+  };
+
+  const handleSendBroadcastReaction = async (emoji) => {
+    triggerFloatingReaction(emoji, true);
+    if (!myBroadcastStream) return;
+    const streamId = myBroadcastStream._id || myBroadcastStream.id;
+    setMyBroadcastStream((prev) => prev ? { ...prev, likesCount: (prev.likesCount || 0) + 1 } : prev);
+    try {
+      await fetch(`/api/livestreams/${streamId}/react`, { method: 'POST' });
+    } catch {}
+  };
+
+  const handleWatchStream = (stream) => {
+    setActiveWatchingStream(stream);
+  };
+
+  const handleCloseWatchStream = () => {
+    setActiveWatchingStream(null);
+    setWatchingChatInput('');
+    setWatchingReactions([]);
+  };
+
+  const handleSendWatcherComment = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!watchingChatInput.trim() || !activeWatchingStream) return;
+
+    const streamId = activeWatchingStream._id || activeWatchingStream.id;
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'Viewer').trim();
+    const text = watchingChatInput.trim();
+    setWatchingChatInput('');
+
+    const newComment = {
+      id: 'c_' + Date.now(),
+      user: currentUser,
+      userName: currentUser,
+      text,
+      createdAt: new Date(),
+    };
+
+    setActiveWatchingStream((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        comments: [...(prev.comments || []), newComment],
+      };
+    });
+
+    setLiveStreamsList((prev) =>
+      prev.map((s) => ((s._id || s.id) === streamId ? { ...s, comments: [...(s.comments || []), newComment] } : s))
+    );
+
+    try {
+      await fetch(`/api/livestreams/${streamId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: currentUser,
+          userName: currentUser,
+          text,
+        }),
+      });
+    } catch {}
+  };
+
+  const handleSendWatcherReaction = async (emoji) => {
+    triggerFloatingReaction(emoji, false);
+    if (!activeWatchingStream) return;
+    const streamId = activeWatchingStream._id || activeWatchingStream.id;
+
+    setActiveWatchingStream((prev) =>
+      prev ? { ...prev, likesCount: (prev.likesCount || 0) + 1 } : prev
+    );
+
+    setLiveStreamsList((prev) =>
+      prev.map((s) => ((s._id || s.id) === streamId ? { ...s, likesCount: (s.likesCount || 0) + 1 } : s))
+    );
+
+    try {
+      await fetch(`/api/livestreams/${streamId}/react`, { method: 'POST' });
+    } catch {}
+  };
+
   if (
     currentView === 'messages' ||
     currentView === 'blank' ||
@@ -17213,6 +17626,621 @@ function App() {
           ) : currentView === 'stories' ? (
             <div className="stories-space" id="stories-space">
               {/* Blank space without any content */}
+            </div>
+          ) : currentView === 'live-stream' ? (
+            <div className="live-stream-space" id="live-stream-space">
+              <div className="live-stream-header-wrapper" id="live-stream-header-wrapper">
+                <div className="live-stream-header-left">
+                  <div className="live-stream-badge-row">
+                    <span className="live-indicator-dot"></span>
+                    <span className="live-header-tag">LIVE STREAMING</span>
+                  </div>
+                  <h1 className="live-stream-title">Live Broadcasts</h1>
+                  <p className="live-stream-subtitle">
+                    Stream live video to your community or tune in to real-time broadcasts.
+                  </p>
+                </div>
+                <div className="live-stream-header-actions">
+                  {!myBroadcastStream ? (
+                    <button
+                      type="button"
+                      className="go-live-header-btn"
+                      id="go-live-header-btn"
+                      onClick={() => setShowGoLiveModal(true)}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                      </svg>
+                      <span>Go Live</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="end-stream-header-btn"
+                      id="end-stream-header-btn"
+                      onClick={handleEndBroadcast}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                      </svg>
+                      <span>End Stream ({formatBroadcastDuration(broadcastDuration)})</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Broadcaster Studio Card */}
+              {myBroadcastStream && (
+                <div className="my-live-broadcast-card" id="my-live-broadcast-card">
+                  <div className="broadcast-card-header">
+                    <div className="broadcast-status-badge">
+                      <span className="pulsing-live-pill">🔴 LIVE</span>
+                      <span className="broadcast-timer-pill">
+                        ⏱️ {formatBroadcastDuration(broadcastDuration)}
+                      </span>
+                      <span className="broadcast-viewers-pill">
+                        👁️ {myBroadcastStream.viewerCount || 1} watching
+                      </span>
+                    </div>
+                    <div className="broadcast-title-info">
+                      <h2 className="broadcasting-title">{myBroadcastStream.title}</h2>
+                      <span className="broadcasting-category-tag">{myBroadcastStream.category}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="end-broadcast-action-btn"
+                      onClick={handleEndBroadcast}
+                      title="End your broadcast"
+                    >
+                      End Broadcast
+                    </button>
+                  </div>
+
+                  <div className="broadcast-studio-body">
+                    {/* Left: Video Frame */}
+                    <div className="broadcast-video-container">
+                      <video
+                        ref={broadcasterVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className={`broadcaster-video-element ${!isBroadcastCamOn ? 'hidden' : ''}`}
+                      />
+                      {!isBroadcastCamOn && (
+                        <div className="cam-off-placeholder">
+                          <div
+                            className="cam-off-avatar"
+                            style={{
+                              backgroundColor: getAvatarColor(myBroadcastStream.hostName || 'Creator'),
+                            }}
+                          >
+                            {getInitials(myBroadcastStream.hostName || 'Creator')}
+                          </div>
+                          <p className="cam-off-text">Camera is turned off</p>
+                          <span className="broadcasting-audio-wave">
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Floating Reactions Overlay */}
+                      <div className="floating-reactions-overlay">
+                        {broadcastReactions.map((r) => (
+                          <span
+                            key={r.id}
+                            className="floating-emoji"
+                            style={{ left: `${r.left}%` }}
+                          >
+                            {r.emoji}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Broadcast Controls Bar */}
+                      <div className="broadcast-controls-bar">
+                        <button
+                          type="button"
+                          className={`broadcast-control-btn ${!isBroadcastCamOn ? 'muted' : ''}`}
+                          onClick={handleToggleCamera}
+                          title={isBroadcastCamOn ? 'Turn off camera' : 'Turn on camera'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            {isBroadcastCamOn ? (
+                              <>
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                              </>
+                            ) : (
+                              <>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                                <path d="M21 21l-3.34-3.34M23 7l-7 5 1.5 1.07M1 5v14a2 2 0 0 0 2 2h14"></path>
+                              </>
+                            )}
+                          </svg>
+                          <span>{isBroadcastCamOn ? 'Cam On' : 'Cam Off'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`broadcast-control-btn ${!isBroadcastMicOn ? 'muted' : ''}`}
+                          onClick={handleToggleMic}
+                          title={isBroadcastMicOn ? 'Mute microphone' : 'Unmute microphone'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            {isBroadcastMicOn ? (
+                              <>
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                              </>
+                            ) : (
+                              <>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a6.97 6.97 0 0 1-.95 3.5"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                              </>
+                            )}
+                          </svg>
+                          <span>{isBroadcastMicOn ? 'Mic On' : 'Muted'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`broadcast-control-btn ${isScreenSharing ? 'active-share' : ''}`}
+                          onClick={handleToggleScreenShare}
+                          title={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                          </svg>
+                          <span>{isScreenSharing ? 'Stop Share' : 'Screen'}</span>
+                        </button>
+
+                        <div className="broadcast-reactions-bar">
+                          {['❤️', '🔥', '👏', '🚀', '🎉'].map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="emoji-react-btn"
+                              onClick={() => handleSendBroadcastReaction(emoji)}
+                              title={`React with ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Broadcast Chat Sidebar */}
+                    <div className="broadcast-chat-sidebar">
+                      <div className="broadcast-chat-header">
+                        <span>💬 Live Chat</span>
+                        <span className="live-chat-count">
+                          {myBroadcastStream.comments ? myBroadcastStream.comments.length : 0} messages
+                        </span>
+                      </div>
+
+                      <div className="broadcast-chat-messages" id="broadcast-chat-messages">
+                        {(!myBroadcastStream.comments || myBroadcastStream.comments.length === 0) ? (
+                          <div className="empty-chat-hint">
+                            Chat messages from viewers will appear here live!
+                          </div>
+                        ) : (
+                          myBroadcastStream.comments.map((c) => (
+                            <div key={c.id || c._id} className="live-chat-bubble">
+                              <span className="live-chat-sender">{c.userName || c.user}:</span>
+                              <span className="live-chat-text">{c.text}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <form className="broadcast-chat-form" onSubmit={handleSendBroadcastComment}>
+                        <input
+                          type="text"
+                          value={broadcastChatInput}
+                          onChange={(e) => setBroadcastChatInput(e.target.value)}
+                          placeholder="Send message to stream..."
+                          className="broadcast-chat-input"
+                          maxLength={200}
+                        />
+                        <button
+                          type="submit"
+                          className="broadcast-chat-send-btn"
+                          disabled={!broadcastChatInput.trim()}
+                        >
+                          Send
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Categories Filter Bar */}
+              <div className="live-categories-bar">
+                {['All', 'Gaming', 'Music', 'Technology', 'Talk Show', 'Creative', 'General'].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`live-category-pill ${liveCategoryFilter === cat ? 'active' : ''}`}
+                    onClick={() => setLiveCategoryFilter(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Discovery Grid */}
+              {isLoadingLiveStreams ? (
+                <div className="live-loading-state">
+                  <div className="loading-spinner"></div>
+                  <p>Loading live broadcasts...</p>
+                </div>
+              ) : (() => {
+                const filteredStreams = liveStreamsList.filter((s) => {
+                  if (liveCategoryFilter === 'All') return true;
+                  return (s.category || '').toLowerCase() === liveCategoryFilter.toLowerCase();
+                });
+
+                if (filteredStreams.length === 0) {
+                  return (
+                    <div className="empty-live-streams-state">
+                      <div className="empty-live-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                        </svg>
+                      </div>
+                      <h3>No live streams active right now</h3>
+                      <p>Be the pioneer! Start your broadcast now and connect with friends and followers in real time.</p>
+                      <button
+                        type="button"
+                        className="go-live-empty-btn"
+                        onClick={() => setShowGoLiveModal(true)}
+                      >
+                        Start Live Stream
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="live-streams-grid" id="live-streams-grid">
+                    {filteredStreams.map((stream) => {
+                      const streamId = stream._id || stream.id;
+                      const isMyStream = myBroadcastStream && ((myBroadcastStream._id || myBroadcastStream.id) === streamId);
+                      return (
+                        <div key={streamId} className="live-stream-card" id={`live-stream-card-${streamId}`}>
+                          <div className="live-stream-thumbnail-frame">
+                            <div className="live-animated-visualizer-bg">
+                              <span className="live-wave-bar"></span>
+                              <span className="live-wave-bar"></span>
+                              <span className="live-wave-bar"></span>
+                              <span className="live-wave-bar"></span>
+                              <span className="live-wave-bar"></span>
+                            </div>
+                            <div className="thumbnail-badges-row">
+                              <span className="badge-live-red">🔴 LIVE</span>
+                              <span className="badge-viewers-count">
+                                👁️ {stream.viewerCount || 1}
+                              </span>
+                            </div>
+                            <span className="thumbnail-category-pill">{stream.category || 'General'}</span>
+                          </div>
+
+                          <div className="live-stream-card-body">
+                            <div className="live-host-avatar-wrap">
+                              {stream.hostAvatar ? (
+                                <img
+                                  src={stream.hostAvatar}
+                                  alt={stream.hostName || stream.host}
+                                  className="live-host-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  className="live-host-avatar-fallback"
+                                  style={{ backgroundColor: getAvatarColor(stream.hostName || stream.host || 'User') }}
+                                >
+                                  {getInitials(stream.hostName || stream.host || 'User')}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="live-stream-info">
+                              <h3 className="live-stream-card-title" title={stream.title}>
+                                {stream.title}
+                              </h3>
+                              <p className="live-stream-hostname">
+                                {stream.hostName || stream.host}
+                              </p>
+                              <div className="live-stream-stats-row">
+                                <span>❤️ {stream.likesCount || 0}</span>
+                                <span>💬 {(stream.comments && stream.comments.length) || 0}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="live-stream-card-footer">
+                            {isMyStream ? (
+                              <button
+                                type="button"
+                                className="live-card-action-btn my-stream-badge-btn"
+                                disabled
+                              >
+                                Currently Broadcasting
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="live-card-action-btn watch-btn"
+                                id={`watch-stream-btn-${streamId}`}
+                                onClick={() => handleWatchStream(stream)}
+                              >
+                                Watch Stream
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Go Live Setup Modal */}
+              {showGoLiveModal && (
+                <div className="modal-backdrop" onClick={() => setShowGoLiveModal(false)}>
+                  <div
+                    className="modal-container live-setup-modal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="modal-header">
+                      <div className="modal-title-with-badge">
+                        <span className="modal-live-icon">📹</span>
+                        <h2>Go Live on Planet</h2>
+                      </div>
+                      <button
+                        type="button"
+                        className="modal-close-btn"
+                        onClick={() => setShowGoLiveModal(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleStartBroadcast} className="live-setup-form">
+                      {goLiveError && (
+                        <div className="live-form-error-banner">
+                          {goLiveError}
+                        </div>
+                      )}
+
+                      <div className="form-group">
+                        <label htmlFor="new-stream-title">Stream Title *</label>
+                        <input
+                          id="new-stream-title"
+                          type="text"
+                          placeholder="e.g., Casual Gaming & Chatting, Live Guitar Session..."
+                          value={newStreamTitle}
+                          onChange={(e) => setNewStreamTitle(e.target.value)}
+                          maxLength={100}
+                          required
+                          autoFocus
+                          className="form-input"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="new-stream-category">Category</label>
+                        <select
+                          id="new-stream-category"
+                          value={newStreamCategory}
+                          onChange={(e) => setNewStreamCategory(e.target.value)}
+                          className="form-select"
+                        >
+                          <option value="General">General</option>
+                          <option value="Gaming">Gaming</option>
+                          <option value="Music">Music</option>
+                          <option value="Technology">Technology</option>
+                          <option value="Talk Show">Talk Show</option>
+                          <option value="Creative">Creative & Arts</option>
+                          <option value="Education">Education</option>
+                        </select>
+                      </div>
+
+                      <div className="live-stream-permission-tip">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="16" x2="12" y2="12"></line>
+                          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        <span>
+                          Your browser may ask for camera & mic permission. You can toggle devices on or off at any time during your broadcast.
+                        </span>
+                      </div>
+
+                      <div className="modal-actions-footer">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setShowGoLiveModal(false)}
+                          disabled={isStartingBroadcast}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn-primary go-live-submit-btn"
+                          disabled={isStartingBroadcast || !newStreamTitle.trim()}
+                        >
+                          {isStartingBroadcast ? (
+                            <>
+                              <span className="spinner-inline"></span>
+                              <span>Connecting Broadcast...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Start Broadcasting</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Watch Stream Theater Modal */}
+              {activeWatchingStream && (
+                <div className="modal-backdrop watch-theater-backdrop" onClick={handleCloseWatchStream}>
+                  <div
+                    className="modal-container watch-theater-modal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="watch-theater-header">
+                      <div className="watch-header-stream-info">
+                        <span className="pulsing-live-pill">🔴 LIVE</span>
+                        <h2 className="watch-stream-title">{activeWatchingStream.title}</h2>
+                        <span className="watch-stream-category-tag">{activeWatchingStream.category}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="watch-modal-close-btn"
+                        onClick={handleCloseWatchStream}
+                        title="Close player"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="watch-theater-layout">
+                      {/* Left: Player Frame */}
+                      <div className="watch-player-frame">
+                        <div className="watch-player-visualizer">
+                          <div className="player-creator-watermark">
+                            <div className="creator-avatar-bubble">
+                              {activeWatchingStream.hostAvatar ? (
+                                <img
+                                  src={activeWatchingStream.hostAvatar}
+                                  alt={activeWatchingStream.hostName || activeWatchingStream.host}
+                                  className="creator-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  className="creator-avatar-fallback"
+                                  style={{ backgroundColor: getAvatarColor(activeWatchingStream.hostName || activeWatchingStream.host || 'Creator') }}
+                                >
+                                  {getInitials(activeWatchingStream.hostName || activeWatchingStream.host || 'Creator')}
+                                </div>
+                              )}
+                            </div>
+                            <div className="creator-watermark-text">
+                              <span className="creator-name">{activeWatchingStream.hostName || activeWatchingStream.host}</span>
+                              <span className="creator-status">Broadcasting Live</span>
+                            </div>
+                          </div>
+
+                          <div className="theater-animated-soundwaves">
+                            <span></span><span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span>
+                          </div>
+                        </div>
+
+                        {/* Floating reactions overlay */}
+                        <div className="floating-reactions-overlay">
+                          {watchingReactions.map((r) => (
+                            <span
+                              key={r.id}
+                              className="floating-emoji"
+                              style={{ left: `${r.left}%` }}
+                            >
+                              {r.emoji}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Player Bottom Bar */}
+                        <div className="watch-player-bottom-bar">
+                          <div className="viewer-counter">
+                            👁️ {activeWatchingStream.viewerCount || 1} watching now
+                          </div>
+                          <div className="watch-reactions-bar">
+                            <span className="reactions-hint">React:</span>
+                            {['❤️', '🔥', '👏', '🚀', '🎉'].map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className="emoji-react-btn"
+                                onClick={() => handleSendWatcherReaction(emoji)}
+                                title={`React with ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Live Chat */}
+                      <div className="watch-chat-sidebar">
+                        <div className="watch-chat-header">
+                          <span>💬 Live Chat</span>
+                          <span className="live-chat-count">
+                            {(activeWatchingStream.comments && activeWatchingStream.comments.length) || 0} messages
+                          </span>
+                        </div>
+
+                        <div className="watch-chat-messages" id="watcher-chat-messages">
+                          {(!activeWatchingStream.comments || activeWatchingStream.comments.length === 0) ? (
+                            <div className="empty-chat-hint">
+                              Be the first to say something in live chat!
+                            </div>
+                          ) : (
+                            activeWatchingStream.comments.map((c) => (
+                              <div key={c.id || c._id} className="live-chat-bubble">
+                                <span className="live-chat-sender">{c.userName || c.user}:</span>
+                                <span className="live-chat-text">{c.text}</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <form className="watch-chat-form" onSubmit={handleSendWatcherComment}>
+                          <input
+                            type="text"
+                            value={watchingChatInput}
+                            onChange={(e) => setWatchingChatInput(e.target.value)}
+                            placeholder="Say something nice in chat..."
+                            className="watch-chat-input"
+                            maxLength={200}
+                          />
+                          <button
+                            type="submit"
+                            className="watch-chat-send-btn"
+                            disabled={!watchingChatInput.trim()}
+                          >
+                            Send
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : currentView === 'messages' ? (
             <div className="chat-box-space" id="chat-box-space">
