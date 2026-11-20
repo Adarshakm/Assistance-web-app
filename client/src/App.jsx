@@ -7597,6 +7597,7 @@ function App() {
   // ==========================================
   // COMMUNITY DISCUSSION FEEDS & ANNOUNCEMENTS
   // ==========================================
+  const [communitiesViewTab, setCommunitiesViewTab] = useState('communities'); // 'communities' | 'discussions'
   const [activeCommunityFeed, setActiveCommunityFeed] = useState(null);
   const [communityFeedTab, setCommunityFeedTab] = useState('all'); // 'all', 'announcements', 'discussions'
   const [discussionCategoryFilter, setDiscussionCategoryFilter] = useState('all');
@@ -7612,6 +7613,7 @@ function App() {
 
   // Discussion Creation State
   const [showCreateDiscussionModal, setShowCreateDiscussionModal] = useState(false);
+  const [newDiscussionCommunityId, setNewDiscussionCommunityId] = useState('');
   const [newDiscussionTitle, setNewDiscussionTitle] = useState('');
   const [newDiscussionContent, setNewDiscussionContent] = useState('');
   const [newDiscussionCategory, setNewDiscussionCategory] = useState('General');
@@ -7623,11 +7625,33 @@ function App() {
   const [expandedDiscussionComments, setExpandedDiscussionComments] = useState({});
   const [isSubmittingComment, setIsSubmittingComment] = useState({});
 
+  const allDiscussionsList = useMemo(() => {
+    const list = [];
+    (communitiesList || []).forEach((c) => {
+      const commId = c._id || c.id;
+      const commName = c.name;
+      (c.discussions || []).forEach((d) => {
+        list.push({
+          ...d,
+          communityId: commId,
+          communityName: commName,
+        });
+      });
+    });
+    list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return list;
+  }, [communitiesList]);
+
   const filteredDiscussions = useMemo(() => {
     if (!activeCommunityFeed || !Array.isArray(activeCommunityFeed.discussions)) return [];
     if (discussionCategoryFilter === 'all') return activeCommunityFeed.discussions;
     return activeCommunityFeed.discussions.filter((d) => (d.category || 'General').toLowerCase() === discussionCategoryFilter.toLowerCase());
   }, [activeCommunityFeed, discussionCategoryFilter]);
+
+  const globalFilteredDiscussions = useMemo(() => {
+    if (discussionCategoryFilter === 'all') return allDiscussionsList;
+    return allDiscussionsList.filter((d) => (d.category || 'General').toLowerCase() === discussionCategoryFilter.toLowerCase());
+  }, [allDiscussionsList, discussionCategoryFilter]);
 
   const handleOpenCommunityFeed = useCallback(async (community) => {
     if (!community) return;
@@ -7831,10 +7855,14 @@ function App() {
     });
   };
 
-  const handleOpenCreateDiscussion = () => {
+  const handleOpenCreateDiscussion = (preselectedCommunity = null) => {
     setNewDiscussionTitle('');
     setNewDiscussionContent('');
     setNewDiscussionCategory('General');
+    const targetId = preselectedCommunity?._id || preselectedCommunity?.id ||
+      activeCommunityFeed?._id || activeCommunityFeed?.id ||
+      (communitiesList[0]?._id || communitiesList[0]?.id || '');
+    setNewDiscussionCommunityId(targetId);
     setDiscussionFeedback(null);
     setShowCreateDiscussionModal(true);
   };
@@ -7846,8 +7874,11 @@ function App() {
 
   const handleCreateDiscussionSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!activeCommunityFeed) return;
-    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+    const commId = (activeCommunityFeed?._id || activeCommunityFeed?.id) || newDiscussionCommunityId || (communitiesList[0]?._id || communitiesList[0]?.id);
+    if (!commId) {
+      setDiscussionFeedback({ type: 'error', text: 'Please select a community for this discussion.' });
+      return;
+    }
     const cleanTitle = newDiscussionTitle.trim();
     const cleanContent = newDiscussionContent.trim();
     if (!cleanTitle) {
@@ -7891,14 +7922,16 @@ function App() {
         createdAt: new Date().toISOString(),
       };
 
-      setActiveCommunityFeed((prev) => {
-        if (!prev) return prev;
-        const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
-        return {
-          ...prev,
-          discussions: [createdDiscussion, ...currentDiscussions],
-        };
-      });
+      if (activeCommunityFeed && (activeCommunityFeed._id || activeCommunityFeed.id) === commId) {
+        setActiveCommunityFeed((prev) => {
+          if (!prev) return prev;
+          const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
+          return {
+            ...prev,
+            discussions: [createdDiscussion, ...currentDiscussions],
+          };
+        });
+      }
 
       setCommunitiesList((prev) => {
         const updated = prev.map((c) => {
@@ -7931,14 +7964,16 @@ function App() {
         commentsCount: 0,
         createdAt: new Date().toISOString(),
       };
-      setActiveCommunityFeed((prev) => {
-        if (!prev) return prev;
-        const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
-        return {
-          ...prev,
-          discussions: [localDiscussion, ...currentDiscussions],
-        };
-      });
+      if (activeCommunityFeed && (activeCommunityFeed._id || activeCommunityFeed.id) === commId) {
+        setActiveCommunityFeed((prev) => {
+          if (!prev) return prev;
+          const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
+          return {
+            ...prev,
+            discussions: [localDiscussion, ...currentDiscussions],
+          };
+        });
+      }
       setCommunitiesList((prev) => {
         const updated = prev.map((c) => {
           if ((c._id || c.id) === commId) {
@@ -11808,10 +11843,10 @@ function App() {
                     {friendRequestActionFeedback && (
                       <div
                         className={`social-feedback-alert ${friendRequestActionFeedback.type === 'error'
-                            ? 'error'
-                            : friendRequestActionFeedback.type === 'info'
-                              ? 'info'
-                              : 'success'
+                          ? 'error'
+                          : friendRequestActionFeedback.type === 'info'
+                            ? 'info'
+                            : 'success'
                           }`}
                       >
                         <span>{friendRequestActionFeedback.text}</span>
@@ -14198,8 +14233,8 @@ function App() {
                       {(sendRequestFeedback || friendRequestActionFeedback) && (
                         <div
                           className={`profile-home-alert ${(sendRequestFeedback?.type || friendRequestActionFeedback?.type) === 'error'
-                              ? 'error'
-                              : 'success'
+                            ? 'error'
+                            : 'success'
                             }`}
                         >
                           <span>{sendRequestFeedback?.text || friendRequestActionFeedback?.text}</span>
@@ -17619,10 +17654,10 @@ function App() {
                                 <button
                                   type="button"
                                   className={`video-action-btn like-btn ${(theaterVideo.likes || [])
-                                      .map((u) => String(u).toLowerCase())
-                                      .includes(String(loggedInUser || 'User').toLowerCase())
-                                      ? 'liked'
-                                      : ''
+                                    .map((u) => String(u).toLowerCase())
+                                    .includes(String(loggedInUser || 'User').toLowerCase())
+                                    ? 'liked'
+                                    : ''
                                     }`}
                                   onClick={() => handleLikeVideo(theaterVideo.id)}
                                 >
@@ -17666,18 +17701,34 @@ function App() {
               ) : currentView === 'communities' ? (
                 <div className="communities-space" id="communities-space">
                   <div className="communities-container" id="communities-container">
-                    {/* Header with Title and Create Community Button */}
+                    {/* Header with Title and Action Buttons */}
                     <div className="communities-header-wrapper">
                       <div className="communities-title-col">
                         <h1 className="heading communities-heading" id="communities-heading">
                           Communities
                         </h1>
                         <p className="communities-subheading">
-                          Connect with people who share your interests
+                          Connect with people who share your interests, join discussion feeds, and publish announcements
                         </p>
                       </div>
 
                       <div className="communities-header-actions">
+                        {/* Explicit feature button requested by user */}
+                        <button
+                          type="button"
+                          className="create-community-btn discussion-feed-header-btn"
+                          id="create-discussion-feed-btn"
+                          onClick={() => handleOpenCreateDiscussion()}
+                          title="Create community discussion feeds"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            <line x1="9" y1="10" x2="15" y2="10"></line>
+                            <line x1="12" y1="7" x2="12" y2="13"></line>
+                          </svg>
+                          <span>Create community discussion feeds</span>
+                        </button>
+
                         <button
                           type="button"
                           className="create-community-btn"
@@ -17694,177 +17745,805 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Main Content Area */}
-                    {communitiesList.length === 0 ? (
-                      <div className="communities-empty-state" id="communities-empty-state">
-                        <div className="communities-empty-icon-wrap">
-                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                          </svg>
+                    {/* Communities Space Top Navigation Tabs */}
+                    <div className="communities-main-tabs-row" id="communities-main-tabs-row">
+                      <button
+                        type="button"
+                        className={`communities-nav-tab-btn ${communitiesViewTab === 'communities' && !activeCommunityFeed ? 'active' : ''}`}
+                        id="tab-all-communities-btn"
+                        onClick={() => {
+                          setCommunitiesViewTab('communities');
+                          setActiveCommunityFeed(null);
+                        }}
+                      >
+                        👥 Communities ({communitiesList.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`communities-nav-tab-btn ${communitiesViewTab === 'discussions' && !activeCommunityFeed ? 'active' : ''}`}
+                        id="tab-discussion-feeds-btn"
+                        onClick={() => {
+                          setCommunitiesViewTab('discussions');
+                          setActiveCommunityFeed(null);
+                        }}
+                      >
+                        💬 Community Discussion Feeds ({allDiscussionsList.length})
+                      </button>
+                    </div>
+
+                    {/* Render Content Based on State */}
+                    {activeCommunityFeed ? (
+                      <div className="community-feed-view" id={`community-feed-view-${activeCommunityFeed._id || activeCommunityFeed.id}`}>
+                        {/* Feed Navigation Bar */}
+                        <div className="community-feed-top-nav">
+                          <button
+                            type="button"
+                            className="community-feed-back-btn"
+                            id="back-to-communities-btn"
+                            onClick={handleCloseCommunityFeed}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                            <span>← Back to Communities</span>
+                          </button>
+
+                          <div className="community-feed-nav-actions">
+                            <button
+                              type="button"
+                              className="community-action-pill announcement"
+                              id="open-publish-announcement-btn"
+                              onClick={handleOpenCreateAnnouncement}
+                              title="Publish Community Announcement"
+                            >
+                              <span className="pill-icon">📢</span>
+                              <span>Publish Announcement</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="community-action-pill discussion"
+                              id="open-create-discussion-btn"
+                              onClick={() => handleOpenCreateDiscussion(activeCommunityFeed)}
+                              title="Create community discussion feeds"
+                            >
+                              <span className="pill-icon">💬</span>
+                              <span>Create community discussion feeds</span>
+                            </button>
+                          </div>
                         </div>
-                        <h3 className="communities-empty-title">No communities created yet</h3>
-                        <p className="communities-empty-subtitle">
-                          Create your first community to bring people together around shared passions and discussions.
-                        </p>
-                        <button
-                          type="button"
-                          className="create-community-btn large"
-                          id="create-first-community-btn"
-                          onClick={handleOpenCreateCommunity}
-                        >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                          </svg>
-                          <span>Create Communities</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="communities-grid" id="communities-grid">
-                        {communitiesList.map((community) => {
-                          const commId = community._id || community.id;
-                          const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
-                          const isCreator = Boolean(
-                            currentUsername &&
-                            community.creator &&
-                            currentUsername === community.creator.toLowerCase()
-                          );
-                          const isMember = Boolean(
-                            Array.isArray(community.members) &&
-                            community.members.some(
-                              (m) =>
-                                (typeof m === 'string' && m.toLowerCase() === currentUsername) ||
-                                (m && typeof m === 'object' && m.username && m.username.toLowerCase() === currentUsername)
-                            )
-                          );
-                          return (
-                            <div key={commId} className="community-card" id={`community-card-${commId}`}>
-                              <div className="community-card-banner">
-                                <div className="community-badge-row">
-                                  <span className="community-category-pill">{community.category || 'General'}</span>
-                                  <span className={`community-privacy-pill ${community.privacy || 'public'}`}>
-                                    {community.privacy === 'private' ? '🔒 Private' : '🌐 Public'}
-                                  </span>
-                                </div>
+
+                        {/* Community Feed Hero Banner */}
+                        <div className="community-feed-hero-card">
+                          <div className="community-feed-hero-content">
+                            <div className="community-feed-hero-avatar-wrap">
+                              {activeCommunityFeed.avatar ? (
+                                <img
+                                  src={activeCommunityFeed.avatar}
+                                  alt={activeCommunityFeed.name}
+                                  className="community-feed-avatar-img"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const fallback = e.currentTarget.parentElement?.querySelector('.community-avatar-placeholder');
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className="community-avatar-placeholder large"
+                                style={{
+                                  backgroundColor: getAvatarColor(activeCommunityFeed.name),
+                                  display: activeCommunityFeed.avatar ? 'none' : 'flex',
+                                }}
+                              >
+                                {getInitials(activeCommunityFeed.name)}
+                              </div>
+                            </div>
+
+                            <div className="community-feed-hero-info">
+                              <div className="community-feed-hero-badges">
+                                <span className="community-category-pill">{activeCommunityFeed.category || 'General'}</span>
+                                <span className={`community-privacy-pill ${activeCommunityFeed.privacy || 'public'}`}>
+                                  {activeCommunityFeed.privacy === 'private' ? '🔒 Private' : '🌐 Public'}
+                                </span>
+                                <span className="community-members-count-pill">
+                                  👥 {activeCommunityFeed.memberCount != null ? activeCommunityFeed.memberCount : (activeCommunityFeed.members?.length || 0)} members
+                                </span>
                               </div>
 
-                              <div className="community-card-body">
-                                <div className="community-card-avatar-wrap">
-                                  {community.avatar ? (
-                                    <img
-                                      src={community.avatar}
-                                      alt={community.name}
-                                      className="community-avatar-img"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        const fallback = e.currentTarget.parentElement?.querySelector('.community-avatar-placeholder');
-                                        if (fallback) fallback.style.display = 'flex';
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div
-                                    className="community-avatar-placeholder"
-                                    style={{
-                                      backgroundColor: getAvatarColor(community.name),
-                                      display: community.avatar ? 'none' : 'flex',
-                                    }}
-                                  >
-                                    {getInitials(community.name)}
-                                  </div>
-                                </div>
+                              <h2 className="community-feed-hero-title">{activeCommunityFeed.name}</h2>
+                              <p className="community-feed-hero-desc">
+                                {activeCommunityFeed.description || 'Welcome to our community! Share ideas, participate in discussions, and stay updated with official announcements.'}
+                              </p>
+                            </div>
+                          </div>
 
-                                <h3 className="community-card-name" title={community.name}>{community.name}</h3>
-                                <p className="community-card-desc">
-                                  {community.description || 'Welcome to our community! Connect and collaborate with members.'}
+                          {/* Feed Filter Tabs */}
+                          <div className="community-feed-tabs-bar">
+                            <button
+                              type="button"
+                              className={`community-feed-tab-btn ${communityFeedTab === 'all' ? 'active' : ''}`}
+                              id="feed-tab-all-btn"
+                              onClick={() => setCommunityFeedTab('all')}
+                            >
+                              ✨ All Activity ({((activeCommunityFeed.announcements?.length || 0) + (activeCommunityFeed.discussions?.length || 0))})
+                            </button>
+                            <button
+                              type="button"
+                              className={`community-feed-tab-btn ${communityFeedTab === 'announcements' ? 'active' : ''}`}
+                              id="feed-tab-announcements-btn"
+                              onClick={() => setCommunityFeedTab('announcements')}
+                            >
+                              📢 Announcements ({activeCommunityFeed.announcements?.length || 0})
+                            </button>
+                            <button
+                              type="button"
+                              className={`community-feed-tab-btn ${communityFeedTab === 'discussions' ? 'active' : ''}`}
+                              id="feed-tab-discussions-btn"
+                              onClick={() => setCommunityFeedTab('discussions')}
+                            >
+                              💬 Discussion Feeds ({activeCommunityFeed.discussions?.length || 0})
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Section 1: Community Announcements */}
+                        {(communityFeedTab === 'all' || communityFeedTab === 'announcements') && (
+                          <div className="community-announcements-section" id="community-announcements-section">
+                            <div className="section-header-row">
+                              <div className="section-title-wrap">
+                                <span className="section-header-emoji">📢</span>
+                                <h3 className="section-title-text">Official Community Announcements</h3>
+                                <span className="section-count-badge">{activeCommunityFeed.announcements?.length || 0}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="section-sub-action-btn announcement"
+                                id="section-publish-announcement-btn"
+                                onClick={handleOpenCreateAnnouncement}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Publish Announcement</span>
+                              </button>
+                            </div>
+
+                            {(!activeCommunityFeed.announcements || activeCommunityFeed.announcements.length === 0) ? (
+                              <div className="feed-empty-state" id="announcements-empty-state">
+                                <span className="feed-empty-icon">📢</span>
+                                <h4 className="feed-empty-title">No announcements published yet</h4>
+                                <p className="feed-empty-subtitle">
+                                  Publish official announcements to keep members informed about events, updates, and milestones.
                                 </p>
+                                <button
+                                  type="button"
+                                  className="feed-empty-btn announcement"
+                                  onClick={handleOpenCreateAnnouncement}
+                                >
+                                  Publish First Announcement
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="announcements-cards-list">
+                                {activeCommunityFeed.announcements.map((ann) => {
+                                  const annId = ann._id || ann.id;
+                                  const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+                                  const canDeleteAnn = (ann.author && ann.author.toLowerCase() === currentUsername) ||
+                                    (activeCommunityFeed.creator && activeCommunityFeed.creator.toLowerCase() === currentUsername);
 
-                                <div className="community-card-meta">
-                                  <span className="community-members-count">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                      <circle cx="9" cy="7" r="4"></circle>
-                                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                    </svg>
-                                    {community.memberCount != null ? community.memberCount : (community.members?.length || 0)} {(community.memberCount === 1 || community.members?.length === 1) ? 'member' : 'members'}
-                                  </span>
-                                  {isCreator && (
-                                    <span className="community-creator-badge">Created by you</span>
-                                  )}
-                                </div>
+                                  return (
+                                    <div key={annId} className={`announcement-feed-card ${ann.tag || 'important'}`} id={`announcement-card-${annId}`}>
+                                      <div className="announcement-card-header">
+                                        <div className="announcement-badges-row">
+                                          <span className={`announcement-urgency-badge ${ann.tag || 'important'}`}>
+                                            {ann.tag === 'event' ? '📅 EVENT' : ann.tag === 'update' ? '🔄 UPDATE' : ann.tag === 'general' ? '📰 NEWS' : '⚡ IMPORTANT'}
+                                          </span>
+                                          {ann.isPinned !== false && (
+                                            <span className="announcement-pinned-badge">
+                                              📌 PINNED
+                                            </span>
+                                          )}
+                                        </div>
+                                        {canDeleteAnn && (
+                                          <button
+                                            type="button"
+                                            className="feed-delete-btn"
+                                            onClick={() => handleDeleteAnnouncement(annId)}
+                                            title="Delete Announcement"
+                                          >
+                                            Delete
+                                          </button>
+                                        )}
+                                      </div>
 
-                                <div className="community-card-actions">
-                                  {isCreator && (
-                                    <div className="community-creator-actions">
+                                      <h4 className="announcement-card-title">{ann.title}</h4>
+                                      <p className="announcement-card-content">{ann.content}</p>
+
+                                      <div className="announcement-card-footer">
+                                        <div className="announcement-author-info">
+                                          <div className="author-avatar-tiny" style={{ backgroundColor: getAvatarColor(ann.authorName || ann.author) }}>
+                                            {getInitials(ann.authorName || ann.author)}
+                                          </div>
+                                          <span className="author-name-text">{ann.authorName || ann.author || 'Admin'}</span>
+                                          <span className="dot-divider">•</span>
+                                          <span className="announcement-timestamp">{formatStoryTimeAgo(ann.createdAt)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Section 2: Community Discussion Feeds */}
+                        {(communityFeedTab === 'all' || communityFeedTab === 'discussions') && (
+                          <div className="community-discussions-section" id="community-discussions-section">
+                            <div className="section-header-row">
+                              <div className="section-title-wrap">
+                                <span className="section-header-emoji">💬</span>
+                                <h3 className="section-title-text">Community Discussion Feeds</h3>
+                                <span className="section-count-badge">{filteredDiscussions.length}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="section-sub-action-btn discussion"
+                                id="section-start-discussion-btn"
+                                onClick={() => handleOpenCreateDiscussion(activeCommunityFeed)}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Create community discussion feeds</span>
+                              </button>
+                            </div>
+
+                            {/* Discussion Category Filter Tabs */}
+                            <div className="discussion-category-filter-bar">
+                              {['all', 'General', 'Tech Stack', 'UI/UX Design', 'Gear Talk', 'Questions', 'Showcase'].map((cat) => (
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  className={`discussion-filter-pill-btn ${discussionCategoryFilter.toLowerCase() === cat.toLowerCase() ? 'active' : ''}`}
+                                  onClick={() => setDiscussionCategoryFilter(cat)}
+                                >
+                                  {cat === 'all' ? 'All Topics' : cat}
+                                </button>
+                              ))}
+                            </div>
+
+                            {filteredDiscussions.length === 0 ? (
+                              <div className="feed-empty-state" id="discussions-empty-state">
+                                <span className="feed-empty-icon">💬</span>
+                                <h4 className="feed-empty-title">No discussions started yet</h4>
+                                <p className="feed-empty-subtitle">
+                                  Ask questions, exchange technical tips, share ideas, and kick off conversations with fellow members.
+                                </p>
+                                <button
+                                  type="button"
+                                  className="feed-empty-btn discussion"
+                                  onClick={() => handleOpenCreateDiscussion(activeCommunityFeed)}
+                                >
+                                  Create First Discussion Feed
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="discussions-cards-list">
+                                {filteredDiscussions.map((disc) => {
+                                  const discId = disc._id || disc.id;
+                                  const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+                                  const canDeleteDisc = (disc.author && disc.author.toLowerCase() === currentUsername) ||
+                                    (activeCommunityFeed.creator && activeCommunityFeed.creator.toLowerCase() === currentUsername);
+                                  const hasLiked = Array.isArray(disc.likes) && disc.likes.includes(currentUsername);
+                                  const commentsList = Array.isArray(disc.comments) ? disc.comments : [];
+                                  const isExpanded = expandedDiscussionComments[discId] !== undefined ? expandedDiscussionComments[discId] : true;
+                                  const commentInputVal = discussionCommentInputs[discId] || '';
+
+                                  return (
+                                    <div key={discId} className="discussion-feed-card" id={`discussion-card-${discId}`}>
+                                      <div className="discussion-card-header">
+                                        <div className="discussion-author-row">
+                                          <div className="author-avatar-small" style={{ backgroundColor: getAvatarColor(disc.authorName || disc.author) }}>
+                                            {getInitials(disc.authorName || disc.author)}
+                                          </div>
+                                          <div className="discussion-author-meta">
+                                            <span className="discussion-author-name">{disc.authorName || disc.author}</span>
+                                            <div className="discussion-sub-meta-row">
+                                              <span className="discussion-category-pill">{disc.category || 'General'}</span>
+                                              <span className="dot-divider">•</span>
+                                              <span className="discussion-timestamp">{formatStoryTimeAgo(disc.createdAt)}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        {canDeleteDisc && (
+                                          <button
+                                            type="button"
+                                            className="feed-delete-btn"
+                                            onClick={() => handleDeleteDiscussion(discId)}
+                                            title="Delete Discussion"
+                                          >
+                                            Delete
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      <h4 className="discussion-card-title">{disc.title}</h4>
+                                      <p className="discussion-card-content">{disc.content}</p>
+
+                                      {/* Actions: Likes & Comments */}
+                                      <div className="discussion-actions-bar">
+                                        <button
+                                          type="button"
+                                          className={`discussion-action-btn ${hasLiked ? 'liked' : ''}`}
+                                          id={`like-discussion-btn-${discId}`}
+                                          onClick={() => handleToggleDiscussionLike(discId)}
+                                        >
+                                          <span className="action-icon">{hasLiked ? '❤️' : '🤍'}</span>
+                                          <span>{disc.likesCount != null ? disc.likesCount : (disc.likes?.length || 0)} Likes</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          className={`discussion-action-btn ${isExpanded ? 'active' : ''}`}
+                                          id={`comment-toggle-btn-${discId}`}
+                                          onClick={() => handleToggleDiscussionComments(discId)}
+                                        >
+                                          <span className="action-icon">💬</span>
+                                          <span>{commentsList.length} Comments</span>
+                                        </button>
+                                      </div>
+
+                                      {/* Threaded Comments Box */}
+                                      {isExpanded && (
+                                        <div className="discussion-comments-thread" id={`comments-thread-${discId}`}>
+                                          {commentsList.length > 0 && (
+                                            <div className="discussion-comments-list">
+                                              {commentsList.map((com) => {
+                                                const comId = com._id || com.id;
+                                                return (
+                                                  <div key={comId} className="discussion-comment-item">
+                                                    <div className="comment-avatar-tiny" style={{ backgroundColor: getAvatarColor(com.authorName || com.author) }}>
+                                                      {getInitials(com.authorName || com.author)}
+                                                    </div>
+                                                    <div className="discussion-comment-bubble">
+                                                      <div className="comment-bubble-header">
+                                                        <span className="comment-author-name">{com.authorName || com.author}</span>
+                                                        <span className="comment-timestamp">{formatStoryTimeAgo(com.createdAt)}</span>
+                                                      </div>
+                                                      <p className="comment-body-text">{com.content}</p>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+
+                                          {/* Comment Input Form */}
+                                          <form
+                                            onSubmit={(e) => handleSubmitDiscussionComment(e, discId)}
+                                            className="discussion-reply-form"
+                                          >
+                                            <input
+                                              type="text"
+                                              className="discussion-reply-input"
+                                              placeholder="Write a comment or response..."
+                                              value={commentInputVal}
+                                              onChange={(e) => handleDiscussionCommentChange(discId, e.target.value)}
+                                            />
+                                            <button
+                                              type="submit"
+                                              className="discussion-reply-btn"
+                                              disabled={!commentInputVal.trim() || isSubmittingComment[discId]}
+                                            >
+                                              {isSubmittingComment[discId] ? 'Posting...' : 'Reply'}
+                                            </button>
+                                          </form>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : communitiesViewTab === 'discussions' ? (
+                      /* Comprehensive Community Discussion Feeds View */
+                      <div className="community-global-discussions-view" id="community-global-discussions-view">
+                        <div className="global-discussions-header-bar">
+                          <div className="global-discussions-title-col">
+                            <h2 className="global-discussions-heading">
+                              💬 All Community Discussion Feeds
+                            </h2>
+                            <p className="global-discussions-sub">
+                              Explore topics, architectural tips, design patterns, and join active conversations across all communities.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="create-community-btn discussion-feed-header-btn"
+                            id="create-discussion-feed-banner-btn"
+                            onClick={() => handleOpenCreateDiscussion()}
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                              <line x1="9" y1="10" x2="15" y2="10"></line>
+                              <line x1="12" y1="7" x2="12" y2="13"></line>
+                            </svg>
+                            <span>Create community discussion feeds</span>
+                          </button>
+                        </div>
+
+                        {/* Category Filter Bar */}
+                        <div className="discussion-category-filter-bar">
+                          {['all', 'General', 'Tech Stack', 'UI/UX Design', 'Gear Talk', 'Questions', 'Showcase'].map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`discussion-filter-pill-btn ${discussionCategoryFilter.toLowerCase() === cat.toLowerCase() ? 'active' : ''}`}
+                              onClick={() => setDiscussionCategoryFilter(cat)}
+                            >
+                              {cat === 'all' ? 'All Topics' : cat}
+                            </button>
+                          ))}
+                        </div>
+
+                        {globalFilteredDiscussions.length === 0 ? (
+                          <div className="feed-empty-state" id="global-discussions-empty-state">
+                            <span className="feed-empty-icon">💬</span>
+                            <h4 className="feed-empty-title">No community discussion feeds yet</h4>
+                            <p className="feed-empty-subtitle">
+                              Start a discussion feed to share technical knowledge, discuss tools, or ask questions to community members.
+                            </p>
+                            <button
+                              type="button"
+                              className="feed-empty-btn discussion"
+                              onClick={() => handleOpenCreateDiscussion()}
+                            >
+                              Create community discussion feeds
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="discussions-cards-list">
+                            {globalFilteredDiscussions.map((disc) => {
+                              const discId = disc._id || disc.id;
+                              const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+                              const canDeleteDisc = (disc.author && disc.author.toLowerCase() === currentUsername);
+                              const hasLiked = Array.isArray(disc.likes) && disc.likes.includes(currentUsername);
+                              const commentsList = Array.isArray(disc.comments) ? disc.comments : [];
+                              const isExpanded = expandedDiscussionComments[discId] !== undefined ? expandedDiscussionComments[discId] : true;
+                              const commentInputVal = discussionCommentInputs[discId] || '';
+
+                              return (
+                                <div key={discId} className="discussion-feed-card" id={`global-discussion-card-${discId}`}>
+                                  <div className="discussion-card-header">
+                                    <div className="discussion-author-row">
+                                      <div className="author-avatar-small" style={{ backgroundColor: getAvatarColor(disc.authorName || disc.author) }}>
+                                        {getInitials(disc.authorName || disc.author)}
+                                      </div>
+                                      <div className="discussion-author-meta">
+                                        <div className="discussion-author-name-row">
+                                          <span className="discussion-author-name">{disc.authorName || disc.author}</span>
+                                          <span className="community-source-badge">
+                                            in 👥 {disc.communityName || 'Community'}
+                                          </span>
+                                        </div>
+                                        <div className="discussion-sub-meta-row">
+                                          <span className="discussion-category-pill">{disc.category || 'General'}</span>
+                                          <span className="dot-divider">•</span>
+                                          <span className="discussion-timestamp">{formatStoryTimeAgo(disc.createdAt)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {canDeleteDisc && (
                                       <button
                                         type="button"
-                                        className="community-edit-btn"
-                                        id={`edit-community-btn-${commId}`}
-                                        onClick={() => handleOpenEditCommunity(community)}
-                                        title="Edit community details"
-                                      >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                        </svg>
-                                        <span>Edit Details</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="community-delete-btn"
-                                        id={`delete-community-btn-${commId}`}
-                                        onClick={() => handleDeleteCommunity(commId)}
-                                        title="Delete community"
+                                        className="feed-delete-btn"
+                                        onClick={() => handleDeleteDiscussion(discId)}
+                                        title="Delete Discussion"
                                       >
                                         Delete
                                       </button>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
 
-                                  {isMember ? (
-                                    <div className="community-membership-actions">
-                                      <span className="community-joined-badge">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                        Joined
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="community-leave-btn"
-                                        id={`leave-community-btn-${commId}`}
-                                        onClick={() => handleLeaveCommunity(commId)}
-                                        disabled={joiningCommunityId === commId}
-                                        title="Leave community"
-                                      >
-                                        {joiningCommunityId === commId ? 'Leaving...' : 'Leave'}
-                                      </button>
-                                    </div>
-                                  ) : (
+                                  <h4 className="discussion-card-title">{disc.title}</h4>
+                                  <p className="discussion-card-content">{disc.content}</p>
+
+                                  {/* Actions: Likes & Comments */}
+                                  <div className="discussion-actions-bar">
                                     <button
                                       type="button"
-                                      className="community-join-btn"
-                                      id={`join-community-btn-${commId}`}
-                                      onClick={() => handleJoinCommunity(commId)}
-                                      disabled={joiningCommunityId === commId}
-                                      title="Join communities"
+                                      className={`discussion-action-btn ${hasLiked ? 'liked' : ''}`}
+                                      id={`global-like-btn-${discId}`}
+                                      onClick={() => handleToggleDiscussionLike(discId, disc.communityId)}
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                      </svg>
-                                      <span>{joiningCommunityId === commId ? 'Joining...' : 'Join communities'}</span>
+                                      <span className="action-icon">{hasLiked ? '❤️' : '🤍'}</span>
+                                      <span>{disc.likesCount != null ? disc.likesCount : (disc.likes?.length || 0)} Likes</span>
                                     </button>
+
+                                    <button
+                                      type="button"
+                                      className={`discussion-action-btn ${isExpanded ? 'active' : ''}`}
+                                      id={`global-comment-toggle-btn-${discId}`}
+                                      onClick={() => handleToggleDiscussionComments(discId)}
+                                    >
+                                      <span className="action-icon">💬</span>
+                                      <span>{commentsList.length} Comments</span>
+                                    </button>
+                                  </div>
+
+                                  {/* Threaded Comments Box */}
+                                  {isExpanded && (
+                                    <div className="discussion-comments-thread" id={`global-comments-thread-${discId}`}>
+                                      {commentsList.length > 0 && (
+                                        <div className="discussion-comments-list">
+                                          {commentsList.map((com) => {
+                                            const comId = com._id || com.id;
+                                            return (
+                                              <div key={comId} className="discussion-comment-item">
+                                                <div className="comment-avatar-tiny" style={{ backgroundColor: getAvatarColor(com.authorName || com.author) }}>
+                                                  {getInitials(com.authorName || com.author)}
+                                                </div>
+                                                <div className="discussion-comment-bubble">
+                                                  <div className="comment-bubble-header">
+                                                    <span className="comment-author-name">{com.authorName || com.author}</span>
+                                                    <span className="comment-timestamp">{formatStoryTimeAgo(com.createdAt)}</span>
+                                                  </div>
+                                                  <p className="comment-body-text">{com.content}</p>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+
+                                      {/* Comment Input Form */}
+                                      <form
+                                        onSubmit={(e) => handleSubmitDiscussionComment(e, discId, disc.communityId)}
+                                        className="discussion-reply-form"
+                                      >
+                                        <input
+                                          type="text"
+                                          className="discussion-reply-input"
+                                          placeholder="Write a comment or response..."
+                                          value={commentInputVal}
+                                          onChange={(e) => handleDiscussionCommentChange(discId, e.target.value)}
+                                        />
+                                        <button
+                                          type="submit"
+                                          className="discussion-reply-btn"
+                                          disabled={!commentInputVal.trim() || isSubmittingComment[discId]}
+                                        >
+                                          {isSubmittingComment[discId] ? 'Posting...' : 'Reply'}
+                                        </button>
+                                      </form>
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      /* Communities Grid View */
+                      <>
+                        {communitiesList.length === 0 ? (
+                          <div className="communities-empty-state" id="communities-empty-state">
+                            <div className="communities-empty-icon-wrap">
+                              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                              </svg>
+                            </div>
+                            <h3 className="communities-empty-title">No communities created yet</h3>
+                            <p className="communities-empty-subtitle">
+                              Create your first community to bring people together around shared passions and discussions.
+                            </p>
+                            <button
+                              type="button"
+                              className="create-community-btn large"
+                              id="create-first-community-btn"
+                              onClick={handleOpenCreateCommunity}
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                              </svg>
+                              <span>Create Communities</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="communities-grid" id="communities-grid">
+                            {communitiesList.map((community) => {
+                              const commId = community._id || community.id;
+                              const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+                              const isCreator = Boolean(
+                                currentUsername &&
+                                community.creator &&
+                                currentUsername === community.creator.toLowerCase()
+                              );
+                              const isMember = Boolean(
+                                Array.isArray(community.members) &&
+                                community.members.some(
+                                  (m) =>
+                                    (typeof m === 'string' && m.toLowerCase() === currentUsername) ||
+                                    (m && typeof m === 'object' && m.username && m.username.toLowerCase() === currentUsername)
+                                )
+                              );
+                              return (
+                                <div key={commId} className="community-card" id={`community-card-${commId}`}>
+                                  <div className="community-card-banner">
+                                    <div className="community-badge-row">
+                                      <span className="community-category-pill">{community.category || 'General'}</span>
+                                      <span className={`community-privacy-pill ${community.privacy || 'public'}`}>
+                                        {community.privacy === 'private' ? '🔒 Private' : '🌐 Public'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="community-card-body">
+                                    <div className="community-card-avatar-wrap">
+                                      {community.avatar ? (
+                                        <img
+                                          src={community.avatar}
+                                          alt={community.name}
+                                          className="community-avatar-img"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                            const fallback = e.currentTarget.parentElement?.querySelector('.community-avatar-placeholder');
+                                            if (fallback) fallback.style.display = 'flex';
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className="community-avatar-placeholder"
+                                        style={{
+                                          backgroundColor: getAvatarColor(community.name),
+                                          display: community.avatar ? 'none' : 'flex',
+                                        }}
+                                      >
+                                        {getInitials(community.name)}
+                                      </div>
+                                    </div>
+
+                                    <h3 className="community-card-name" title={community.name}>{community.name}</h3>
+                                    <p className="community-card-desc">
+                                      {community.description || 'Welcome to our community! Connect and collaborate with members.'}
+                                    </p>
+
+                                    <div className="community-card-meta">
+                                      <span className="community-members-count">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                          <circle cx="9" cy="7" r="4"></circle>
+                                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                        </svg>
+                                        {community.memberCount != null ? community.memberCount : (community.members?.length || 0)} {(community.memberCount === 1 || community.members?.length === 1) ? 'member' : 'members'}
+                                      </span>
+                                      {isCreator && (
+                                        <span className="community-creator-badge">Created by you</span>
+                                      )}
+                                    </div>
+
+                                    {/* Feed Activity Stats */}
+                                    <div className="community-card-feed-stats">
+                                      <span className="feed-stat-pill announcement">
+                                        📢 {community.announcements?.length || 0} Announcements
+                                      </span>
+                                      <span className="feed-stat-pill discussion">
+                                        💬 {community.discussions?.length || 0} Discussions
+                                      </span>
+                                    </div>
+
+                                    <div className="community-card-actions">
+                                      {/* Open Feed Button */}
+                                      <button
+                                        type="button"
+                                        className="community-open-feed-btn"
+                                        id={`open-feed-btn-${commId}`}
+                                        onClick={() => handleOpenCommunityFeed(community)}
+                                        title="Open Community Discussion Feeds & Announcements"
+                                      >
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                        </svg>
+                                        <span>Open Feed & Discussions</span>
+                                      </button>
+
+                                      {/* Direct Create Discussion Feed Button */}
+                                      <button
+                                        type="button"
+                                        className="community-create-discussion-btn"
+                                        id={`create-feed-btn-${commId}`}
+                                        onClick={() => handleOpenCreateDiscussion(community)}
+                                        title="Create community discussion feeds"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                        </svg>
+                                        <span>Create discussion feed</span>
+                                      </button>
+
+                                      {isCreator && (
+                                        <div className="community-creator-actions">
+                                          <button
+                                            type="button"
+                                            className="community-edit-btn"
+                                            id={`edit-community-btn-${commId}`}
+                                            onClick={() => handleOpenEditCommunity(community)}
+                                            title="Edit community details"
+                                          >
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                            </svg>
+                                            <span>Edit Details</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="community-delete-btn"
+                                            id={`delete-community-btn-${commId}`}
+                                            onClick={() => handleDeleteCommunity(commId)}
+                                            title="Delete community"
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {isMember ? (
+                                        <div className="community-membership-actions">
+                                          <span className="community-joined-badge">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                              <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                            Joined
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="community-leave-btn"
+                                            id={`leave-community-btn-${commId}`}
+                                            onClick={() => handleLeaveCommunity(commId)}
+                                            disabled={joiningCommunityId === commId}
+                                            title="Leave community"
+                                          >
+                                            {joiningCommunityId === commId ? 'Leaving...' : 'Leave'}
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="community-join-btn"
+                                          id={`join-community-btn-${commId}`}
+                                          onClick={() => handleJoinCommunity(commId)}
+                                          disabled={joiningCommunityId === commId}
+                                          title="Join communities"
+                                        >
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                          </svg>
+                                          <span>{joiningCommunityId === commId ? 'Joining...' : 'Join communities'}</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* MODAL: CREATE COMMUNITY */}
@@ -18464,12 +19143,14 @@ function App() {
                         >
                           <div className="community-modal-header discussion-header-theme">
                             <div>
-                              <span className="modal-header-badge">💬 Community Discussion</span>
+                              <span className="modal-header-badge">💬 Community Discussion Feed</span>
                               <h2 className="community-modal-title" id="create-discussion-modal-title">
-                                Start Community Discussion
+                                Create Community Discussion Feeds
                               </h2>
                               <p className="community-modal-subtitle">
-                                Start a conversation, ask for advice, or share knowledge in {activeCommunityFeed?.name}.
+                                {activeCommunityFeed
+                                  ? `Start a discussion feed in ${activeCommunityFeed.name}`
+                                  : 'Start a community discussion feed to share knowledge and discuss topics with members.'}
                               </p>
                             </div>
                             <button
@@ -18483,6 +19164,27 @@ function App() {
                           </div>
 
                           <form onSubmit={handleCreateDiscussionSubmit} className="community-modal-form">
+                            {!activeCommunityFeed && (
+                              <div className="form-group">
+                                <label className="input-label" htmlFor="discussion-community-select">
+                                  Select Community <span className="required-star">*</span>
+                                </label>
+                                <select
+                                  id="discussion-community-select"
+                                  className="input-field community-select"
+                                  value={newDiscussionCommunityId}
+                                  onChange={(e) => setNewDiscussionCommunityId(e.target.value)}
+                                  required
+                                >
+                                  {communitiesList.map((c) => (
+                                    <option key={c._id || c.id} value={c._id || c.id}>
+                                      👥 {c.name} ({c.category || 'General'})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
                             <div className="form-group">
                               <div className="label-with-counter">
                                 <label className="input-label" htmlFor="discussion-title-input">
@@ -18560,7 +19262,7 @@ function App() {
                                 id="submit-create-discussion-btn"
                                 disabled={isSubmittingDiscussion || !newDiscussionTitle.trim() || !newDiscussionContent.trim()}
                               >
-                                {isSubmittingDiscussion ? 'Posting...' : '💬 Post Discussion'}
+                                {isSubmittingDiscussion ? 'Posting...' : '💬 Create community discussion feed'}
                               </button>
                             </div>
                           </form>
@@ -18570,1619 +19272,1617 @@ function App() {
                   </div>
                 </div>
               ) : currentView === 'stories' ? (
-              <div className="stories-space" id="stories-space">
-                <input
-                  ref={uploadStoryRef}
-                  type="file"
-                  id="upload-story-input"
-                  accept="image/*"
-                  className="hidden-file-input"
-                  onClick={(e) => {
-                    e.target.value = null;
-                  }}
-                  onChange={handleStoryUpload}
-                />
-                <input
-                  ref={uploadStoryPhotoRef}
-                  type="file"
-                  id="upload-story-photo-file-input"
-                  accept="image/*"
-                  className="hidden-file-input"
-                  onClick={(e) => {
-                    e.target.value = null;
-                  }}
-                  onChange={handleStoryPhotoUpload}
-                />
-                <input
-                  ref={uploadStoryVideoRef}
-                  type="file"
-                  id="upload-story-video-file-input"
-                  accept="video/*"
-                  className="hidden-file-input"
-                  onClick={(e) => {
-                    e.target.value = null;
-                  }}
-                  onChange={handleStoryVideoUpload}
-                />
+                <div className="stories-space" id="stories-space">
+                  <input
+                    ref={uploadStoryRef}
+                    type="file"
+                    id="upload-story-input"
+                    accept="image/*"
+                    className="hidden-file-input"
+                    onClick={(e) => {
+                      e.target.value = null;
+                    }}
+                    onChange={handleStoryUpload}
+                  />
+                  <input
+                    ref={uploadStoryPhotoRef}
+                    type="file"
+                    id="upload-story-photo-file-input"
+                    accept="image/*"
+                    className="hidden-file-input"
+                    onClick={(e) => {
+                      e.target.value = null;
+                    }}
+                    onChange={handleStoryPhotoUpload}
+                  />
+                  <input
+                    ref={uploadStoryVideoRef}
+                    type="file"
+                    id="upload-story-video-file-input"
+                    accept="video/*"
+                    className="hidden-file-input"
+                    onClick={(e) => {
+                      e.target.value = null;
+                    }}
+                    onChange={handleStoryVideoUpload}
+                  />
 
-                <div className="stories-container" id="stories-container">
-                  {/* Header Section */}
-                  <div className="stories-header" id="stories-header">
-                    <div className="stories-header-left">
-                      <div className="stories-title-row">
-                        <span className="stories-header-icon">✨</span>
-                        <h1 className="stories-title">Stories & Moments</h1>
-                        <span className="stories-badge-pill">
-                          {
-                            storiesList.filter((s) => !s.isArchived && (!s.expiresAt || new Date(s.expiresAt).getTime() > Date.now())).length
-                          }{' '}
-                          Active
-                        </span>
+                  <div className="stories-container" id="stories-container">
+                    {/* Header Section */}
+                    <div className="stories-header" id="stories-header">
+                      <div className="stories-header-left">
+                        <div className="stories-title-row">
+                          <span className="stories-header-icon">✨</span>
+                          <h1 className="stories-title">Stories & Moments</h1>
+                          <span className="stories-badge-pill">
+                            {
+                              storiesList.filter((s) => !s.isArchived && (!s.expiresAt || new Date(s.expiresAt).getTime() > Date.now())).length
+                            }{' '}
+                            Active
+                          </span>
+                        </div>
+                        <p className="stories-subtitle">
+                          Share visual moments, creative thoughts, and video updates that disappear in 24 hours.
+                        </p>
                       </div>
-                      <p className="stories-subtitle">
-                        Share visual moments, creative thoughts, and video updates that disappear in 24 hours.
-                      </p>
+
+                      <div className="stories-header-actions">
+                        <button
+                          type="button"
+                          className={`stories-tab-nav-btn ${storiesTab === 'active' ? 'active' : ''}`}
+                          id="stories-tab-active-btn"
+                          onClick={() => setStoriesTab('active')}
+                        >
+                          🔥 Active Stories
+                        </button>
+                        <button
+                          type="button"
+                          className={`stories-tab-nav-btn ${storiesTab === 'create' ? 'active' : ''}`}
+                          id="stories-tab-create-btn"
+                          onClick={() => setStoriesTab('create')}
+                        >
+                          ➕ Create Story
+                        </button>
+                        <button
+                          type="button"
+                          className={`stories-tab-nav-btn ${storiesTab === 'archive' ? 'active' : ''}`}
+                          id="stories-tab-archive-btn"
+                          onClick={() => setStoriesTab('archive')}
+                        >
+                          🔒 Private Archive ({archivedStoriesList.length})
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="stories-header-actions">
-                      <button
-                        type="button"
-                        className={`stories-tab-nav-btn ${storiesTab === 'active' ? 'active' : ''}`}
-                        id="stories-tab-active-btn"
-                        onClick={() => setStoriesTab('active')}
-                      >
-                        🔥 Active Stories
-                      </button>
-                      <button
-                        type="button"
-                        className={`stories-tab-nav-btn ${storiesTab === 'create' ? 'active' : ''}`}
-                        id="stories-tab-create-btn"
-                        onClick={() => setStoriesTab('create')}
-                      >
-                        ➕ Create Story
-                      </button>
-                      <button
-                        type="button"
-                        className={`stories-tab-nav-btn ${storiesTab === 'archive' ? 'active' : ''}`}
-                        id="stories-tab-archive-btn"
-                        onClick={() => setStoriesTab('archive')}
-                      >
-                        🔒 Private Archive ({archivedStoriesList.length})
-                      </button>
-                    </div>
-                  </div>
+                    {/* Feedback Toast */}
+                    {storyFeedback && (
+                      <div className={`story-feedback-banner ${storyFeedback.type}`} id="story-feedback-banner">
+                        <span className="story-feedback-text">{storyFeedback.message}</span>
+                        <button
+                          type="button"
+                          className="story-feedback-close"
+                          onClick={() => setStoryFeedback(null)}
+                          aria-label="Dismiss message"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
 
-                  {/* Feedback Toast */}
-                  {storyFeedback && (
-                    <div className={`story-feedback-banner ${storyFeedback.type}`} id="story-feedback-banner">
-                      <span className="story-feedback-text">{storyFeedback.message}</span>
-                      <button
-                        type="button"
-                        className="story-feedback-close"
-                        onClick={() => setStoryFeedback(null)}
-                        aria-label="Dismiss message"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ========================================================
+                    {/* ========================================================
                       TAB 1: ACTIVE STORIES
                       ======================================================== */}
-                  {storiesTab === 'active' && (
-                    <div className="stories-active-view" id="stories-active-view">
-                      {/* Top Story Rings Carousel */}
-                      <div className="story-rings-carousel-section" id="story-rings-carousel-section">
-                        <div className="story-rings-carousel" id="story-rings-carousel">
-                          {/* Current User's Ring */}
-                          {(() => {
-                            const myAuth = (loggedInUser || 'alexchen').toLowerCase();
-                            const myGroup = groupedStories.find((g) => g.author.toLowerCase() === myAuth);
-                            const hasActiveStories = myGroup && myGroup.stories.length > 0;
+                    {storiesTab === 'active' && (
+                      <div className="stories-active-view" id="stories-active-view">
+                        {/* Top Story Rings Carousel */}
+                        <div className="story-rings-carousel-section" id="story-rings-carousel-section">
+                          <div className="story-rings-carousel" id="story-rings-carousel">
+                            {/* Current User's Ring */}
+                            {(() => {
+                              const myAuth = (loggedInUser || 'alexchen').toLowerCase();
+                              const myGroup = groupedStories.find((g) => g.author.toLowerCase() === myAuth);
+                              const hasActiveStories = myGroup && myGroup.stories.length > 0;
 
-                            return (
-                              <div
-                                className="story-ring-item my-story-ring"
-                                id="my-story-ring-btn"
-                                onClick={() => {
-                                  if (hasActiveStories) {
-                                    handleOpenStoryViewer(myAuth, 0);
-                                  } else {
-                                    setStoriesTab('create');
-                                  }
-                                }}
-                                title={hasActiveStories ? 'View your active stories' : 'Create your story'}
-                              >
+                              return (
                                 <div
-                                  className={`story-ring-avatar-wrapper ${
-                                    hasActiveStories ? 'story-ring-unread' : 'story-ring-add'
-                                  }`}
+                                  className="story-ring-item my-story-ring"
+                                  id="my-story-ring-btn"
+                                  onClick={() => {
+                                    if (hasActiveStories) {
+                                      handleOpenStoryViewer(myAuth, 0);
+                                    } else {
+                                      setStoriesTab('create');
+                                    }
+                                  }}
+                                  title={hasActiveStories ? 'View your active stories' : 'Create your story'}
                                 >
-                                  {profilePicture ? (
-                                    <img src={profilePicture} alt="Your profile" className="story-ring-avatar-img" />
-                                  ) : (
-                                    <div className="story-ring-avatar-placeholder">
-                                      {(displayName || loggedInUser || 'You').slice(0, 1).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <span className="story-ring-plus-badge" title="Add Story">
-                                    +
-                                  </span>
-                                </div>
-                                <span className="story-ring-name">Your Story</span>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Friends / Community Rings */}
-                          {groupedStories
-                            .filter((g) => g.author.toLowerCase() !== (loggedInUser || 'alexchen').toLowerCase())
-                            .map((group) => (
-                              <div
-                                key={group.author}
-                                className="story-ring-item"
-                                id={`story-ring-${group.author}`}
-                                onClick={() => handleOpenStoryViewer(group.author, 0)}
-                                title={`Watch ${group.authorName}'s stories`}
-                              >
-                                <div
-                                  className={`story-ring-avatar-wrapper ${
-                                    group.hasUnseen ? 'story-ring-unread' : 'story-ring-seen'
-                                  }`}
-                                >
-                                  {group.authorAvatar ? (
-                                    <img
-                                      src={group.authorAvatar}
-                                      alt={group.authorName}
-                                      className="story-ring-avatar-img"
-                                    />
-                                  ) : (
-                                    <div className="story-ring-avatar-placeholder">
-                                      {group.authorName.slice(0, 1).toUpperCase()}
-                                    </div>
-                                  )}
-                                  {group.stories.some((s) => s.audience === 'close_friends') && (
-                                    <span className="story-ring-close-star" title="Close Friends Story">
-                                      ⭐
+                                  <div
+                                    className={`story-ring-avatar-wrapper ${hasActiveStories ? 'story-ring-unread' : 'story-ring-add'
+                                      }`}
+                                  >
+                                    {profilePicture ? (
+                                      <img src={profilePicture} alt="Your profile" className="story-ring-avatar-img" />
+                                    ) : (
+                                      <div className="story-ring-avatar-placeholder">
+                                        {(displayName || loggedInUser || 'You').slice(0, 1).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="story-ring-plus-badge" title="Add Story">
+                                      +
                                     </span>
-                                  )}
+                                  </div>
+                                  <span className="story-ring-name">Your Story</span>
                                 </div>
-                                <span className="story-ring-name">{group.authorName}</span>
-                              </div>
-                            ))}
+                              );
+                            })()}
+
+                            {/* Friends / Community Rings */}
+                            {groupedStories
+                              .filter((g) => g.author.toLowerCase() !== (loggedInUser || 'alexchen').toLowerCase())
+                              .map((group) => (
+                                <div
+                                  key={group.author}
+                                  className="story-ring-item"
+                                  id={`story-ring-${group.author}`}
+                                  onClick={() => handleOpenStoryViewer(group.author, 0)}
+                                  title={`Watch ${group.authorName}'s stories`}
+                                >
+                                  <div
+                                    className={`story-ring-avatar-wrapper ${group.hasUnseen ? 'story-ring-unread' : 'story-ring-seen'
+                                      }`}
+                                  >
+                                    {group.authorAvatar ? (
+                                      <img
+                                        src={group.authorAvatar}
+                                        alt={group.authorName}
+                                        className="story-ring-avatar-img"
+                                      />
+                                    ) : (
+                                      <div className="story-ring-avatar-placeholder">
+                                        {group.authorName.slice(0, 1).toUpperCase()}
+                                      </div>
+                                    )}
+                                    {group.stories.some((s) => s.audience === 'close_friends') && (
+                                      <span className="story-ring-close-star" title="Close Friends Story">
+                                        ⭐
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="story-ring-name">{group.authorName}</span>
+                                </div>
+                              ))}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Toolbar: Search and Audience Filter */}
-                      <div className="stories-toolbar" id="stories-toolbar">
-                        <div className="stories-search-box">
-                          <span className="stories-search-icon">🔍</span>
-                          <input
-                            type="text"
-                            id="stories-search-input"
-                            className="stories-search-input"
-                            placeholder="Search stories by author, caption, or keywords..."
-                            value={storiesSearchQuery}
-                            onChange={(e) => setStoriesSearchQuery(e.target.value)}
-                          />
-                          {storiesSearchQuery && (
-                            <button
-                              type="button"
-                              className="stories-search-clear"
-                              onClick={() => setStoriesSearchQuery('')}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="stories-audience-filter-pills">
-                          {[
-                            { id: 'all', label: 'All Stories' },
-                            { id: 'friends', label: '👥 Friends' },
-                            { id: 'close_friends', label: '⭐ Close Friends' },
-                            { id: 'public', label: '🌍 Public' },
-                          ].map((pill) => (
-                            <button
-                              key={pill.id}
-                              type="button"
-                              className={`stories-filter-pill ${storiesAudienceFilter === pill.id ? 'active' : ''}`}
-                              id={`stories-filter-${pill.id}`}
-                              onClick={() => setStoriesAudienceFilter(pill.id)}
-                            >
-                              {pill.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Active Stories Grid */}
-                      {(() => {
-                        const nowTime = Date.now();
-                        const filteredStories = storiesList.filter((s) => {
-                          if (s.isArchived) return false;
-                          if (s.expiresAt && new Date(s.expiresAt).getTime() <= nowTime) return false;
-
-                          // Audience filter
-                          if (storiesAudienceFilter !== 'all') {
-                            if (s.audience !== storiesAudienceFilter) return false;
-                          }
-
-                          // Search query
-                          if (storiesSearchQuery.trim()) {
-                            const q = storiesSearchQuery.toLowerCase();
-                            const matchesAuthor =
-                              (s.author && s.author.toLowerCase().includes(q)) ||
-                              (s.authorName && s.authorName.toLowerCase().includes(q));
-                            const matchesText = s.overlayText && s.overlayText.toLowerCase().includes(q);
-                            const matchesCaption = s.caption && s.caption.toLowerCase().includes(q);
-                            const matchesMentions =
-                              s.mentions && s.mentions.some((m) => m.toLowerCase().includes(q));
-                            if (!matchesAuthor && !matchesText && !matchesCaption && !matchesMentions) {
-                              return false;
-                            }
-                          }
-
-                          return true;
-                        });
-
-                        if (filteredStories.length === 0) {
-                          return (
-                            <div className="stories-empty-state" id="stories-empty-state">
-                              <div className="stories-empty-icon">📸</div>
-                              <h3 className="stories-empty-title">No active stories found</h3>
-                              <p className="stories-empty-desc">
-                                {storiesSearchQuery
-                                  ? `No stories matching "${storiesSearchQuery}". Try clearing search.`
-                                  : 'Be the first to share a moment today with your friends!'}
-                              </p>
+                        {/* Toolbar: Search and Audience Filter */}
+                        <div className="stories-toolbar" id="stories-toolbar">
+                          <div className="stories-search-box">
+                            <span className="stories-search-icon">🔍</span>
+                            <input
+                              type="text"
+                              id="stories-search-input"
+                              className="stories-search-input"
+                              placeholder="Search stories by author, caption, or keywords..."
+                              value={storiesSearchQuery}
+                              onChange={(e) => setStoriesSearchQuery(e.target.value)}
+                            />
+                            {storiesSearchQuery && (
                               <button
                                 type="button"
-                                className="story-action-primary-btn"
-                                id="stories-empty-create-btn"
-                                onClick={() => setStoriesTab('create')}
+                                className="stories-search-clear"
+                                onClick={() => setStoriesSearchQuery('')}
                               >
-                                ➕ Create a Story
+                                ✕
                               </button>
+                            )}
+                          </div>
+
+                          <div className="stories-audience-filter-pills">
+                            {[
+                              { id: 'all', label: 'All Stories' },
+                              { id: 'friends', label: '👥 Friends' },
+                              { id: 'close_friends', label: '⭐ Close Friends' },
+                              { id: 'public', label: '🌍 Public' },
+                            ].map((pill) => (
+                              <button
+                                key={pill.id}
+                                type="button"
+                                className={`stories-filter-pill ${storiesAudienceFilter === pill.id ? 'active' : ''}`}
+                                id={`stories-filter-${pill.id}`}
+                                onClick={() => setStoriesAudienceFilter(pill.id)}
+                              >
+                                {pill.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Active Stories Grid */}
+                        {(() => {
+                          const nowTime = Date.now();
+                          const filteredStories = storiesList.filter((s) => {
+                            if (s.isArchived) return false;
+                            if (s.expiresAt && new Date(s.expiresAt).getTime() <= nowTime) return false;
+
+                            // Audience filter
+                            if (storiesAudienceFilter !== 'all') {
+                              if (s.audience !== storiesAudienceFilter) return false;
+                            }
+
+                            // Search query
+                            if (storiesSearchQuery.trim()) {
+                              const q = storiesSearchQuery.toLowerCase();
+                              const matchesAuthor =
+                                (s.author && s.author.toLowerCase().includes(q)) ||
+                                (s.authorName && s.authorName.toLowerCase().includes(q));
+                              const matchesText = s.overlayText && s.overlayText.toLowerCase().includes(q);
+                              const matchesCaption = s.caption && s.caption.toLowerCase().includes(q);
+                              const matchesMentions =
+                                s.mentions && s.mentions.some((m) => m.toLowerCase().includes(q));
+                              if (!matchesAuthor && !matchesText && !matchesCaption && !matchesMentions) {
+                                return false;
+                              }
+                            }
+
+                            return true;
+                          });
+
+                          if (filteredStories.length === 0) {
+                            return (
+                              <div className="stories-empty-state" id="stories-empty-state">
+                                <div className="stories-empty-icon">📸</div>
+                                <h3 className="stories-empty-title">No active stories found</h3>
+                                <p className="stories-empty-desc">
+                                  {storiesSearchQuery
+                                    ? `No stories matching "${storiesSearchQuery}". Try clearing search.`
+                                    : 'Be the first to share a moment today with your friends!'}
+                                </p>
+                                <button
+                                  type="button"
+                                  className="story-action-primary-btn"
+                                  id="stories-empty-create-btn"
+                                  onClick={() => setStoriesTab('create')}
+                                >
+                                  ➕ Create a Story
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="stories-grid" id="stories-grid">
+                              {filteredStories.map((story) => (
+                                <div
+                                  key={story.id}
+                                  className="story-grid-card"
+                                  id={`story-card-${story.id}`}
+                                  onClick={() => handleOpenStoryViewer(story.author, 0)}
+                                >
+                                  {/* 9:16 Canvas Thumbnail */}
+                                  <div className="story-card-canvas">
+                                    {story.mediaType === 'image' && story.media ? (
+                                      <img
+                                        src={story.media}
+                                        alt={story.caption || 'Story photo'}
+                                        className="story-card-media-img"
+                                      />
+                                    ) : story.mediaType === 'video' && story.media ? (
+                                      <video
+                                        src={story.media}
+                                        className="story-card-media-video"
+                                        muted
+                                        playsInline
+                                        loop
+                                      />
+                                    ) : (
+                                      <div
+                                        className="story-card-text-canvas"
+                                        style={{ background: story.backgroundColor || '#18181b' }}
+                                      >
+                                        <p className="story-card-text-overlay">{story.overlayText || story.caption}</p>
+                                      </div>
+                                    )}
+
+                                    <div className="story-card-overlay-scrim"></div>
+
+                                    {/* Top card author bar */}
+                                    <div className="story-card-header">
+                                      <div className="story-card-author-left">
+                                        <div className="story-card-avatar">
+                                          {story.authorAvatar ? (
+                                            <img src={story.authorAvatar} alt={story.authorName} />
+                                          ) : (
+                                            <span>{(story.authorName || story.author).slice(0, 1).toUpperCase()}</span>
+                                          )}
+                                        </div>
+                                        <div className="story-card-author-meta">
+                                          <span className="story-card-author-name">
+                                            {story.authorName || story.author}
+                                          </span>
+                                          <span className="story-card-time-ago">
+                                            {formatStoryTimeAgo(story.createdAt)}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <span className="story-card-timer-badge">
+                                        {getStoryTimeRemaining(story.expiresAt)}
+                                      </span>
+                                    </div>
+
+                                    {/* Center content overlay if image/video with text */}
+                                    {story.overlayText && story.mediaType !== 'text' && (
+                                      <div className="story-card-center-text-wrap">
+                                        <span
+                                          className="story-card-floating-text"
+                                          style={{
+                                            color: story.textStyle?.color || '#ffffff',
+                                            background: story.textStyle?.background || 'rgba(0,0,0,0.5)',
+                                          }}
+                                        >
+                                          {story.overlayText}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {/* Sticker tag */}
+                                    {story.stickers && story.stickers.length > 0 && (
+                                      <div className="story-card-sticker-tag">
+                                        <span>{story.stickers[0].content}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Audience badge */}
+                                    <div className="story-card-audience-pill">
+                                      {story.audience === 'close_friends'
+                                        ? '⭐ Close Friends'
+                                        : story.audience === 'friends'
+                                          ? '👥 Friends'
+                                          : story.audience === 'private'
+                                            ? '🔒 Private'
+                                            : '🌍 Public'}
+                                    </div>
+
+                                    {/* Bottom info & actions */}
+                                    <div className="story-card-footer">
+                                      {story.caption && (
+                                        <p className="story-card-caption-line">{story.caption}</p>
+                                      )}
+                                      <div className="story-card-actions-row">
+                                        <div className="story-card-metrics">
+                                          <span className="story-card-view-count">
+                                            👁️ {story.viewersCount || story.viewers?.length || 0}
+                                          </span>
+                                          {story.replies && story.replies.length > 0 && (
+                                            <span className="story-card-reply-count">
+                                              💬 {story.replies.length}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {story.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase() ? (
+                                          <button
+                                            type="button"
+                                            className="story-card-archive-btn"
+                                            title="Move to Private Archive"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleArchiveStory(story.id);
+                                            }}
+                                          >
+                                            🔒 Archive
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className="story-card-watch-btn"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenStoryViewer(story.author, 0);
+                                            }}
+                                          >
+                                            ▶ Watch
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           );
-                        }
+                        })()}
+                      </div>
+                    )}
 
-                        return (
-                          <div className="stories-grid" id="stories-grid">
-                            {filteredStories.map((story) => (
-                              <div
-                                key={story.id}
-                                className="story-grid-card"
-                                id={`story-card-${story.id}`}
-                                onClick={() => handleOpenStoryViewer(story.author, 0)}
-                              >
-                                {/* 9:16 Canvas Thumbnail */}
-                                <div className="story-card-canvas">
+                    {/* ========================================================
+                      TAB 2: STORY STUDIO (CREATOR)
+                      ======================================================== */}
+                    {storiesTab === 'create' && (
+                      <div className="story-studio-wrapper" id="story-studio-wrapper">
+                        <div className="story-studio-grid">
+                          {/* Left: 9:16 Canvas Live Preview */}
+                          <div className="story-studio-preview-col">
+                            <div className="story-studio-canvas-container">
+                              <div className="story-canvas-phone-frame">
+                                <div
+                                  className="story-canvas-viewport"
+                                  id="story-canvas-viewport"
+                                  style={{
+                                    background:
+                                      storyStudioMediaType === 'text'
+                                        ? storyStudioBg
+                                        : '#111827',
+                                  }}
+                                >
+                                  {/* Media Layer */}
+                                  {storyStudioMediaType === 'image' && storyStudioMedia && (
+                                    <img
+                                      src={storyStudioMedia}
+                                      alt="Story canvas preview"
+                                      className="story-canvas-media-layer"
+                                    />
+                                  )}
+
+                                  {storyStudioMediaType === 'video' && storyStudioMedia && (
+                                    <video
+                                      src={storyStudioMedia}
+                                      className="story-canvas-media-layer"
+                                      autoPlay
+                                      loop
+                                      muted
+                                      playsInline
+                                    />
+                                  )}
+
+                                  {/* Canvas Scrim */}
+                                  <div className="story-canvas-scrim"></div>
+
+                                  {/* Canvas Top Bar Simulation */}
+                                  <div className="story-canvas-sim-header">
+                                    <div className="story-canvas-sim-author">
+                                      <div className="story-canvas-sim-avatar">
+                                        {profilePicture ? (
+                                          <img src={profilePicture} alt="User" />
+                                        ) : (
+                                          <span>{(displayName || loggedInUser || 'Y').slice(0, 1).toUpperCase()}</span>
+                                        )}
+                                      </div>
+                                      <span className="story-canvas-sim-name">
+                                        {displayName || loggedInUser || 'Your Story'}
+                                      </span>
+                                    </div>
+                                    <span className="story-canvas-sim-audience">
+                                      {storyStudioAudience === 'close_friends'
+                                        ? '⭐ Close Friends'
+                                        : storyStudioAudience === 'friends'
+                                          ? '👥 Friends'
+                                          : storyStudioAudience === 'private'
+                                            ? '🔒 Private'
+                                            : '🌍 Public'}
+                                    </span>
+                                  </div>
+
+                                  {/* Canvas Live Overlay Text */}
+                                  {storyStudioText && (
+                                    <div
+                                      className={`story-canvas-overlay-textbox text-align-${storyStudioTextAlign} font-size-${storyStudioFontSize} font-family-${storyStudioFontFamily}`}
+                                      style={{
+                                        color: storyStudioTextColor,
+                                        backgroundColor: storyStudioTextBg,
+                                      }}
+                                    >
+                                      {storyStudioText}
+                                    </div>
+                                  )}
+
+                                  {/* Canvas Live Stickers */}
+                                  {storyStudioStickers.map((stk) => (
+                                    <div
+                                      key={stk.id}
+                                      className="story-canvas-sticker-item"
+                                      style={{
+                                        left: `${stk.x}%`,
+                                        top: `${stk.y}%`,
+                                        transform: 'translate(-50%, -50%)',
+                                      }}
+                                    >
+                                      <span className="story-canvas-sticker-content">{stk.content}</span>
+                                      <button
+                                        type="button"
+                                        className="story-canvas-sticker-remove"
+                                        title="Remove sticker"
+                                        onClick={() => handleRemoveSticker(stk.id)}
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ))}
+
+                                  {/* Canvas Live Mentions */}
+                                  {storyStudioMentions.length > 0 && (
+                                    <div className="story-canvas-mentions-bar">
+                                      {storyStudioMentions.map((m) => (
+                                        <span key={m} className="story-canvas-mention-tag">
+                                          @{m}
+                                          <button
+                                            type="button"
+                                            className="story-canvas-mention-remove"
+                                            onClick={() => handleRemoveMention(m)}
+                                          >
+                                            ✕
+                                          </button>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Canvas Live Link */}
+                                  {storyStudioLink?.url && (
+                                    <div className="story-canvas-link-pill">
+                                      <span className="story-canvas-link-icon">🔗</span>
+                                      <span className="story-canvas-link-text">
+                                        {storyStudioLink.title || 'Visit Link'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="story-canvas-link-remove"
+                                        onClick={() => setStoryStudioLink({ url: '', title: '' })}
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Canvas Live Caption */}
+                                  {storyStudioCaption && (
+                                    <div className="story-canvas-sim-caption">
+                                      <p>{storyStudioCaption}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right: Studio Creative Control Station */}
+                          <div className="story-studio-controls-col">
+                            <div className="story-studio-card">
+                              <h2 className="story-studio-card-title">Story Creator Studio</h2>
+                              <p className="story-studio-card-subtitle">
+                                Compose your 24-hour moment with photos, videos, overlay text, stickers, and tags.
+                              </p>
+
+                              {/* 1. Media Type Selector */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">1. Choose Media Format</label>
+                                <div className="story-media-mode-btns">
+                                  <button
+                                    type="button"
+                                    className={`story-media-mode-btn ${storyStudioMediaType === 'image' ? 'active' : ''}`}
+                                    id="story-mode-photo-btn"
+                                    onClick={() => {
+                                      setStoryStudioMediaType('image');
+                                      uploadStoryPhotoRef.current?.click();
+                                    }}
+                                  >
+                                    📷 Upload Photo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`story-media-mode-btn ${storyStudioMediaType === 'video' ? 'active' : ''}`}
+                                    id="story-mode-video-btn"
+                                    onClick={() => {
+                                      setStoryStudioMediaType('video');
+                                      uploadStoryVideoRef.current?.click();
+                                    }}
+                                  >
+                                    🎥 Upload Video
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`story-media-mode-btn ${storyStudioMediaType === 'text' ? 'active' : ''}`}
+                                    id="story-mode-text-btn"
+                                    onClick={() => setStoryStudioMediaType('text')}
+                                  >
+                                    🎨 Text & Gradient
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Background Gradients (if in text mode) */}
+                              {storyStudioMediaType === 'text' && (
+                                <div className="story-studio-section">
+                                  <label className="story-studio-label">Canvas Background Gradient</label>
+                                  <div className="story-gradient-swatches">
+                                    {STORY_BG_GRADIENTS.map((grad, i) => (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        className={`story-gradient-swatch ${storyStudioBg === grad ? 'selected' : ''}`}
+                                        style={{ background: grad }}
+                                        onClick={() => setStoryStudioBg(grad)}
+                                        title={`Gradient style ${i + 1}`}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Creative Sample Presets */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">✨ Quick Creative Templates</label>
+                                <div className="story-preset-chips">
+                                  {STORY_SAMPLE_PRESETS.map((preset) => (
+                                    <button
+                                      key={preset.id}
+                                      type="button"
+                                      className="story-preset-chip"
+                                      onClick={() => handleSelectStoryPreset(preset)}
+                                    >
+                                      {preset.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* 2. Text Overlay Settings */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">2. Add Story Text</label>
+                                <textarea
+                                  id="story-studio-text-input"
+                                  className="story-studio-textarea"
+                                  placeholder="Write overlay text to display on your story..."
+                                  rows={2}
+                                  value={storyStudioText}
+                                  onChange={(e) => setStoryStudioText(e.target.value)}
+                                />
+
+                                <div className="story-text-styling-bar">
+                                  {/* Font Family */}
+                                  <div className="story-style-subgroup">
+                                    <span className="story-style-sublabel">Font:</span>
+                                    <div className="story-style-mini-group">
+                                      {['sans', 'serif', 'mono', 'cursive'].map((f) => (
+                                        <button
+                                          key={f}
+                                          type="button"
+                                          className={`story-style-mini-btn ${storyStudioFontFamily === f ? 'active' : ''}`}
+                                          onClick={() => setStoryStudioFontFamily(f)}
+                                        >
+                                          {f}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Font Size */}
+                                  <div className="story-style-subgroup">
+                                    <span className="story-style-sublabel">Size:</span>
+                                    <div className="story-style-mini-group">
+                                      {['small', 'medium', 'large', 'xlarge'].map((sz) => (
+                                        <button
+                                          key={sz}
+                                          type="button"
+                                          className={`story-style-mini-btn ${storyStudioFontSize === sz ? 'active' : ''}`}
+                                          onClick={() => setStoryStudioFontSize(sz)}
+                                        >
+                                          {sz === 'small' ? 'S' : sz === 'medium' ? 'M' : sz === 'large' ? 'L' : 'XL'}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Alignment */}
+                                  <div className="story-style-subgroup">
+                                    <span className="story-style-sublabel">Align:</span>
+                                    <div className="story-style-mini-group">
+                                      {['left', 'center', 'right'].map((al) => (
+                                        <button
+                                          key={al}
+                                          type="button"
+                                          className={`story-style-mini-btn ${storyStudioTextAlign === al ? 'active' : ''}`}
+                                          onClick={() => setStoryStudioTextAlign(al)}
+                                        >
+                                          {al === 'left' ? '⬅️' : al === 'center' ? '↔️' : '➡️'}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Color Palettes */}
+                                <div className="story-text-color-row">
+                                  <span className="story-style-sublabel">Text Color:</span>
+                                  {['#ffffff', '#000000', '#f43f5e', '#38bdf8', '#fbbf24', '#34d399'].map((c) => (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      className={`story-color-dot ${storyStudioTextColor === c ? 'selected' : ''}`}
+                                      style={{ backgroundColor: c }}
+                                      onClick={() => setStoryStudioTextColor(c)}
+                                    />
+                                  ))}
+
+                                  <span className="story-style-sublabel" style={{ marginLeft: '12px' }}>
+                                    Box:
+                                  </span>
+                                  {[
+                                    { bg: 'transparent', label: 'None' },
+                                    { bg: 'rgba(0,0,0,0.5)', label: 'Dark' },
+                                    { bg: 'rgba(255,255,255,0.7)', label: 'Light' },
+                                  ].map((b) => (
+                                    <button
+                                      key={b.bg}
+                                      type="button"
+                                      className={`story-style-mini-btn ${storyStudioTextBg === b.bg ? 'active' : ''}`}
+                                      onClick={() => setStoryStudioTextBg(b.bg)}
+                                    >
+                                      {b.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* 3. Interactive Stickers & Badges */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">3. Add Stickers & Badges</label>
+                                <div className="story-add-interactive-row">
+                                  <button
+                                    type="button"
+                                    className="story-interactive-trigger-btn"
+                                    id="story-add-sticker-btn"
+                                    onClick={() => setShowStickerDrawer((prev) => !prev)}
+                                  >
+                                    😃 Add Stickers ({storyStudioStickers.length})
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="story-interactive-trigger-btn"
+                                    id="story-add-time-btn"
+                                    onClick={() => {
+                                      const now = new Date();
+                                      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                      handleAddSticker({ type: 'time', content: `⏰ ${timeStr}` });
+                                    }}
+                                  >
+                                    ⏰ Current Time
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="story-interactive-trigger-btn"
+                                    id="story-add-loc-btn"
+                                    onClick={() => setShowLocationInput((prev) => !prev)}
+                                  >
+                                    📍 Location
+                                  </button>
+                                </div>
+
+                                {/* Location Input Form */}
+                                {showLocationInput && (
+                                  <div className="story-location-input-drawer">
+                                    <input
+                                      type="text"
+                                      className="story-studio-input"
+                                      placeholder="Type location (e.g. San Francisco, CA)..."
+                                      value={tempLocationInput}
+                                      onChange={(e) => setTempLocationInput(e.target.value)}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="story-inline-save-btn"
+                                      onClick={() => {
+                                        if (tempLocationInput.trim()) {
+                                          handleAddSticker({
+                                            type: 'location',
+                                            content: `📍 ${tempLocationInput.trim()}`,
+                                          });
+                                          setTempLocationInput('');
+                                          setShowLocationInput(false);
+                                        }
+                                      }}
+                                    >
+                                      Add
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Sticker Palette Drawer */}
+                                {showStickerDrawer && (
+                                  <div className="story-sticker-drawer" id="story-sticker-drawer">
+                                    <div className="story-sticker-emoji-grid">
+                                      {STORY_STICKER_EMOJIS.map((emoji) => (
+                                        <button
+                                          key={emoji}
+                                          type="button"
+                                          className="story-sticker-emoji-btn"
+                                          onClick={() => handleAddSticker({ type: 'emoji', content: emoji })}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 4. Mentions & Story Links */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">4. Mention Users & Attach Links</label>
+                                <div className="story-mention-link-row">
+                                  <div className="story-mention-field-wrap">
+                                    <input
+                                      type="text"
+                                      className="story-studio-input"
+                                      placeholder="Mention @username..."
+                                      value={tempMentionInput}
+                                      onChange={(e) => setTempMentionInput(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          handleAddMention(tempMentionInput);
+                                        }
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="story-inline-save-btn"
+                                      onClick={() => handleAddMention(tempMentionInput)}
+                                    >
+                                      @ Mention
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className="story-link-modal-trigger-btn"
+                                    id="story-link-trigger-btn"
+                                    onClick={() => {
+                                      setTempLinkUrl(storyStudioLink?.url || '');
+                                      setTempLinkTitle(storyStudioLink?.title || '');
+                                      setShowLinkModal(true);
+                                    }}
+                                  >
+                                    {storyStudioLink?.url ? '🔗 Edit Link' : '🔗 Add Link'}
+                                  </button>
+                                </div>
+
+                                {/* Mention Quick Suggestions */}
+                                <div className="story-mention-suggestions">
+                                  <span className="story-style-sublabel">Suggestions:</span>
+                                  {['alexchen', 'sophia_p', 'tonystark', 'liam_smith'].map((u) => (
+                                    <button
+                                      key={u}
+                                      type="button"
+                                      className="story-mention-suggestion-chip"
+                                      onClick={() => handleAddMention(u)}
+                                    >
+                                      @{u}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* 5. Caption & Audience */}
+                              <div className="story-studio-section">
+                                <label className="story-studio-label">5. Caption & Audience</label>
+                                <textarea
+                                  id="story-studio-caption-input"
+                                  className="story-studio-textarea"
+                                  placeholder="Write a caption for your story... #moments #life"
+                                  rows={2}
+                                  value={storyStudioCaption}
+                                  onChange={(e) => setStoryStudioCaption(e.target.value)}
+                                />
+
+                                {/* Audience Selector */}
+                                <div className="story-audience-selector-row">
+                                  <label className="story-style-sublabel">Who can see this?</label>
+                                  <div className="story-audience-options">
+                                    {[
+                                      { id: 'public', label: '🌍 Public', desc: 'Anyone' },
+                                      { id: 'friends', label: '👥 Friends', desc: 'Approved friends' },
+                                      { id: 'close_friends', label: '⭐ Close Friends', desc: 'Favorites only' },
+                                      { id: 'private', label: '🔒 Private', desc: 'Only you' },
+                                    ].map((aud) => (
+                                      <label
+                                        key={aud.id}
+                                        className={`story-audience-radio-card ${storyStudioAudience === aud.id ? 'selected' : ''}`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          name="storyAudience"
+                                          value={aud.id}
+                                          checked={storyStudioAudience === aud.id}
+                                          onChange={() => setStoryStudioAudience(aud.id)}
+                                        />
+                                        <div className="story-audience-radio-info">
+                                          <span className="story-audience-title">{aud.label}</span>
+                                          <span className="story-audience-desc">{aud.desc}</span>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Actions: Publish */}
+                              <div className="story-studio-publish-actions">
+                                <button
+                                  type="button"
+                                  className="story-publish-primary-btn"
+                                  id="story-publish-btn"
+                                  disabled={isPublishingStory}
+                                  onClick={handlePublishStory}
+                                >
+                                  {isPublishingStory ? 'Publishing Story...' : '🚀 Publish Story (24h)'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="story-discard-btn"
+                                  id="story-discard-btn"
+                                  onClick={() => {
+                                    setStoryStudioText('');
+                                    setStoryStudioCaption('');
+                                    setStoryStudioStickers([]);
+                                    setStoryStudioMentions([]);
+                                    setStoryStudioLink({ url: '', title: '' });
+                                    setStoriesTab('active');
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ========================================================
+                      TAB 3: PRIVATE ARCHIVE (AUTHOR VAULT)
+                      ======================================================== */}
+                    {storiesTab === 'archive' && (
+                      <div className="stories-archive-view" id="stories-archive-view">
+                        <div className="stories-archive-header">
+                          <div className="stories-archive-header-text">
+                            <h2 className="stories-archive-title">🔒 Your Private Story Archive</h2>
+                            <p className="stories-archive-subtitle">
+                              Stories you archive privately or that automatically expire after 24 hours are safely preserved here forever.
+                              Only you can view and re-share them.
+                            </p>
+                          </div>
+                        </div>
+
+                        {archivedStoriesList.length === 0 ? (
+                          <div className="stories-empty-state" id="stories-archive-empty">
+                            <div className="stories-empty-icon">📦</div>
+                            <h3 className="stories-empty-title">Your story archive is empty</h3>
+                            <p className="stories-empty-desc">
+                              When you archive active stories or when they expire after 24 hours, they will appear here privately.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="stories-archive-grid" id="stories-archive-grid">
+                            {archivedStoriesList.map((story) => (
+                              <div key={story.id} className="story-archive-card" id={`story-archive-${story.id}`}>
+                                <div className="story-archive-card-canvas">
                                   {story.mediaType === 'image' && story.media ? (
                                     <img
                                       src={story.media}
-                                      alt={story.caption || 'Story photo'}
-                                      className="story-card-media-img"
+                                      alt={story.caption || 'Archived story'}
+                                      className="story-archive-media"
                                     />
                                   ) : story.mediaType === 'video' && story.media ? (
-                                    <video
-                                      src={story.media}
-                                      className="story-card-media-video"
-                                      muted
-                                      playsInline
-                                      loop
-                                    />
+                                    <video src={story.media} className="story-archive-media" muted playsInline />
                                   ) : (
                                     <div
-                                      className="story-card-text-canvas"
-                                      style={{ background: story.backgroundColor || '#18181b' }}
+                                      className="story-archive-text-canvas"
+                                      style={{ background: story.backgroundColor || '#1f2937' }}
                                     >
-                                      <p className="story-card-text-overlay">{story.overlayText || story.caption}</p>
+                                      <p>{story.overlayText || story.caption}</p>
                                     </div>
                                   )}
 
-                                  <div className="story-card-overlay-scrim"></div>
+                                  <div className="story-archive-scrim"></div>
 
-                                  {/* Top card author bar */}
-                                  <div className="story-card-header">
-                                    <div className="story-card-author-left">
-                                      <div className="story-card-avatar">
-                                        {story.authorAvatar ? (
-                                          <img src={story.authorAvatar} alt={story.authorName} />
-                                        ) : (
-                                          <span>{(story.authorName || story.author).slice(0, 1).toUpperCase()}</span>
-                                        )}
-                                      </div>
-                                      <div className="story-card-author-meta">
-                                        <span className="story-card-author-name">
-                                          {story.authorName || story.author}
-                                        </span>
-                                        <span className="story-card-time-ago">
-                                          {formatStoryTimeAgo(story.createdAt)}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <span className="story-card-timer-badge">
-                                      {getStoryTimeRemaining(story.expiresAt)}
+                                  <div className="story-archive-card-top">
+                                    <span className="story-archive-badge">🔒 Archived</span>
+                                    <span className="story-archive-date">
+                                      {formatStoryTimeAgo(story.createdAt)}
                                     </span>
                                   </div>
 
-                                  {/* Center content overlay if image/video with text */}
-                                  {story.overlayText && story.mediaType !== 'text' && (
-                                    <div className="story-card-center-text-wrap">
-                                      <span
-                                        className="story-card-floating-text"
-                                        style={{
-                                          color: story.textStyle?.color || '#ffffff',
-                                          background: story.textStyle?.background || 'rgba(0,0,0,0.5)',
+                                  <div className="story-archive-card-bottom">
+                                    {story.caption && (
+                                      <p className="story-archive-caption">{story.caption}</p>
+                                    )}
+                                    <div className="story-archive-metrics-row">
+                                      <span>👁️ {story.viewersCount || story.viewers?.length || 0} views</span>
+                                      {story.replies && story.replies.length > 0 && (
+                                        <span>💬 {story.replies.length} replies</span>
+                                      )}
+                                    </div>
+
+                                    <div className="story-archive-buttons-row">
+                                      <button
+                                        type="button"
+                                        className="story-archive-watch-btn"
+                                        onClick={() => {
+                                          setActiveStoryViewer({
+                                            author: story.author,
+                                            storyIndex: 0,
+                                          });
                                         }}
                                       >
-                                        {story.overlayText}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* Sticker tag */}
-                                  {story.stickers && story.stickers.length > 0 && (
-                                    <div className="story-card-sticker-tag">
-                                      <span>{story.stickers[0].content}</span>
-                                    </div>
-                                  )}
-
-                                  {/* Audience badge */}
-                                  <div className="story-card-audience-pill">
-                                    {story.audience === 'close_friends'
-                                      ? '⭐ Close Friends'
-                                      : story.audience === 'friends'
-                                      ? '👥 Friends'
-                                      : story.audience === 'private'
-                                      ? '🔒 Private'
-                                      : '🌍 Public'}
-                                  </div>
-
-                                  {/* Bottom info & actions */}
-                                  <div className="story-card-footer">
-                                    {story.caption && (
-                                      <p className="story-card-caption-line">{story.caption}</p>
-                                    )}
-                                    <div className="story-card-actions-row">
-                                      <div className="story-card-metrics">
-                                        <span className="story-card-view-count">
-                                          👁️ {story.viewersCount || story.viewers?.length || 0}
-                                        </span>
-                                        {story.replies && story.replies.length > 0 && (
-                                          <span className="story-card-reply-count">
-                                            💬 {story.replies.length}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {story.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase() ? (
-                                        <button
-                                          type="button"
-                                          className="story-card-archive-btn"
-                                          title="Move to Private Archive"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleArchiveStory(story.id);
-                                          }}
-                                        >
-                                          🔒 Archive
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="story-card-watch-btn"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOpenStoryViewer(story.author, 0);
-                                          }}
-                                        >
-                                          ▶ Watch
-                                        </button>
-                                      )}
+                                        ▶ Watch
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="story-archive-reshare-btn"
+                                        title="Re-share to active stories for 24 hours"
+                                        onClick={() => handleRestoreArchivedStory(story.id)}
+                                      >
+                                        🔄 Re-share
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="story-archive-delete-btn"
+                                        title="Delete forever"
+                                        onClick={() => handleDeleteStory(story.id, true)}
+                                      >
+                                        🗑️
+                                      </button>
                                     </div>
                                   </div>
                                 </div>
                               </div>
                             ))}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* ========================================================
-                      TAB 2: STORY STUDIO (CREATOR)
-                      ======================================================== */}
-                  {storiesTab === 'create' && (
-                    <div className="story-studio-wrapper" id="story-studio-wrapper">
-                      <div className="story-studio-grid">
-                        {/* Left: 9:16 Canvas Live Preview */}
-                        <div className="story-studio-preview-col">
-                          <div className="story-studio-canvas-container">
-                            <div className="story-canvas-phone-frame">
-                              <div
-                                className="story-canvas-viewport"
-                                id="story-canvas-viewport"
-                                style={{
-                                  background:
-                                    storyStudioMediaType === 'text'
-                                      ? storyStudioBg
-                                      : '#111827',
-                                }}
-                              >
-                                {/* Media Layer */}
-                                {storyStudioMediaType === 'image' && storyStudioMedia && (
-                                  <img
-                                    src={storyStudioMedia}
-                                    alt="Story canvas preview"
-                                    className="story-canvas-media-layer"
+                    MODAL 1: FULLSCREEN STORY VIEWER
+                    ======================================================== */}
+                  {activeStoryViewer && (() => {
+                    const group = groupedStories.find(
+                      (g) => g.author.toLowerCase() === activeStoryViewer.author.toLowerCase()
+                    ) || {
+                      author: activeStoryViewer.author,
+                      authorName: activeStoryViewer.author,
+                      stories: archivedStoriesList.filter((s) => s.author.toLowerCase() === activeStoryViewer.author.toLowerCase()),
+                    };
+
+                    const currentStory = group?.stories?.[activeStoryViewer.storyIndex] || group?.stories?.[0];
+                    if (!currentStory) return null;
+
+                    const isAuthor =
+                      currentStory.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase();
+
+                    return (
+                      <div
+                        className="story-viewer-modal-backdrop"
+                        id="story-viewer-modal"
+                        onClick={handleCloseStoryViewer}
+                      >
+                        <div
+                          className="story-viewer-player-container"
+                          id="story-viewer-player-container"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Segmented Top Progress Bars */}
+                          <div className="story-viewer-progress-bars">
+                            {group.stories.map((st, idx) => {
+                              let widthPercent = 0;
+                              if (idx < activeStoryViewer.storyIndex) {
+                                widthPercent = 100;
+                              } else if (idx === activeStoryViewer.storyIndex) {
+                                widthPercent = storyProgress;
+                              }
+
+                              return (
+                                <div key={st.id || idx} className="story-progress-bar-track">
+                                  <div
+                                    className="story-progress-bar-fill"
+                                    style={{ width: `${widthPercent}%` }}
                                   />
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Header Bar */}
+                          <div className="story-viewer-header">
+                            <div className="story-viewer-author-bar">
+                              <div className="story-viewer-author-avatar">
+                                {currentStory.authorAvatar ? (
+                                  <img src={currentStory.authorAvatar} alt={currentStory.authorName} />
+                                ) : (
+                                  <span>{(currentStory.authorName || currentStory.author).slice(0, 1).toUpperCase()}</span>
                                 )}
-
-                                {storyStudioMediaType === 'video' && storyStudioMedia && (
-                                  <video
-                                    src={storyStudioMedia}
-                                    className="story-canvas-media-layer"
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                  />
-                                )}
-
-                                {/* Canvas Scrim */}
-                                <div className="story-canvas-scrim"></div>
-
-                                {/* Canvas Top Bar Simulation */}
-                                <div className="story-canvas-sim-header">
-                                  <div className="story-canvas-sim-author">
-                                    <div className="story-canvas-sim-avatar">
-                                      {profilePicture ? (
-                                        <img src={profilePicture} alt="User" />
-                                      ) : (
-                                        <span>{(displayName || loggedInUser || 'Y').slice(0, 1).toUpperCase()}</span>
-                                      )}
-                                    </div>
-                                    <span className="story-canvas-sim-name">
-                                      {displayName || loggedInUser || 'Your Story'}
-                                    </span>
-                                  </div>
-                                  <span className="story-canvas-sim-audience">
-                                    {storyStudioAudience === 'close_friends'
-                                      ? '⭐ Close Friends'
-                                      : storyStudioAudience === 'friends'
-                                      ? '👥 Friends'
-                                      : storyStudioAudience === 'private'
-                                      ? '🔒 Private'
-                                      : '🌍 Public'}
+                              </div>
+                              <div className="story-viewer-author-text">
+                                <span className="story-viewer-author-title">
+                                  {currentStory.authorName || currentStory.author}
+                                </span>
+                                <div className="story-viewer-author-meta-sub">
+                                  <span className="story-viewer-time-badge">
+                                    {formatStoryTimeAgo(currentStory.createdAt)}
+                                  </span>
+                                  <span className="story-viewer-expires-badge">
+                                    {getStoryTimeRemaining(currentStory.expiresAt)}
                                   </span>
                                 </div>
-
-                                {/* Canvas Live Overlay Text */}
-                                {storyStudioText && (
-                                  <div
-                                    className={`story-canvas-overlay-textbox text-align-${storyStudioTextAlign} font-size-${storyStudioFontSize} font-family-${storyStudioFontFamily}`}
-                                    style={{
-                                      color: storyStudioTextColor,
-                                      backgroundColor: storyStudioTextBg,
-                                    }}
-                                  >
-                                    {storyStudioText}
-                                  </div>
-                                )}
-
-                                {/* Canvas Live Stickers */}
-                                {storyStudioStickers.map((stk) => (
-                                  <div
-                                    key={stk.id}
-                                    className="story-canvas-sticker-item"
-                                    style={{
-                                      left: `${stk.x}%`,
-                                      top: `${stk.y}%`,
-                                      transform: 'translate(-50%, -50%)',
-                                    }}
-                                  >
-                                    <span className="story-canvas-sticker-content">{stk.content}</span>
-                                    <button
-                                      type="button"
-                                      className="story-canvas-sticker-remove"
-                                      title="Remove sticker"
-                                      onClick={() => handleRemoveSticker(stk.id)}
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                ))}
-
-                                {/* Canvas Live Mentions */}
-                                {storyStudioMentions.length > 0 && (
-                                  <div className="story-canvas-mentions-bar">
-                                    {storyStudioMentions.map((m) => (
-                                      <span key={m} className="story-canvas-mention-tag">
-                                        @{m}
-                                        <button
-                                          type="button"
-                                          className="story-canvas-mention-remove"
-                                          onClick={() => handleRemoveMention(m)}
-                                        >
-                                          ✕
-                                        </button>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Canvas Live Link */}
-                                {storyStudioLink?.url && (
-                                  <div className="story-canvas-link-pill">
-                                    <span className="story-canvas-link-icon">🔗</span>
-                                    <span className="story-canvas-link-text">
-                                      {storyStudioLink.title || 'Visit Link'}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="story-canvas-link-remove"
-                                      onClick={() => setStoryStudioLink({ url: '', title: '' })}
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Canvas Live Caption */}
-                                {storyStudioCaption && (
-                                  <div className="story-canvas-sim-caption">
-                                    <p>{storyStudioCaption}</p>
-                                  </div>
-                                )}
                               </div>
+                            </div>
+
+                            <div className="story-viewer-header-actions">
+                              {/* Audience Badge */}
+                              <span className="story-viewer-audience-pill">
+                                {currentStory.audience === 'close_friends'
+                                  ? '⭐ Close Friends'
+                                  : currentStory.audience === 'friends'
+                                    ? '👥 Friends'
+                                    : currentStory.audience === 'private'
+                                      ? '🔒 Private'
+                                      : '🌍 Public'}
+                              </span>
+
+                              {/* Pause / Resume Button */}
+                              <button
+                                type="button"
+                                className="story-viewer-control-btn"
+                                id="story-pause-play-btn"
+                                title={isStoryPaused ? 'Resume story' : 'Pause story'}
+                                onClick={() => setIsStoryPaused((p) => !p)}
+                              >
+                                {isStoryPaused ? '▶' : '⏸'}
+                              </button>
+
+                              {/* Author Actions */}
+                              {isAuthor && (
+                                <button
+                                  type="button"
+                                  className="story-viewer-control-btn"
+                                  id="story-viewer-archive-action-btn"
+                                  title="Archive story privately"
+                                  onClick={() => handleArchiveStory(currentStory.id)}
+                                >
+                                  🔒
+                                </button>
+                              )}
+
+                              {isAuthor && (
+                                <button
+                                  type="button"
+                                  className="story-viewer-control-btn"
+                                  id="story-viewer-delete-action-btn"
+                                  title="Delete story"
+                                  onClick={() => handleDeleteStory(currentStory.id)}
+                                >
+                                  🗑️
+                                </button>
+                              )}
+
+                              {/* Close Button */}
+                              <button
+                                type="button"
+                                className="story-viewer-control-btn story-viewer-close-btn"
+                                id="story-viewer-close-btn"
+                                onClick={handleCloseStoryViewer}
+                                aria-label="Close story viewer"
+                              >
+                                ✕
+                              </button>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Right: Studio Creative Control Station */}
-                        <div className="story-studio-controls-col">
-                          <div className="story-studio-card">
-                            <h2 className="story-studio-card-title">Story Creator Studio</h2>
-                            <p className="story-studio-card-subtitle">
-                              Compose your 24-hour moment with photos, videos, overlay text, stickers, and tags.
-                            </p>
+                          {/* Canvas & Media Display */}
+                          <div
+                            className="story-viewer-media-viewport"
+                            id="story-viewer-media-viewport"
+                            style={{
+                              background:
+                                currentStory.mediaType === 'text'
+                                  ? currentStory.backgroundColor || '#111827'
+                                  : '#030712',
+                            }}
+                          >
+                            {currentStory.mediaType === 'image' && currentStory.media && (
+                              <img
+                                src={currentStory.media}
+                                alt={currentStory.caption || 'Story'}
+                                className="story-viewer-media-element"
+                              />
+                            )}
 
-                            {/* 1. Media Type Selector */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">1. Choose Media Format</label>
-                              <div className="story-media-mode-btns">
-                                <button
-                                  type="button"
-                                  className={`story-media-mode-btn ${storyStudioMediaType === 'image' ? 'active' : ''}`}
-                                  id="story-mode-photo-btn"
-                                  onClick={() => {
-                                    setStoryStudioMediaType('image');
-                                    uploadStoryPhotoRef.current?.click();
-                                  }}
-                                >
-                                  📷 Upload Photo
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`story-media-mode-btn ${storyStudioMediaType === 'video' ? 'active' : ''}`}
-                                  id="story-mode-video-btn"
-                                  onClick={() => {
-                                    setStoryStudioMediaType('video');
-                                    uploadStoryVideoRef.current?.click();
-                                  }}
-                                >
-                                  🎥 Upload Video
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`story-media-mode-btn ${storyStudioMediaType === 'text' ? 'active' : ''}`}
-                                  id="story-mode-text-btn"
-                                  onClick={() => setStoryStudioMediaType('text')}
-                                >
-                                  🎨 Text & Gradient
-                                </button>
-                              </div>
-                            </div>
+                            {currentStory.mediaType === 'video' && currentStory.media && (
+                              <video
+                                src={currentStory.media}
+                                className="story-viewer-media-element"
+                                autoPlay
+                                playsInline
+                                loop
+                                muted={false}
+                              />
+                            )}
 
-                            {/* Background Gradients (if in text mode) */}
-                            {storyStudioMediaType === 'text' && (
-                              <div className="story-studio-section">
-                                <label className="story-studio-label">Canvas Background Gradient</label>
-                                <div className="story-gradient-swatches">
-                                  {STORY_BG_GRADIENTS.map((grad, i) => (
-                                    <button
-                                      key={i}
-                                      type="button"
-                                      className={`story-gradient-swatch ${storyStudioBg === grad ? 'selected' : ''}`}
-                                      style={{ background: grad }}
-                                      onClick={() => setStoryStudioBg(grad)}
-                                      title={`Gradient style ${i + 1}`}
-                                    />
-                                  ))}
-                                </div>
+                            <div className="story-viewer-media-scrim"></div>
+
+                            {/* Text Overlay */}
+                            {currentStory.overlayText && (
+                              <div
+                                className={`story-viewer-overlay-text text-align-${currentStory.textStyle?.align || 'center'} font-size-${currentStory.textStyle?.fontSize || 'medium'} font-family-${currentStory.textStyle?.fontFamily || 'sans'}`}
+                                style={{
+                                  color: currentStory.textStyle?.color || '#ffffff',
+                                  backgroundColor: currentStory.textStyle?.background || 'transparent',
+                                }}
+                              >
+                                {currentStory.overlayText}
                               </div>
                             )}
 
-                            {/* Creative Sample Presets */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">✨ Quick Creative Templates</label>
-                              <div className="story-preset-chips">
-                                {STORY_SAMPLE_PRESETS.map((preset) => (
-                                  <button
-                                    key={preset.id}
-                                    type="button"
-                                    className="story-preset-chip"
-                                    onClick={() => handleSelectStoryPreset(preset)}
-                                  >
-                                    {preset.name}
-                                  </button>
-                                ))}
+                            {/* Interactive Stickers */}
+                            {currentStory.stickers?.map((stk, idx) => (
+                              <div
+                                key={stk.id || idx}
+                                className="story-viewer-sticker-item"
+                                style={{
+                                  left: `${stk.x}%`,
+                                  top: `${stk.y}%`,
+                                  transform: 'translate(-50%, -50%)',
+                                }}
+                              >
+                                <span className="story-viewer-sticker-content">{stk.content}</span>
                               </div>
-                            </div>
+                            ))}
 
-                            {/* 2. Text Overlay Settings */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">2. Add Story Text</label>
-                              <textarea
-                                id="story-studio-text-input"
-                                className="story-studio-textarea"
-                                placeholder="Write overlay text to display on your story..."
-                                rows={2}
-                                value={storyStudioText}
-                                onChange={(e) => setStoryStudioText(e.target.value)}
-                              />
-
-                              <div className="story-text-styling-bar">
-                                {/* Font Family */}
-                                <div className="story-style-subgroup">
-                                  <span className="story-style-sublabel">Font:</span>
-                                  <div className="story-style-mini-group">
-                                    {['sans', 'serif', 'mono', 'cursive'].map((f) => (
-                                      <button
-                                        key={f}
-                                        type="button"
-                                        className={`story-style-mini-btn ${storyStudioFontFamily === f ? 'active' : ''}`}
-                                        onClick={() => setStoryStudioFontFamily(f)}
-                                      >
-                                        {f}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Font Size */}
-                                <div className="story-style-subgroup">
-                                  <span className="story-style-sublabel">Size:</span>
-                                  <div className="story-style-mini-group">
-                                    {['small', 'medium', 'large', 'xlarge'].map((sz) => (
-                                      <button
-                                        key={sz}
-                                        type="button"
-                                        className={`story-style-mini-btn ${storyStudioFontSize === sz ? 'active' : ''}`}
-                                        onClick={() => setStoryStudioFontSize(sz)}
-                                      >
-                                        {sz === 'small' ? 'S' : sz === 'medium' ? 'M' : sz === 'large' ? 'L' : 'XL'}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                {/* Alignment */}
-                                <div className="story-style-subgroup">
-                                  <span className="story-style-sublabel">Align:</span>
-                                  <div className="story-style-mini-group">
-                                    {['left', 'center', 'right'].map((al) => (
-                                      <button
-                                        key={al}
-                                        type="button"
-                                        className={`story-style-mini-btn ${storyStudioTextAlign === al ? 'active' : ''}`}
-                                        onClick={() => setStoryStudioTextAlign(al)}
-                                      >
-                                        {al === 'left' ? '⬅️' : al === 'center' ? '↔️' : '➡️'}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Color Palettes */}
-                              <div className="story-text-color-row">
-                                <span className="story-style-sublabel">Text Color:</span>
-                                {['#ffffff', '#000000', '#f43f5e', '#38bdf8', '#fbbf24', '#34d399'].map((c) => (
+                            {/* Mentions */}
+                            {currentStory.mentions?.length > 0 && (
+                              <div className="story-viewer-mentions-bar">
+                                {currentStory.mentions.map((m) => (
                                   <button
-                                    key={c}
+                                    key={m}
                                     type="button"
-                                    className={`story-color-dot ${storyStudioTextColor === c ? 'selected' : ''}`}
-                                    style={{ backgroundColor: c }}
-                                    onClick={() => setStoryStudioTextColor(c)}
-                                  />
-                                ))}
-
-                                <span className="story-style-sublabel" style={{ marginLeft: '12px' }}>
-                                  Box:
-                                </span>
-                                {[
-                                  { bg: 'transparent', label: 'None' },
-                                  { bg: 'rgba(0,0,0,0.5)', label: 'Dark' },
-                                  { bg: 'rgba(255,255,255,0.7)', label: 'Light' },
-                                ].map((b) => (
-                                  <button
-                                    key={b.bg}
-                                    type="button"
-                                    className={`story-style-mini-btn ${storyStudioTextBg === b.bg ? 'active' : ''}`}
-                                    onClick={() => setStoryStudioTextBg(b.bg)}
-                                  >
-                                    {b.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* 3. Interactive Stickers & Badges */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">3. Add Stickers & Badges</label>
-                              <div className="story-add-interactive-row">
-                                <button
-                                  type="button"
-                                  className="story-interactive-trigger-btn"
-                                  id="story-add-sticker-btn"
-                                  onClick={() => setShowStickerDrawer((prev) => !prev)}
-                                >
-                                  😃 Add Stickers ({storyStudioStickers.length})
-                                </button>
-                                <button
-                                  type="button"
-                                  className="story-interactive-trigger-btn"
-                                  id="story-add-time-btn"
-                                  onClick={() => {
-                                    const now = new Date();
-                                    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                    handleAddSticker({ type: 'time', content: `⏰ ${timeStr}` });
-                                  }}
-                                >
-                                  ⏰ Current Time
-                                </button>
-                                <button
-                                  type="button"
-                                  className="story-interactive-trigger-btn"
-                                  id="story-add-loc-btn"
-                                  onClick={() => setShowLocationInput((prev) => !prev)}
-                                >
-                                  📍 Location
-                                </button>
-                              </div>
-
-                              {/* Location Input Form */}
-                              {showLocationInput && (
-                                <div className="story-location-input-drawer">
-                                  <input
-                                    type="text"
-                                    className="story-studio-input"
-                                    placeholder="Type location (e.g. San Francisco, CA)..."
-                                    value={tempLocationInput}
-                                    onChange={(e) => setTempLocationInput(e.target.value)}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="story-inline-save-btn"
+                                    className="story-viewer-mention-chip"
                                     onClick={() => {
-                                      if (tempLocationInput.trim()) {
-                                        handleAddSticker({
-                                          type: 'location',
-                                          content: `📍 ${tempLocationInput.trim()}`,
-                                        });
-                                        setTempLocationInput('');
-                                        setShowLocationInput(false);
-                                      }
+                                      handleCloseStoryViewer();
+                                      setFriendsProfileUser(m);
+                                      setCurrentView('friends-profile');
                                     }}
                                   >
-                                    Add
+                                    @{m}
                                   </button>
-                                </div>
-                              )}
+                                ))}
+                              </div>
+                            )}
 
-                              {/* Sticker Palette Drawer */}
-                              {showStickerDrawer && (
-                                <div className="story-sticker-drawer" id="story-sticker-drawer">
-                                  <div className="story-sticker-emoji-grid">
-                                    {STORY_STICKER_EMOJIS.map((emoji) => (
-                                      <button
-                                        key={emoji}
-                                        type="button"
-                                        className="story-sticker-emoji-btn"
-                                        onClick={() => handleAddSticker({ type: 'emoji', content: emoji })}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                            {/* External Link Pill */}
+                            {currentStory.link?.url && (
+                              <div className="story-viewer-link-container">
+                                <a
+                                  href={currentStory.link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="story-viewer-link-pill"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span className="story-viewer-link-icon">🔗</span>
+                                  <span className="story-viewer-link-label">
+                                    {currentStory.link.title || 'Visit Link'}
+                                  </span>
+                                  <span className="story-viewer-link-arrow">↗</span>
+                                </a>
+                              </div>
+                            )}
+
+                            {/* Caption Bar */}
+                            {currentStory.caption && (
+                              <div className="story-viewer-caption-bar">
+                                <p>{currentStory.caption}</p>
+                              </div>
+                            )}
+
+                            {/* Invisible Left & Right Tap Zones for Instant Navigation */}
+                            <div
+                              className="story-nav-tap-zone-left"
+                              id="story-nav-prev-zone"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePrevStory();
+                              }}
+                              onMouseDown={() => setIsStoryPaused(true)}
+                              onMouseUp={() => setIsStoryPaused(false)}
+                              onTouchStart={() => setIsStoryPaused(true)}
+                              onTouchEnd={() => setIsStoryPaused(false)}
+                              title="Previous story segment"
+                            />
+                            <div
+                              className="story-nav-tap-zone-right"
+                              id="story-nav-next-zone"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNextStory();
+                              }}
+                              onMouseDown={() => setIsStoryPaused(true)}
+                              onMouseUp={() => setIsStoryPaused(false)}
+                              onTouchStart={() => setIsStoryPaused(true)}
+                              onTouchEnd={() => setIsStoryPaused(false)}
+                              title="Next story segment"
+                            />
+                          </div>
+
+                          {/* Desktop Navigation Arrow Buttons */}
+                          <button
+                            type="button"
+                            className="story-nav-arrow-btn left"
+                            id="story-nav-arrow-prev"
+                            onClick={handlePrevStory}
+                            aria-label="Previous story"
+                          >
+                            ‹
+                          </button>
+                          <button
+                            type="button"
+                            className="story-nav-arrow-btn right"
+                            id="story-nav-arrow-next"
+                            onClick={handleNextStory}
+                            aria-label="Next story"
+                          >
+                            ›
+                          </button>
+
+                          {/* Floating Reaction Animation Particles */}
+                          {floatingReactions.map((r) => (
+                            <div
+                              key={r.id}
+                              className="story-floating-reaction"
+                              style={{ left: `${r.x}%` }}
+                            >
+                              {r.emoji}
                             </div>
+                          ))}
 
-                            {/* 4. Mentions & Story Links */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">4. Mention Users & Attach Links</label>
-                              <div className="story-mention-link-row">
-                                <div className="story-mention-field-wrap">
+                          {/* Bottom Interaction Area */}
+                          <div className="story-viewer-footer-area">
+                            {isAuthor ? (
+                              /* Author view: Display Viewer List Trigger */
+                              <div className="story-viewer-author-bottom">
+                                <button
+                                  type="button"
+                                  className="story-viewers-modal-trigger-btn"
+                                  id="story-viewers-list-btn"
+                                  onClick={() => {
+                                    setIsStoryPaused(true);
+                                    setViewerListStory(currentStory);
+                                  }}
+                                >
+                                  <span className="story-viewers-icon">👁️</span>
+                                  <span className="story-viewers-count-text">
+                                    Seen by {currentStory.viewersCount || currentStory.viewers?.length || 0} viewers
+                                  </span>
+                                  <span className="story-viewers-arrow">▲</span>
+                                </button>
+                              </div>
+                            ) : (
+                              /* Viewer view: Quick Reactions + Reply input */
+                              <div className="story-viewer-reply-container">
+                                {/* Quick Floating Reaction Emojis */}
+                                <div className="story-quick-reactions-bar">
+                                  {['❤️', '🔥', '😂', '👏', '😮', '😢'].map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      className="story-quick-reaction-emoji-btn"
+                                      onClick={() => handleStoryReaction(currentStory.id, emoji)}
+                                      title={`React with ${emoji}`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Reply Text Bar */}
+                                <div className="story-reply-input-row">
                                   <input
                                     type="text"
-                                    className="story-studio-input"
-                                    placeholder="Mention @username..."
-                                    value={tempMentionInput}
-                                    onChange={(e) => setTempMentionInput(e.target.value)}
+                                    className="story-reply-input"
+                                    id="story-reply-input-field"
+                                    placeholder={`Reply to ${currentStory.authorName || currentStory.author}...`}
+                                    value={storyReplyInput}
+                                    onChange={(e) => setStoryReplyInput(e.target.value)}
+                                    onFocus={() => setIsStoryPaused(true)}
+                                    onBlur={() => setIsStoryPaused(false)}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') {
                                         e.preventDefault();
-                                        handleAddMention(tempMentionInput);
+                                        handleStoryReply(currentStory.id);
                                       }
                                     }}
                                   />
                                   <button
                                     type="button"
-                                    className="story-inline-save-btn"
-                                    onClick={() => handleAddMention(tempMentionInput)}
+                                    className="story-reply-send-btn"
+                                    id="story-reply-send-btn"
+                                    onClick={() => handleStoryReply(currentStory.id)}
                                   >
-                                    @ Mention
+                                    Send
                                   </button>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  className="story-link-modal-trigger-btn"
-                                  id="story-link-trigger-btn"
-                                  onClick={() => {
-                                    setTempLinkUrl(storyStudioLink?.url || '');
-                                    setTempLinkTitle(storyStudioLink?.title || '');
-                                    setShowLinkModal(true);
-                                  }}
-                                >
-                                  {storyStudioLink?.url ? '🔗 Edit Link' : '🔗 Add Link'}
-                                </button>
                               </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-                              {/* Mention Quick Suggestions */}
-                              <div className="story-mention-suggestions">
-                                <span className="story-style-sublabel">Suggestions:</span>
-                                {['alexchen', 'sophia_p', 'tonystark', 'liam_smith'].map((u) => (
-                                  <button
-                                    key={u}
-                                    type="button"
-                                    className="story-mention-suggestion-chip"
-                                    onClick={() => handleAddMention(u)}
-                                  >
-                                    @{u}
-                                  </button>
+                  {/* ========================================================
+                    MODAL 2: STORY VIEWERS LIST MODAL
+                    ======================================================== */}
+                  {viewerListStory && (
+                    <div
+                      className="story-viewers-modal-backdrop"
+                      id="story-viewers-list-modal"
+                      onClick={() => {
+                        setViewerListStory(null);
+                        setIsStoryPaused(false);
+                      }}
+                    >
+                      <div
+                        className="story-viewers-modal-sheet"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="story-viewers-modal-header">
+                          <div className="story-viewers-header-title-wrap">
+                            <span className="story-viewers-icon">👁️</span>
+                            <h3 className="story-viewers-title">
+                              Story Viewers ({viewerListStory.viewers?.length || 0})
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            className="story-viewers-modal-close"
+                            onClick={() => {
+                              setViewerListStory(null);
+                              setIsStoryPaused(false);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="story-viewers-list-body">
+                          {!viewerListStory.viewers || viewerListStory.viewers.length === 0 ? (
+                            <div className="story-viewers-empty-state">
+                              <p>No one has viewed this story yet.</p>
+                              <span>Share your story with friends to get views and reactions!</span>
+                            </div>
+                          ) : (
+                            <div className="story-viewers-items-list">
+                              {viewerListStory.viewers.map((viewer, idx) => (
+                                <div key={viewer._id || viewer.user || idx} className="story-viewer-row-item">
+                                  <div className="story-viewer-avatar">
+                                    {viewer.avatar ? (
+                                      <img src={viewer.avatar} alt={viewer.displayName || viewer.user} />
+                                    ) : (
+                                      <span>{(viewer.displayName || viewer.user || 'U').slice(0, 1).toUpperCase()}</span>
+                                    )}
+                                  </div>
+                                  <div className="story-viewer-names">
+                                    <span className="story-viewer-display-name">
+                                      {viewer.displayName || viewer.user}
+                                    </span>
+                                    <span className="story-viewer-handle">@{viewer.user}</span>
+                                  </div>
+                                  <div className="story-viewer-viewed-time">
+                                    <span>{formatStoryTimeAgo(viewer.viewedAt)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Display replies received if any */}
+                          {viewerListStory.replies && viewerListStory.replies.length > 0 && (
+                            <div className="story-viewers-replies-section">
+                              <h4 className="story-viewers-replies-title">
+                                Replies & Reactions ({viewerListStory.replies.length})
+                              </h4>
+                              <div className="story-received-replies-list">
+                                {viewerListStory.replies.map((rep, idx) => (
+                                  <div key={rep._id || idx} className="story-received-reply-card">
+                                    <div className="story-reply-card-header">
+                                      <span className="story-reply-card-user">
+                                        {rep.displayName || rep.user}
+                                      </span>
+                                      <span className="story-reply-card-time">
+                                        {formatStoryTimeAgo(rep.createdAt)}
+                                      </span>
+                                    </div>
+                                    {rep.reaction && (
+                                      <div className="story-reply-reaction-badge">{rep.reaction}</div>
+                                    )}
+                                    {rep.content && <p className="story-reply-text">{rep.content}</p>}
+                                  </div>
                                 ))}
                               </div>
                             </div>
-
-                            {/* 5. Caption & Audience */}
-                            <div className="story-studio-section">
-                              <label className="story-studio-label">5. Caption & Audience</label>
-                              <textarea
-                                id="story-studio-caption-input"
-                                className="story-studio-textarea"
-                                placeholder="Write a caption for your story... #moments #life"
-                                rows={2}
-                                value={storyStudioCaption}
-                                onChange={(e) => setStoryStudioCaption(e.target.value)}
-                              />
-
-                              {/* Audience Selector */}
-                              <div className="story-audience-selector-row">
-                                <label className="story-style-sublabel">Who can see this?</label>
-                                <div className="story-audience-options">
-                                  {[
-                                    { id: 'public', label: '🌍 Public', desc: 'Anyone' },
-                                    { id: 'friends', label: '👥 Friends', desc: 'Approved friends' },
-                                    { id: 'close_friends', label: '⭐ Close Friends', desc: 'Favorites only' },
-                                    { id: 'private', label: '🔒 Private', desc: 'Only you' },
-                                  ].map((aud) => (
-                                    <label
-                                      key={aud.id}
-                                      className={`story-audience-radio-card ${storyStudioAudience === aud.id ? 'selected' : ''}`}
-                                    >
-                                      <input
-                                        type="radio"
-                                        name="storyAudience"
-                                        value={aud.id}
-                                        checked={storyStudioAudience === aud.id}
-                                        onChange={() => setStoryStudioAudience(aud.id)}
-                                      />
-                                      <div className="story-audience-radio-info">
-                                        <span className="story-audience-title">{aud.label}</span>
-                                        <span className="story-audience-desc">{aud.desc}</span>
-                                      </div>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Actions: Publish */}
-                            <div className="story-studio-publish-actions">
-                              <button
-                                type="button"
-                                className="story-publish-primary-btn"
-                                id="story-publish-btn"
-                                disabled={isPublishingStory}
-                                onClick={handlePublishStory}
-                              >
-                                {isPublishingStory ? 'Publishing Story...' : '🚀 Publish Story (24h)'}
-                              </button>
-                              <button
-                                type="button"
-                                className="story-discard-btn"
-                                id="story-discard-btn"
-                                onClick={() => {
-                                  setStoryStudioText('');
-                                  setStoryStudioCaption('');
-                                  setStoryStudioStickers([]);
-                                  setStoryStudioMentions([]);
-                                  setStoryStudioLink({ url: '', title: '' });
-                                  setStoriesTab('active');
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* ========================================================
-                      TAB 3: PRIVATE ARCHIVE (AUTHOR VAULT)
-                      ======================================================== */}
-                  {storiesTab === 'archive' && (
-                    <div className="stories-archive-view" id="stories-archive-view">
-                      <div className="stories-archive-header">
-                        <div className="stories-archive-header-text">
-                          <h2 className="stories-archive-title">🔒 Your Private Story Archive</h2>
-                          <p className="stories-archive-subtitle">
-                            Stories you archive privately or that automatically expire after 24 hours are safely preserved here forever.
-                            Only you can view and re-share them.
-                          </p>
+                    MODAL 3: ADD STORY LINK MODAL
+                    ======================================================== */}
+                  {showLinkModal && (
+                    <div
+                      className="story-link-modal-backdrop"
+                      id="story-link-modal"
+                      onClick={() => setShowLinkModal(false)}
+                    >
+                      <div
+                        className="story-link-modal-card"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="story-link-modal-header">
+                          <h3>🔗 Add External Link to Story</h3>
+                          <button
+                            type="button"
+                            className="story-link-modal-close"
+                            onClick={() => setShowLinkModal(false)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="story-link-modal-body">
+                          <label className="story-studio-label">Destination URL</label>
+                          <input
+                            type="url"
+                            className="story-studio-input"
+                            placeholder="https://example.com"
+                            value={tempLinkUrl}
+                            onChange={(e) => setTempLinkUrl(e.target.value)}
+                          />
+
+                          <label className="story-studio-label" style={{ marginTop: '12px' }}>
+                            Custom Sticker Text (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            className="story-studio-input"
+                            placeholder="e.g. Visit Website, See Project, Read Article"
+                            value={tempLinkTitle}
+                            onChange={(e) => setTempLinkTitle(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="story-link-modal-footer">
+                          <button
+                            type="button"
+                            className="story-modal-cancel-btn"
+                            onClick={() => setShowLinkModal(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="story-modal-save-btn"
+                            onClick={handleSaveStoryLink}
+                          >
+                            Save Link
+                          </button>
                         </div>
                       </div>
-
-                      {archivedStoriesList.length === 0 ? (
-                        <div className="stories-empty-state" id="stories-archive-empty">
-                          <div className="stories-empty-icon">📦</div>
-                          <h3 className="stories-empty-title">Your story archive is empty</h3>
-                          <p className="stories-empty-desc">
-                            When you archive active stories or when they expire after 24 hours, they will appear here privately.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="stories-archive-grid" id="stories-archive-grid">
-                          {archivedStoriesList.map((story) => (
-                            <div key={story.id} className="story-archive-card" id={`story-archive-${story.id}`}>
-                              <div className="story-archive-card-canvas">
-                                {story.mediaType === 'image' && story.media ? (
-                                  <img
-                                    src={story.media}
-                                    alt={story.caption || 'Archived story'}
-                                    className="story-archive-media"
-                                  />
-                                ) : story.mediaType === 'video' && story.media ? (
-                                  <video src={story.media} className="story-archive-media" muted playsInline />
-                                ) : (
-                                  <div
-                                    className="story-archive-text-canvas"
-                                    style={{ background: story.backgroundColor || '#1f2937' }}
-                                  >
-                                    <p>{story.overlayText || story.caption}</p>
-                                  </div>
-                                )}
-
-                                <div className="story-archive-scrim"></div>
-
-                                <div className="story-archive-card-top">
-                                  <span className="story-archive-badge">🔒 Archived</span>
-                                  <span className="story-archive-date">
-                                    {formatStoryTimeAgo(story.createdAt)}
-                                  </span>
-                                </div>
-
-                                <div className="story-archive-card-bottom">
-                                  {story.caption && (
-                                    <p className="story-archive-caption">{story.caption}</p>
-                                  )}
-                                  <div className="story-archive-metrics-row">
-                                    <span>👁️ {story.viewersCount || story.viewers?.length || 0} views</span>
-                                    {story.replies && story.replies.length > 0 && (
-                                      <span>💬 {story.replies.length} replies</span>
-                                    )}
-                                  </div>
-
-                                  <div className="story-archive-buttons-row">
-                                    <button
-                                      type="button"
-                                      className="story-archive-watch-btn"
-                                      onClick={() => {
-                                        setActiveStoryViewer({
-                                          author: story.author,
-                                          storyIndex: 0,
-                                        });
-                                      }}
-                                    >
-                                      ▶ Watch
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="story-archive-reshare-btn"
-                                      title="Re-share to active stories for 24 hours"
-                                      onClick={() => handleRestoreArchivedStory(story.id)}
-                                    >
-                                      🔄 Re-share
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="story-archive-delete-btn"
-                                      title="Delete forever"
-                                      onClick={() => handleDeleteStory(story.id, true)}
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
-
-                {/* ========================================================
-                    MODAL 1: FULLSCREEN STORY VIEWER
-                    ======================================================== */}
-                {activeStoryViewer && (() => {
-                  const group = groupedStories.find(
-                    (g) => g.author.toLowerCase() === activeStoryViewer.author.toLowerCase()
-                  ) || {
-                    author: activeStoryViewer.author,
-                    authorName: activeStoryViewer.author,
-                    stories: archivedStoriesList.filter((s) => s.author.toLowerCase() === activeStoryViewer.author.toLowerCase()),
-                  };
-
-                  const currentStory = group?.stories?.[activeStoryViewer.storyIndex] || group?.stories?.[0];
-                  if (!currentStory) return null;
-
-                  const isAuthor =
-                    currentStory.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase();
-
-                  return (
-                    <div
-                      className="story-viewer-modal-backdrop"
-                      id="story-viewer-modal"
-                      onClick={handleCloseStoryViewer}
-                    >
-                      <div
-                        className="story-viewer-player-container"
-                        id="story-viewer-player-container"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Segmented Top Progress Bars */}
-                        <div className="story-viewer-progress-bars">
-                          {group.stories.map((st, idx) => {
-                            let widthPercent = 0;
-                            if (idx < activeStoryViewer.storyIndex) {
-                              widthPercent = 100;
-                            } else if (idx === activeStoryViewer.storyIndex) {
-                              widthPercent = storyProgress;
-                            }
-
-                            return (
-                              <div key={st.id || idx} className="story-progress-bar-track">
-                                <div
-                                  className="story-progress-bar-fill"
-                                  style={{ width: `${widthPercent}%` }}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Header Bar */}
-                        <div className="story-viewer-header">
-                          <div className="story-viewer-author-bar">
-                            <div className="story-viewer-author-avatar">
-                              {currentStory.authorAvatar ? (
-                                <img src={currentStory.authorAvatar} alt={currentStory.authorName} />
-                              ) : (
-                                <span>{(currentStory.authorName || currentStory.author).slice(0, 1).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div className="story-viewer-author-text">
-                              <span className="story-viewer-author-title">
-                                {currentStory.authorName || currentStory.author}
-                              </span>
-                              <div className="story-viewer-author-meta-sub">
-                                <span className="story-viewer-time-badge">
-                                  {formatStoryTimeAgo(currentStory.createdAt)}
-                                </span>
-                                <span className="story-viewer-expires-badge">
-                                  {getStoryTimeRemaining(currentStory.expiresAt)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="story-viewer-header-actions">
-                            {/* Audience Badge */}
-                            <span className="story-viewer-audience-pill">
-                              {currentStory.audience === 'close_friends'
-                                ? '⭐ Close Friends'
-                                : currentStory.audience === 'friends'
-                                ? '👥 Friends'
-                                : currentStory.audience === 'private'
-                                ? '🔒 Private'
-                                : '🌍 Public'}
-                            </span>
-
-                            {/* Pause / Resume Button */}
-                            <button
-                              type="button"
-                              className="story-viewer-control-btn"
-                              id="story-pause-play-btn"
-                              title={isStoryPaused ? 'Resume story' : 'Pause story'}
-                              onClick={() => setIsStoryPaused((p) => !p)}
-                            >
-                              {isStoryPaused ? '▶' : '⏸'}
-                            </button>
-
-                            {/* Author Actions */}
-                            {isAuthor && (
-                              <button
-                                type="button"
-                                className="story-viewer-control-btn"
-                                id="story-viewer-archive-action-btn"
-                                title="Archive story privately"
-                                onClick={() => handleArchiveStory(currentStory.id)}
-                              >
-                                🔒
-                              </button>
-                            )}
-
-                            {isAuthor && (
-                              <button
-                                type="button"
-                                className="story-viewer-control-btn"
-                                id="story-viewer-delete-action-btn"
-                                title="Delete story"
-                                onClick={() => handleDeleteStory(currentStory.id)}
-                              >
-                                🗑️
-                              </button>
-                            )}
-
-                            {/* Close Button */}
-                            <button
-                              type="button"
-                              className="story-viewer-control-btn story-viewer-close-btn"
-                              id="story-viewer-close-btn"
-                              onClick={handleCloseStoryViewer}
-                              aria-label="Close story viewer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Canvas & Media Display */}
-                        <div
-                          className="story-viewer-media-viewport"
-                          id="story-viewer-media-viewport"
-                          style={{
-                            background:
-                              currentStory.mediaType === 'text'
-                                ? currentStory.backgroundColor || '#111827'
-                                : '#030712',
-                          }}
-                        >
-                          {currentStory.mediaType === 'image' && currentStory.media && (
-                            <img
-                              src={currentStory.media}
-                              alt={currentStory.caption || 'Story'}
-                              className="story-viewer-media-element"
-                            />
-                          )}
-
-                          {currentStory.mediaType === 'video' && currentStory.media && (
-                            <video
-                              src={currentStory.media}
-                              className="story-viewer-media-element"
-                              autoPlay
-                              playsInline
-                              loop
-                              muted={false}
-                            />
-                          )}
-
-                          <div className="story-viewer-media-scrim"></div>
-
-                          {/* Text Overlay */}
-                          {currentStory.overlayText && (
-                            <div
-                              className={`story-viewer-overlay-text text-align-${currentStory.textStyle?.align || 'center'} font-size-${currentStory.textStyle?.fontSize || 'medium'} font-family-${currentStory.textStyle?.fontFamily || 'sans'}`}
-                              style={{
-                                color: currentStory.textStyle?.color || '#ffffff',
-                                backgroundColor: currentStory.textStyle?.background || 'transparent',
-                              }}
-                            >
-                              {currentStory.overlayText}
-                            </div>
-                          )}
-
-                          {/* Interactive Stickers */}
-                          {currentStory.stickers?.map((stk, idx) => (
-                            <div
-                              key={stk.id || idx}
-                              className="story-viewer-sticker-item"
-                              style={{
-                                left: `${stk.x}%`,
-                                top: `${stk.y}%`,
-                                transform: 'translate(-50%, -50%)',
-                              }}
-                            >
-                              <span className="story-viewer-sticker-content">{stk.content}</span>
-                            </div>
-                          ))}
-
-                          {/* Mentions */}
-                          {currentStory.mentions?.length > 0 && (
-                            <div className="story-viewer-mentions-bar">
-                              {currentStory.mentions.map((m) => (
-                                <button
-                                  key={m}
-                                  type="button"
-                                  className="story-viewer-mention-chip"
-                                  onClick={() => {
-                                    handleCloseStoryViewer();
-                                    setFriendsProfileUser(m);
-                                    setCurrentView('friends-profile');
-                                  }}
-                                >
-                                  @{m}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* External Link Pill */}
-                          {currentStory.link?.url && (
-                            <div className="story-viewer-link-container">
-                              <a
-                                href={currentStory.link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="story-viewer-link-pill"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span className="story-viewer-link-icon">🔗</span>
-                                <span className="story-viewer-link-label">
-                                  {currentStory.link.title || 'Visit Link'}
-                                </span>
-                                <span className="story-viewer-link-arrow">↗</span>
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Caption Bar */}
-                          {currentStory.caption && (
-                            <div className="story-viewer-caption-bar">
-                              <p>{currentStory.caption}</p>
-                            </div>
-                          )}
-
-                          {/* Invisible Left & Right Tap Zones for Instant Navigation */}
-                          <div
-                            className="story-nav-tap-zone-left"
-                            id="story-nav-prev-zone"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePrevStory();
-                            }}
-                            onMouseDown={() => setIsStoryPaused(true)}
-                            onMouseUp={() => setIsStoryPaused(false)}
-                            onTouchStart={() => setIsStoryPaused(true)}
-                            onTouchEnd={() => setIsStoryPaused(false)}
-                            title="Previous story segment"
-                          />
-                          <div
-                            className="story-nav-tap-zone-right"
-                            id="story-nav-next-zone"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNextStory();
-                            }}
-                            onMouseDown={() => setIsStoryPaused(true)}
-                            onMouseUp={() => setIsStoryPaused(false)}
-                            onTouchStart={() => setIsStoryPaused(true)}
-                            onTouchEnd={() => setIsStoryPaused(false)}
-                            title="Next story segment"
-                          />
-                        </div>
-
-                        {/* Desktop Navigation Arrow Buttons */}
-                        <button
-                          type="button"
-                          className="story-nav-arrow-btn left"
-                          id="story-nav-arrow-prev"
-                          onClick={handlePrevStory}
-                          aria-label="Previous story"
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          className="story-nav-arrow-btn right"
-                          id="story-nav-arrow-next"
-                          onClick={handleNextStory}
-                          aria-label="Next story"
-                        >
-                          ›
-                        </button>
-
-                        {/* Floating Reaction Animation Particles */}
-                        {floatingReactions.map((r) => (
-                          <div
-                            key={r.id}
-                            className="story-floating-reaction"
-                            style={{ left: `${r.x}%` }}
-                          >
-                            {r.emoji}
-                          </div>
-                        ))}
-
-                        {/* Bottom Interaction Area */}
-                        <div className="story-viewer-footer-area">
-                          {isAuthor ? (
-                            /* Author view: Display Viewer List Trigger */
-                            <div className="story-viewer-author-bottom">
-                              <button
-                                type="button"
-                                className="story-viewers-modal-trigger-btn"
-                                id="story-viewers-list-btn"
-                                onClick={() => {
-                                  setIsStoryPaused(true);
-                                  setViewerListStory(currentStory);
-                                }}
-                              >
-                                <span className="story-viewers-icon">👁️</span>
-                                <span className="story-viewers-count-text">
-                                  Seen by {currentStory.viewersCount || currentStory.viewers?.length || 0} viewers
-                                </span>
-                                <span className="story-viewers-arrow">▲</span>
-                              </button>
-                            </div>
-                          ) : (
-                            /* Viewer view: Quick Reactions + Reply input */
-                            <div className="story-viewer-reply-container">
-                              {/* Quick Floating Reaction Emojis */}
-                              <div className="story-quick-reactions-bar">
-                                {['❤️', '🔥', '😂', '👏', '😮', '😢'].map((emoji) => (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    className="story-quick-reaction-emoji-btn"
-                                    onClick={() => handleStoryReaction(currentStory.id, emoji)}
-                                    title={`React with ${emoji}`}
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {/* Reply Text Bar */}
-                              <div className="story-reply-input-row">
-                                <input
-                                  type="text"
-                                  className="story-reply-input"
-                                  id="story-reply-input-field"
-                                  placeholder={`Reply to ${currentStory.authorName || currentStory.author}...`}
-                                  value={storyReplyInput}
-                                  onChange={(e) => setStoryReplyInput(e.target.value)}
-                                  onFocus={() => setIsStoryPaused(true)}
-                                  onBlur={() => setIsStoryPaused(false)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      handleStoryReply(currentStory.id);
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="story-reply-send-btn"
-                                  id="story-reply-send-btn"
-                                  onClick={() => handleStoryReply(currentStory.id)}
-                                >
-                                  Send
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ========================================================
-                    MODAL 2: STORY VIEWERS LIST MODAL
-                    ======================================================== */}
-                {viewerListStory && (
-                  <div
-                    className="story-viewers-modal-backdrop"
-                    id="story-viewers-list-modal"
-                    onClick={() => {
-                      setViewerListStory(null);
-                      setIsStoryPaused(false);
-                    }}
-                  >
-                    <div
-                      className="story-viewers-modal-sheet"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="story-viewers-modal-header">
-                        <div className="story-viewers-header-title-wrap">
-                          <span className="story-viewers-icon">👁️</span>
-                          <h3 className="story-viewers-title">
-                            Story Viewers ({viewerListStory.viewers?.length || 0})
-                          </h3>
-                        </div>
-                        <button
-                          type="button"
-                          className="story-viewers-modal-close"
-                          onClick={() => {
-                            setViewerListStory(null);
-                            setIsStoryPaused(false);
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      <div className="story-viewers-list-body">
-                        {!viewerListStory.viewers || viewerListStory.viewers.length === 0 ? (
-                          <div className="story-viewers-empty-state">
-                            <p>No one has viewed this story yet.</p>
-                            <span>Share your story with friends to get views and reactions!</span>
-                          </div>
-                        ) : (
-                          <div className="story-viewers-items-list">
-                            {viewerListStory.viewers.map((viewer, idx) => (
-                              <div key={viewer._id || viewer.user || idx} className="story-viewer-row-item">
-                                <div className="story-viewer-avatar">
-                                  {viewer.avatar ? (
-                                    <img src={viewer.avatar} alt={viewer.displayName || viewer.user} />
-                                  ) : (
-                                    <span>{(viewer.displayName || viewer.user || 'U').slice(0, 1).toUpperCase()}</span>
-                                  )}
-                                </div>
-                                <div className="story-viewer-names">
-                                  <span className="story-viewer-display-name">
-                                    {viewer.displayName || viewer.user}
-                                  </span>
-                                  <span className="story-viewer-handle">@{viewer.user}</span>
-                                </div>
-                                <div className="story-viewer-viewed-time">
-                                  <span>{formatStoryTimeAgo(viewer.viewedAt)}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Display replies received if any */}
-                        {viewerListStory.replies && viewerListStory.replies.length > 0 && (
-                          <div className="story-viewers-replies-section">
-                            <h4 className="story-viewers-replies-title">
-                              Replies & Reactions ({viewerListStory.replies.length})
-                            </h4>
-                            <div className="story-received-replies-list">
-                              {viewerListStory.replies.map((rep, idx) => (
-                                <div key={rep._id || idx} className="story-received-reply-card">
-                                  <div className="story-reply-card-header">
-                                    <span className="story-reply-card-user">
-                                      {rep.displayName || rep.user}
-                                    </span>
-                                    <span className="story-reply-card-time">
-                                      {formatStoryTimeAgo(rep.createdAt)}
-                                    </span>
-                                  </div>
-                                  {rep.reaction && (
-                                    <div className="story-reply-reaction-badge">{rep.reaction}</div>
-                                  )}
-                                  {rep.content && <p className="story-reply-text">{rep.content}</p>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ========================================================
-                    MODAL 3: ADD STORY LINK MODAL
-                    ======================================================== */}
-                {showLinkModal && (
-                  <div
-                    className="story-link-modal-backdrop"
-                    id="story-link-modal"
-                    onClick={() => setShowLinkModal(false)}
-                  >
-                    <div
-                      className="story-link-modal-card"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="story-link-modal-header">
-                        <h3>🔗 Add External Link to Story</h3>
-                        <button
-                          type="button"
-                          className="story-link-modal-close"
-                          onClick={() => setShowLinkModal(false)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      <div className="story-link-modal-body">
-                        <label className="story-studio-label">Destination URL</label>
-                        <input
-                          type="url"
-                          className="story-studio-input"
-                          placeholder="https://example.com"
-                          value={tempLinkUrl}
-                          onChange={(e) => setTempLinkUrl(e.target.value)}
-                        />
-
-                        <label className="story-studio-label" style={{ marginTop: '12px' }}>
-                          Custom Sticker Text (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          className="story-studio-input"
-                          placeholder="e.g. Visit Website, See Project, Read Article"
-                          value={tempLinkTitle}
-                          onChange={(e) => setTempLinkTitle(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="story-link-modal-footer">
-                        <button
-                          type="button"
-                          className="story-modal-cancel-btn"
-                          onClick={() => setShowLinkModal(false)}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className="story-modal-save-btn"
-                          onClick={handleSaveStoryLink}
-                        >
-                          Save Link
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
               ) : currentView === 'live-stream' ? (
                 <div className="live-stream-space" id="live-stream-space">
                   <div className="live-stream-header-wrapper" id="live-stream-header-wrapper">
@@ -23316,10 +24016,10 @@ function App() {
                     id="confirm-new-password-input"
                     type={showConfirmNewPassword ? 'text' : 'password'}
                     className={`input-field input-with-toggle ${confirmNewPassword && newPassword === confirmNewPassword
-                        ? 'input-valid'
-                        : confirmNewPassword && newPassword !== confirmNewPassword
-                          ? 'input-invalid'
-                          : ''
+                      ? 'input-valid'
+                      : confirmNewPassword && newPassword !== confirmNewPassword
+                        ? 'input-invalid'
+                        : ''
                       }`}
                     placeholder="••••••••"
                     value={confirmNewPassword}
@@ -23460,10 +24160,10 @@ function App() {
                     id="username-input"
                     type="text"
                     className={`input-field ${usernameStatus === 'available'
-                        ? 'input-valid'
-                        : usernameStatus === 'taken' || usernameStatus === 'too-short'
-                          ? 'input-invalid'
-                          : ''
+                      ? 'input-valid'
+                      : usernameStatus === 'taken' || usernameStatus === 'too-short'
+                        ? 'input-invalid'
+                        : ''
                       }`}
                     placeholder="johndoe"
                     value={username}

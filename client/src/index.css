@@ -19722,6 +19722,57 @@ body.light-theme .social-modal-footer {
    COMMUNITY DISCUSSION FEEDS & ANNOUNCEMENTS STYLES
    ========================================================================== */
 
+/* Main Header "Create community discussion feeds" Button */
+.create-community-btn.discussion-feed-header-btn {
+  background: linear-gradient(135deg, #3b82f6, #4f46e5);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.create-community-btn.discussion-feed-header-btn:hover {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Communities Space Main Navigation Tabs */
+.communities-main-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color, #27272a);
+  flex-wrap: wrap;
+}
+
+.communities-nav-tab-btn {
+  background: rgba(255, 255, 255, 0.04);
+  color: #a1a1aa;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.15s ease;
+}
+
+.communities-nav-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: #52525b;
+}
+
+.communities-nav-tab-btn.active {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.2);
+}
+
 /* Community Card Extensions */
 .community-card-feed-stats {
   display: flex;
@@ -19772,6 +19823,85 @@ body.light-theme .social-modal-footer {
   border-color: #60a5fa;
   color: #ffffff;
   transform: translateY(-1px);
+}
+
+.community-create-discussion-btn {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e4e4e7;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.community-create-discussion-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+/* Global Community Discussion Feeds View */
+.community-global-discussions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.global-discussions-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  background: var(--card-bg, #18181b);
+  border: 1px solid var(--border-color, #27272a);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.global-discussions-title-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.global-discussions-heading {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.global-discussions-sub {
+  font-size: 0.9rem;
+  color: #a1a1aa;
+  margin: 0;
+  max-width: 650px;
+}
+
+.discussion-author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.community-source-badge {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
 }
 
 /* Community Feed View Container */
