@@ -7595,6 +7595,547 @@ function App() {
   };
 
   // ==========================================
+  // COMMUNITY DISCUSSION FEEDS & ANNOUNCEMENTS
+  // ==========================================
+  const [activeCommunityFeed, setActiveCommunityFeed] = useState(null);
+  const [communityFeedTab, setCommunityFeedTab] = useState('all'); // 'all', 'announcements', 'discussions'
+  const [discussionCategoryFilter, setDiscussionCategoryFilter] = useState('all');
+
+  // Announcement Publishing State
+  const [showCreateAnnouncementModal, setShowCreateAnnouncementModal] = useState(false);
+  const [newAnnouncementTitle, setNewAnnouncementTitle] = useState('');
+  const [newAnnouncementContent, setNewAnnouncementContent] = useState('');
+  const [newAnnouncementTag, setNewAnnouncementTag] = useState('important');
+  const [newAnnouncementIsPinned, setNewAnnouncementIsPinned] = useState(true);
+  const [isPublishingAnnouncement, setIsPublishingAnnouncement] = useState(false);
+  const [announcementFeedback, setAnnouncementFeedback] = useState(null);
+
+  // Discussion Creation State
+  const [showCreateDiscussionModal, setShowCreateDiscussionModal] = useState(false);
+  const [newDiscussionTitle, setNewDiscussionTitle] = useState('');
+  const [newDiscussionContent, setNewDiscussionContent] = useState('');
+  const [newDiscussionCategory, setNewDiscussionCategory] = useState('General');
+  const [isSubmittingDiscussion, setIsSubmittingDiscussion] = useState(false);
+  const [discussionFeedback, setDiscussionFeedback] = useState(null);
+
+  // Comments & Replies State
+  const [discussionCommentInputs, setDiscussionCommentInputs] = useState({});
+  const [expandedDiscussionComments, setExpandedDiscussionComments] = useState({});
+  const [isSubmittingComment, setIsSubmittingComment] = useState({});
+
+  const filteredDiscussions = useMemo(() => {
+    if (!activeCommunityFeed || !Array.isArray(activeCommunityFeed.discussions)) return [];
+    if (discussionCategoryFilter === 'all') return activeCommunityFeed.discussions;
+    return activeCommunityFeed.discussions.filter((d) => (d.category || 'General').toLowerCase() === discussionCategoryFilter.toLowerCase());
+  }, [activeCommunityFeed, discussionCategoryFilter]);
+
+  const handleOpenCommunityFeed = useCallback(async (community) => {
+    if (!community) return;
+    setActiveCommunityFeed(community);
+    setCommunityFeedTab('all');
+    setDiscussionCategoryFilter('all');
+    const commId = community._id || community.id;
+    try {
+      const res = await fetch(`/api/communities/${commId}/feed`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          const updated = {
+            ...community,
+            announcements: Array.isArray(data.announcements) ? data.announcements : (community.announcements || []),
+            discussions: Array.isArray(data.discussions) ? data.discussions : (community.discussions || []),
+          };
+          setActiveCommunityFeed(updated);
+          setCommunitiesList((prev) => {
+            const list = prev.map((c) => ((c._id || c.id) === commId ? { ...c, ...updated } : c));
+            try {
+              localStorage.setItem('planet_communities', JSON.stringify(list));
+            } catch { }
+            return list;
+          });
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
+  const handleCloseCommunityFeed = () => {
+    setActiveCommunityFeed(null);
+  };
+
+  const handleOpenCreateAnnouncement = () => {
+    setNewAnnouncementTitle('');
+    setNewAnnouncementContent('');
+    setNewAnnouncementTag('important');
+    setNewAnnouncementIsPinned(true);
+    setAnnouncementFeedback(null);
+    setShowCreateAnnouncementModal(true);
+  };
+
+  const handleCloseCreateAnnouncement = () => {
+    setShowCreateAnnouncementModal(false);
+    setAnnouncementFeedback(null);
+  };
+
+  const handlePublishAnnouncementSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+    const cleanTitle = newAnnouncementTitle.trim();
+    const cleanContent = newAnnouncementContent.trim();
+    if (!cleanTitle) {
+      setAnnouncementFeedback({ type: 'error', text: 'Announcement title is required.' });
+      return;
+    }
+    if (!cleanContent) {
+      setAnnouncementFeedback({ type: 'error', text: 'Announcement content is required.' });
+      return;
+    }
+
+    setIsPublishingAnnouncement(true);
+    setAnnouncementFeedback(null);
+
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentDisplayName = displayName || currentUser;
+
+    const payload = {
+      title: cleanTitle,
+      content: cleanContent,
+      author: currentUser,
+      authorName: currentDisplayName,
+      authorAvatar: userAvatar || '',
+      tag: newAnnouncementTag,
+      isPinned: newAnnouncementIsPinned,
+    };
+
+    try {
+      const res = await fetch(`/api/communities/${commId}/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      const createdAnnouncement = data?.announcement || {
+        _id: 'ann_' + Date.now(),
+        ...payload,
+        createdAt: new Date().toISOString(),
+      };
+
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const currentAnnouncements = Array.isArray(prev.announcements) ? [...prev.announcements] : [];
+        return {
+          ...prev,
+          announcements: [createdAnnouncement, ...currentAnnouncements],
+        };
+      });
+
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === commId) {
+            const currentAnnouncements = Array.isArray(c.announcements) ? [...c.announcements] : [];
+            return {
+              ...c,
+              announcements: [createdAnnouncement, ...currentAnnouncements],
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch { }
+        return updated;
+      });
+
+      setAnnouncementFeedback({ type: 'success', text: 'Community announcement published successfully! 📢' });
+      setTimeout(() => {
+        handleCloseCreateAnnouncement();
+      }, 700);
+    } catch {
+      const localAnnouncement = {
+        _id: 'ann_' + Date.now(),
+        ...payload,
+        createdAt: new Date().toISOString(),
+      };
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const currentAnnouncements = Array.isArray(prev.announcements) ? [...prev.announcements] : [];
+        return {
+          ...prev,
+          announcements: [localAnnouncement, ...currentAnnouncements],
+        };
+      });
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === commId) {
+            const currentAnnouncements = Array.isArray(c.announcements) ? [...c.announcements] : [];
+            return {
+              ...c,
+              announcements: [localAnnouncement, ...currentAnnouncements],
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch { }
+        return updated;
+      });
+      setAnnouncementFeedback({ type: 'success', text: 'Community announcement published!' });
+      setTimeout(() => {
+        handleCloseCreateAnnouncement();
+      }, 700);
+    } finally {
+      setIsPublishingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+
+    try {
+      await fetch(`/api/communities/${commId}/announcements/${announcementId}`, {
+        method: 'DELETE',
+      });
+    } catch { }
+
+    setActiveCommunityFeed((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        announcements: (prev.announcements || []).filter(
+          (a) => (a._id || a.id) !== announcementId
+        ),
+      };
+    });
+
+    setCommunitiesList((prev) => {
+      const updated = prev.map((c) => {
+        if ((c._id || c.id) === commId) {
+          return {
+            ...c,
+            announcements: (c.announcements || []).filter(
+              (a) => (a._id || a.id) !== announcementId
+            ),
+          };
+        }
+        return c;
+      });
+      try {
+        localStorage.setItem('planet_communities', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+  };
+
+  const handleOpenCreateDiscussion = () => {
+    setNewDiscussionTitle('');
+    setNewDiscussionContent('');
+    setNewDiscussionCategory('General');
+    setDiscussionFeedback(null);
+    setShowCreateDiscussionModal(true);
+  };
+
+  const handleCloseCreateDiscussion = () => {
+    setShowCreateDiscussionModal(false);
+    setDiscussionFeedback(null);
+  };
+
+  const handleCreateDiscussionSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+    const cleanTitle = newDiscussionTitle.trim();
+    const cleanContent = newDiscussionContent.trim();
+    if (!cleanTitle) {
+      setDiscussionFeedback({ type: 'error', text: 'Discussion title is required.' });
+      return;
+    }
+    if (!cleanContent) {
+      setDiscussionFeedback({ type: 'error', text: 'Discussion content is required.' });
+      return;
+    }
+
+    setIsSubmittingDiscussion(true);
+    setDiscussionFeedback(null);
+
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentDisplayName = displayName || currentUser;
+
+    const payload = {
+      title: cleanTitle,
+      content: cleanContent,
+      author: currentUser,
+      authorName: currentDisplayName,
+      authorAvatar: userAvatar || '',
+      category: newDiscussionCategory,
+    };
+
+    try {
+      const res = await fetch(`/api/communities/${commId}/discussions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      const createdDiscussion = data?.discussion || {
+        _id: 'disc_' + Date.now(),
+        ...payload,
+        likes: [],
+        likesCount: 0,
+        comments: [],
+        commentsCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
+        return {
+          ...prev,
+          discussions: [createdDiscussion, ...currentDiscussions],
+        };
+      });
+
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === commId) {
+            const currentDiscussions = Array.isArray(c.discussions) ? [...c.discussions] : [];
+            return {
+              ...c,
+              discussions: [createdDiscussion, ...currentDiscussions],
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch { }
+        return updated;
+      });
+
+      setDiscussionFeedback({ type: 'success', text: 'Discussion posted to community feed! 💬' });
+      setTimeout(() => {
+        handleCloseCreateDiscussion();
+      }, 700);
+    } catch {
+      const localDiscussion = {
+        _id: 'disc_' + Date.now(),
+        ...payload,
+        likes: [],
+        likesCount: 0,
+        comments: [],
+        commentsCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const currentDiscussions = Array.isArray(prev.discussions) ? [...prev.discussions] : [];
+        return {
+          ...prev,
+          discussions: [localDiscussion, ...currentDiscussions],
+        };
+      });
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === commId) {
+            const currentDiscussions = Array.isArray(c.discussions) ? [...c.discussions] : [];
+            return {
+              ...c,
+              discussions: [localDiscussion, ...currentDiscussions],
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch { }
+        return updated;
+      });
+      setDiscussionFeedback({ type: 'success', text: 'Discussion posted!' });
+      setTimeout(() => {
+        handleCloseCreateDiscussion();
+      }, 700);
+    } finally {
+      setIsSubmittingDiscussion(false);
+    }
+  };
+
+  const handleToggleDiscussionLike = async (discussionId) => {
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+
+    // Optimistically update
+    setActiveCommunityFeed((prev) => {
+      if (!prev) return prev;
+      const updatedDiscussions = (prev.discussions || []).map((d) => {
+        if ((d._id || d.id) === discussionId) {
+          const currentLikes = Array.isArray(d.likes) ? [...d.likes] : [];
+          const idx = currentLikes.indexOf(currentUser);
+          if (idx > -1) {
+            currentLikes.splice(idx, 1);
+          } else {
+            currentLikes.push(currentUser);
+          }
+          return {
+            ...d,
+            likes: currentLikes,
+            likesCount: currentLikes.length,
+          };
+        }
+        return d;
+      });
+      return { ...prev, discussions: updatedDiscussions };
+    });
+
+    try {
+      await fetch(`/api/communities/${commId}/discussions/${discussionId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: currentUser }),
+      });
+    } catch { }
+  };
+
+  const handleDiscussionCommentChange = (discussionId, value) => {
+    setDiscussionCommentInputs((prev) => ({
+      ...prev,
+      [discussionId]: value,
+    }));
+  };
+
+  const handleToggleDiscussionComments = (discussionId) => {
+    setExpandedDiscussionComments((prev) => ({
+      ...prev,
+      [discussionId]: !prev[discussionId],
+    }));
+  };
+
+  const handleSubmitDiscussionComment = async (e, discussionId) => {
+    if (e) e.preventDefault();
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+    const content = (discussionCommentInputs[discussionId] || '').trim();
+    if (!content) return;
+
+    setIsSubmittingComment((prev) => ({ ...prev, [discussionId]: true }));
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const currentDisplayName = displayName || currentUser;
+
+    const payload = {
+      content,
+      author: currentUser,
+      authorName: currentDisplayName,
+      authorAvatar: userAvatar || '',
+    };
+
+    try {
+      const res = await fetch(`/api/communities/${commId}/discussions/${discussionId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      const newComment = data?.comment || {
+        _id: 'com_' + Date.now(),
+        ...payload,
+        createdAt: new Date().toISOString(),
+      };
+
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const updatedDiscussions = (prev.discussions || []).map((d) => {
+          if ((d._id || d.id) === discussionId) {
+            const currentComments = Array.isArray(d.comments) ? [...d.comments] : [];
+            currentComments.push(newComment);
+            return {
+              ...d,
+              comments: currentComments,
+              commentsCount: currentComments.length,
+            };
+          }
+          return d;
+        });
+        return { ...prev, discussions: updatedDiscussions };
+      });
+
+      // Clear input and ensure comments expanded
+      setDiscussionCommentInputs((prev) => ({ ...prev, [discussionId]: '' }));
+      setExpandedDiscussionComments((prev) => ({ ...prev, [discussionId]: true }));
+    } catch {
+      const localComment = {
+        _id: 'com_' + Date.now(),
+        ...payload,
+        createdAt: new Date().toISOString(),
+      };
+      setActiveCommunityFeed((prev) => {
+        if (!prev) return prev;
+        const updatedDiscussions = (prev.discussions || []).map((d) => {
+          if ((d._id || d.id) === discussionId) {
+            const currentComments = Array.isArray(d.comments) ? [...d.comments] : [];
+            currentComments.push(localComment);
+            return {
+              ...d,
+              comments: currentComments,
+              commentsCount: currentComments.length,
+            };
+          }
+          return d;
+        });
+        return { ...prev, discussions: updatedDiscussions };
+      });
+      setDiscussionCommentInputs((prev) => ({ ...prev, [discussionId]: '' }));
+      setExpandedDiscussionComments((prev) => ({ ...prev, [discussionId]: true }));
+    } finally {
+      setIsSubmittingComment((prev) => ({ ...prev, [discussionId]: false }));
+    }
+  };
+
+  const handleDeleteDiscussion = async (discussionId) => {
+    if (!window.confirm('Delete this discussion thread?')) return;
+    if (!activeCommunityFeed) return;
+    const commId = activeCommunityFeed._id || activeCommunityFeed.id;
+
+    try {
+      await fetch(`/api/communities/${commId}/discussions/${discussionId}`, {
+        method: 'DELETE',
+      });
+    } catch { }
+
+    setActiveCommunityFeed((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        discussions: (prev.discussions || []).filter(
+          (d) => (d._id || d.id) !== discussionId
+        ),
+      };
+    });
+
+    setCommunitiesList((prev) => {
+      const updated = prev.map((c) => {
+        if ((c._id || c.id) === commId) {
+          return {
+            ...c,
+            discussions: (c.discussions || []).filter(
+              (d) => (d._id || d.id) !== discussionId
+            ),
+          };
+        }
+        return c;
+      });
+      try {
+        localStorage.setItem('planet_communities', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+  };
+
+  // ==========================================
   // LIVE STREAM FEATURE STATE & HANDLERS
   // ==========================================
   const [liveStreamsList, setLiveStreamsList] = useState([]);
@@ -17770,6 +18311,256 @@ function App() {
                                 disabled={isSubmittingEditCommunity || !editCommunityName.trim()}
                               >
                                 {isSubmittingEditCommunity ? 'Saving...' : 'Save Changes'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODAL: PUBLISH ANNOUNCEMENT */}
+                    {showCreateAnnouncementModal && (
+                      <div
+                        className="community-modal-overlay"
+                        onClick={handleCloseCreateAnnouncement}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="publish-announcement-modal-title"
+                      >
+                        <div
+                          className="community-modal-card announcement-modal-card"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="community-modal-header announcement-header-theme">
+                            <div>
+                              <span className="modal-header-badge">📢 Official Announcement</span>
+                              <h2 className="community-modal-title" id="publish-announcement-modal-title">
+                                Publish Community Announcement
+                              </h2>
+                              <p className="community-modal-subtitle">
+                                Broadcast an important update, schedule, or milestone to all members of {activeCommunityFeed?.name}.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="community-modal-close-btn"
+                              onClick={handleCloseCreateAnnouncement}
+                              aria-label="Close"
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          <form onSubmit={handlePublishAnnouncementSubmit} className="community-modal-form">
+                            <div className="form-group">
+                              <div className="label-with-counter">
+                                <label className="input-label" htmlFor="announcement-title-input">
+                                  Announcement Title <span className="required-star">*</span>
+                                </label>
+                                <span className="char-counter">{newAnnouncementTitle.length}/100</span>
+                              </div>
+                              <input
+                                type="text"
+                                id="announcement-title-input"
+                                className="input-field"
+                                placeholder="e.g. 📢 Welcome to New Community Guidelines & Feature Launch"
+                                value={newAnnouncementTitle}
+                                maxLength={100}
+                                onChange={(e) => setNewAnnouncementTitle(e.target.value)}
+                                required
+                                autoFocus
+                              />
+                            </div>
+
+                            <div className="community-form-grid">
+                              <div className="form-group">
+                                <label className="input-label" htmlFor="announcement-tag-select">Urgency / Tag</label>
+                                <select
+                                  id="announcement-tag-select"
+                                  className="input-field community-select"
+                                  value={newAnnouncementTag}
+                                  onChange={(e) => setNewAnnouncementTag(e.target.value)}
+                                >
+                                  <option value="important">⚡ Important Notice</option>
+                                  <option value="event">📅 Community Event</option>
+                                  <option value="update">🔄 Platform / Project Update</option>
+                                  <option value="general">📰 General Announcement</option>
+                                </select>
+                              </div>
+
+                              <div className="form-group">
+                                <label className="input-label">Pinned Status</label>
+                                <label className="announcement-pin-toggle-wrap">
+                                  <input
+                                    type="checkbox"
+                                    checked={newAnnouncementIsPinned}
+                                    onChange={(e) => setNewAnnouncementIsPinned(e.target.checked)}
+                                  />
+                                  <span>📌 Pin to top of community feed</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            <div className="form-group">
+                              <div className="label-with-counter">
+                                <label className="input-label" htmlFor="announcement-content-input">
+                                  Announcement Message <span className="required-star">*</span>
+                                </label>
+                                <span className="char-counter">{newAnnouncementContent.length}/2000</span>
+                              </div>
+                              <textarea
+                                id="announcement-content-input"
+                                className="input-field community-textarea announcement-textarea"
+                                placeholder="Write the full announcement text, key dates, instructions, or links..."
+                                rows={5}
+                                maxLength={2000}
+                                value={newAnnouncementContent}
+                                onChange={(e) => setNewAnnouncementContent(e.target.value)}
+                                required
+                              />
+                            </div>
+
+                            {announcementFeedback && (
+                              <div className={`community-feedback-banner ${announcementFeedback.type}`} role="alert">
+                                {announcementFeedback.text}
+                              </div>
+                            )}
+
+                            <div className="community-modal-footer">
+                              <button
+                                type="button"
+                                className="community-cancel-btn"
+                                onClick={handleCloseCreateAnnouncement}
+                                disabled={isPublishingAnnouncement}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="community-submit-btn announcement-submit-btn"
+                                id="submit-publish-announcement-btn"
+                                disabled={isPublishingAnnouncement || !newAnnouncementTitle.trim() || !newAnnouncementContent.trim()}
+                              >
+                                {isPublishingAnnouncement ? 'Publishing...' : '📢 Publish Announcement'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODAL: CREATE DISCUSSION */}
+                    {showCreateDiscussionModal && (
+                      <div
+                        className="community-modal-overlay"
+                        onClick={handleCloseCreateDiscussion}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="create-discussion-modal-title"
+                      >
+                        <div
+                          className="community-modal-card discussion-modal-card"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="community-modal-header discussion-header-theme">
+                            <div>
+                              <span className="modal-header-badge">💬 Community Discussion</span>
+                              <h2 className="community-modal-title" id="create-discussion-modal-title">
+                                Start Community Discussion
+                              </h2>
+                              <p className="community-modal-subtitle">
+                                Start a conversation, ask for advice, or share knowledge in {activeCommunityFeed?.name}.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="community-modal-close-btn"
+                              onClick={handleCloseCreateDiscussion}
+                              aria-label="Close"
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          <form onSubmit={handleCreateDiscussionSubmit} className="community-modal-form">
+                            <div className="form-group">
+                              <div className="label-with-counter">
+                                <label className="input-label" htmlFor="discussion-title-input">
+                                  Discussion Topic / Question <span className="required-star">*</span>
+                                </label>
+                                <span className="char-counter">{newDiscussionTitle.length}/120</span>
+                              </div>
+                              <input
+                                type="text"
+                                id="discussion-title-input"
+                                className="input-field"
+                                placeholder="e.g. What frontend architecture are you using for real-time collaboration?"
+                                value={newDiscussionTitle}
+                                maxLength={120}
+                                onChange={(e) => setNewDiscussionTitle(e.target.value)}
+                                required
+                                autoFocus
+                              />
+                            </div>
+
+                            <div className="form-group">
+                              <label className="input-label" htmlFor="discussion-category-select">Category / Topic</label>
+                              <select
+                                id="discussion-category-select"
+                                className="input-field community-select"
+                                value={newDiscussionCategory}
+                                onChange={(e) => setNewDiscussionCategory(e.target.value)}
+                              >
+                                <option value="General">General Discussion</option>
+                                <option value="Tech Stack">Tech Stack & Architecture</option>
+                                <option value="UI/UX Design">UI/UX & Design</option>
+                                <option value="Gear Talk">Gear Talk & Equipment</option>
+                                <option value="Questions">Questions & Help</option>
+                                <option value="Showcase">Showcase & Projects</option>
+                              </select>
+                            </div>
+
+                            <div className="form-group">
+                              <div className="label-with-counter">
+                                <label className="input-label" htmlFor="discussion-content-input">
+                                  Details & Context <span className="required-star">*</span>
+                                </label>
+                                <span className="char-counter">{newDiscussionContent.length}/3000</span>
+                              </div>
+                              <textarea
+                                id="discussion-content-input"
+                                className="input-field community-textarea discussion-textarea"
+                                placeholder="Provide context, share what you have tried, and invite others to contribute..."
+                                rows={5}
+                                maxLength={3000}
+                                value={newDiscussionContent}
+                                onChange={(e) => setNewDiscussionContent(e.target.value)}
+                                required
+                              />
+                            </div>
+
+                            {discussionFeedback && (
+                              <div className={`community-feedback-banner ${discussionFeedback.type}`} role="alert">
+                                {discussionFeedback.text}
+                              </div>
+                            )}
+
+                            <div className="community-modal-footer">
+                              <button
+                                type="button"
+                                className="community-cancel-btn"
+                                onClick={handleCloseCreateDiscussion}
+                                disabled={isSubmittingDiscussion}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="community-submit-btn discussion-submit-btn"
+                                id="submit-create-discussion-btn"
+                                disabled={isSubmittingDiscussion || !newDiscussionTitle.trim() || !newDiscussionContent.trim()}
+                              >
+                                {isSubmittingDiscussion ? 'Posting...' : '💬 Post Discussion'}
                               </button>
                             </div>
                           </form>

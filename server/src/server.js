@@ -80,11 +80,8 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
   if (mongoose.connection.readyState !== 1) {
     if (req.method === 'GET') {
       const fullPath = (req.baseUrl + req.path).toLowerCase();
-      if (fullPath.includes('livestream') || fullPath.includes('storie') || fullPath.includes('story')) {
+      if (fullPath.includes('livestream') || fullPath.includes('storie') || fullPath.includes('story') || fullPath.includes('communit')) {
         return next();
-      }
-      if (fullPath.includes('communit')) {
-        return res.status(200).json({ success: true, count: 0, communities: [], offline: true });
       }
       if (fullPath.includes('post')) {
         return res.status(200).json({ success: true, posts: [], offline: true });
