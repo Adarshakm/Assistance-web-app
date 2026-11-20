@@ -7394,7 +7394,7 @@ function App() {
               return {
                 ...c,
                 members: currentMembers,
-                memberCount: Math.max(1, currentMembers.length),
+                memberCount: currentMembers.length,
               };
             }
             return c;
@@ -7418,7 +7418,7 @@ function App() {
             return {
               ...c,
               members: currentMembers,
-              memberCount: Math.max(1, currentMembers.length),
+              memberCount: currentMembers.length,
             };
           }
           return c;
@@ -16624,13 +16624,12 @@ function App() {
                         currentUsername === community.creator.toLowerCase()
                       );
                       const isMember = Boolean(
-                        isCreator ||
-                        (Array.isArray(community.members) &&
+                        Array.isArray(community.members) &&
                           community.members.some(
                             (m) =>
                               (typeof m === 'string' && m.toLowerCase() === currentUsername) ||
                               (m && typeof m === 'object' && m.username && m.username.toLowerCase() === currentUsername)
-                          ))
+                          )
                       );
                       return (
                         <div key={commId} className="community-card" id={`community-card-${commId}`}>
@@ -16681,7 +16680,7 @@ function App() {
                                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                                   <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                                 </svg>
-                                {community.memberCount || 1} {community.memberCount === 1 ? 'member' : 'members'}
+                                {community.memberCount != null ? community.memberCount : (community.members?.length || 0)} {(community.memberCount === 1 || community.members?.length === 1) ? 'member' : 'members'}
                               </span>
                               {isCreator && (
                                 <span className="community-creator-badge">Created by you</span>
@@ -16689,8 +16688,8 @@ function App() {
                             </div>
 
                             <div className="community-card-actions">
-                              {isCreator ? (
-                                <>
+                              {isCreator && (
+                                <div className="community-creator-actions">
                                   <button
                                     type="button"
                                     className="community-edit-btn"
@@ -16713,8 +16712,10 @@ function App() {
                                   >
                                     Delete
                                   </button>
-                                </>
-                              ) : isMember ? (
+                                </div>
+                              )}
+
+                              {isMember ? (
                                 <div className="community-membership-actions">
                                   <span className="community-joined-badge">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -16740,13 +16741,13 @@ function App() {
                                   id={`join-community-btn-${commId}`}
                                   onClick={() => handleJoinCommunity(commId)}
                                   disabled={joiningCommunityId === commId}
-                                  title="Join community"
+                                  title="Join communities"
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                   </svg>
-                                  <span>{joiningCommunityId === commId ? 'Joining...' : 'Join Community'}</span>
+                                  <span>{joiningCommunityId === commId ? 'Joining...' : 'Join communities'}</span>
                                 </button>
                               )}
                             </div>

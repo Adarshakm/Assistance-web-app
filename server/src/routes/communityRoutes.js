@@ -88,8 +88,8 @@ router.post('/create', async (req, res) => {
         avatar: finalAvatar,
         privacy: cleanPrivacy,
         category: cleanCategory,
-        members: [{ username: cleanCreator, role: 'admin', joinedAt: new Date() }],
-        memberCount: 1,
+        members: [],
+        memberCount: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
         offline: true,
@@ -109,14 +109,8 @@ router.post('/create', async (req, res) => {
       avatar: finalAvatar,
       privacy: cleanPrivacy,
       category: cleanCategory,
-      members: [
-        {
-          username: cleanCreator,
-          role: 'admin',
-          joinedAt: new Date(),
-        },
-      ],
-      memberCount: 1,
+      members: [],
+      memberCount: 0,
     });
 
     const saved = await newCommunity.save();
@@ -508,17 +502,10 @@ router.post('/:id/leave', async (req, res) => {
       return res.status(200).json({ success: true, message: 'Community already left.' });
     }
 
-    if (community.creator && community.creator.toLowerCase() === cleanUser) {
-      return res.status(400).json({
-        success: false,
-        error: 'The creator cannot leave their own community. You may delete it instead.',
-      });
-    }
-
     community.members = community.members.filter(
       (m) => (m.username && m.username.toLowerCase() !== cleanUser) && m !== cleanUser
     );
-    community.memberCount = Math.max(1, community.members.length);
+    community.memberCount = community.members.length;
     const saved = await community.save();
 
     return res.status(200).json({

@@ -19284,9 +19284,20 @@ body.light-theme .social-modal-footer {
   margin-top: 0.85rem;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.community-creator-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.community-card-actions .community-join-btn,
+.community-card-actions .community-membership-actions {
+  margin-left: auto;
 }
 
 .community-edit-btn {
