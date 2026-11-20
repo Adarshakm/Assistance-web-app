@@ -18000,20 +18000,40 @@ function App() {
 
               {/* Go Live Setup Modal */}
               {showGoLiveModal && (
-                <div className="modal-backdrop" onClick={() => setShowGoLiveModal(false)}>
+                <div
+                  className="modal-backdrop live-setup-backdrop"
+                  id="live-setup-backdrop"
+                  onClick={() => setShowGoLiveModal(false)}
+                >
                   <div
-                    className="modal-container live-setup-modal"
+                    className="modal-container live-setup-modal live-setup-modal-card"
+                    id="live-setup-modal-card"
                     onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="live-setup-title"
                   >
-                    <div className="modal-header">
-                      <div className="modal-title-with-badge">
-                        <span className="modal-live-icon">📹</span>
-                        <h2>Go Live on Planet</h2>
+                    <div className="live-setup-header">
+                      <div className="live-setup-title-group">
+                        <div className="live-setup-icon-badge">
+                          <span className="live-setup-icon">📹</span>
+                        </div>
+                        <div className="live-setup-title-text">
+                          <h2 className="live-setup-title" id="live-setup-title">
+                            Go Live on Planet
+                          </h2>
+                          <p className="live-setup-subtitle">
+                            Broadcast real-time video & audio to your community
+                          </p>
+                        </div>
                       </div>
                       <button
                         type="button"
-                        className="modal-close-btn"
+                        className="live-setup-close-btn"
+                        id="live-setup-close-btn"
                         onClick={() => setShowGoLiveModal(false)}
+                        aria-label="Close"
+                        title="Close"
                       >
                         ✕
                       </button>
@@ -18021,13 +18041,23 @@ function App() {
 
                     <form onSubmit={handleStartBroadcast} className="live-setup-form">
                       {goLiveError && (
-                        <div className="live-form-error-banner">
-                          {goLiveError}
+                        <div className="live-setup-error-banner">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                          </svg>
+                          <span>{goLiveError}</span>
                         </div>
                       )}
 
-                      <div className="form-group">
-                        <label htmlFor="new-stream-title">Stream Title *</label>
+                      <div className="live-setup-form-group">
+                        <div className="live-setup-label-row">
+                          <label htmlFor="new-stream-title" className="live-setup-label">
+                            Stream Title <span className="required-star">*</span>
+                          </label>
+                          <span className="live-setup-char-count">{newStreamTitle.length}/100</span>
+                        </div>
                         <input
                           id="new-stream-title"
                           type="text"
@@ -18037,43 +18067,56 @@ function App() {
                           maxLength={100}
                           required
                           autoFocus
-                          className="form-input"
+                          className="live-setup-input"
                         />
                       </div>
 
-                      <div className="form-group">
-                        <label htmlFor="new-stream-category">Category</label>
-                        <select
-                          id="new-stream-category"
-                          value={newStreamCategory}
-                          onChange={(e) => setNewStreamCategory(e.target.value)}
-                          className="form-select"
-                        >
-                          <option value="General">General</option>
-                          <option value="Gaming">Gaming</option>
-                          <option value="Music">Music</option>
-                          <option value="Technology">Technology</option>
-                          <option value="Talk Show">Talk Show</option>
-                          <option value="Creative">Creative & Arts</option>
-                          <option value="Education">Education</option>
-                        </select>
+                      <div className="live-setup-form-group">
+                        <label htmlFor="new-stream-category" className="live-setup-label">
+                          Category
+                        </label>
+                        <div className="live-setup-select-wrap">
+                          <select
+                            id="new-stream-category"
+                            value={newStreamCategory}
+                            onChange={(e) => setNewStreamCategory(e.target.value)}
+                            className="live-setup-select"
+                          >
+                            <option value="General">General</option>
+                            <option value="Gaming">Gaming</option>
+                            <option value="Music">Music</option>
+                            <option value="Technology">Technology</option>
+                            <option value="Talk Show">Talk Show</option>
+                            <option value="Creative">Creative & Arts</option>
+                            <option value="Education">Education</option>
+                          </select>
+                          <div className="live-setup-select-chevron">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="live-stream-permission-tip">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <line x1="12" y1="16" x2="12" y2="12"></line>
-                          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                        </svg>
-                        <span>
-                          Your browser may ask for camera & mic permission. You can toggle devices on or off at any time during your broadcast.
-                        </span>
+                      <div className="live-setup-permission-card">
+                        <div className="permission-card-icon">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                          </svg>
+                        </div>
+                        <div className="permission-card-body">
+                          <p className="permission-card-text">
+                            Your browser may ask for camera & mic permission. You can toggle devices on or off at any time during your broadcast.
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="modal-actions-footer">
+                      <div className="live-setup-footer">
                         <button
                           type="button"
-                          className="btn-secondary"
+                          className="live-setup-cancel-btn"
+                          id="live-setup-cancel-btn"
                           onClick={() => setShowGoLiveModal(false)}
                           disabled={isStartingBroadcast}
                         >
@@ -18081,16 +18124,21 @@ function App() {
                         </button>
                         <button
                           type="submit"
-                          className="btn-primary go-live-submit-btn"
+                          className="live-setup-submit-btn"
+                          id="live-setup-submit-btn"
                           disabled={isStartingBroadcast || !newStreamTitle.trim()}
                         >
                           {isStartingBroadcast ? (
                             <>
-                              <span className="spinner-inline"></span>
+                              <span className="live-setup-spinner"></span>
                               <span>Connecting Broadcast...</span>
                             </>
                           ) : (
                             <>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                              </svg>
                               <span>Start Broadcasting</span>
                             </>
                           )}
