@@ -7102,7 +7102,11 @@ function App() {
         setCommunityFeedback({ type: 'success', text: `Community "${cleanName}" created successfully! 🎉` });
         setTimeout(() => {
           handleCloseCreateCommunity();
-        }, 900);
+          const mainElem = document.getElementById('workspace-main');
+          if (mainElem) {
+            mainElem.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }, 800);
       } else {
         setCommunityFeedback({ type: 'error', text: data.error || data.message || 'Failed to create community.' });
       }
@@ -7130,7 +7134,11 @@ function App() {
       setCommunityFeedback({ type: 'success', text: `Community "${cleanName}" created successfully!` });
       setTimeout(() => {
         handleCloseCreateCommunity();
-      }, 900);
+        const mainElem = document.getElementById('workspace-main');
+        if (mainElem) {
+          mainElem.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 800);
     } finally {
       setIsSubmittingCommunity(false);
     }
