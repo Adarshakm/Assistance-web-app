@@ -388,4 +388,122 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/communities/:id/join
+ * Join a community
+ */
+router.post('/:id/join', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'Community ID is required.' });
+    }
+
+    const cleanUser = String(user || '').trim().toLowerCase();
+    if (!cleanUser) {
+      return res.status(400).json({ success: false, error: 'User is required to join.' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(200).json({
+        success: true,
+        message: 'Joined community successfully (offline mode).',
+        member: { username: cleanUser, role: 'member', joinedAt: new Date() },
+        offline: true,
+      });
+    }
+
+    const community = await Community.findById(id);
+    if (!community) {
+      return res.status(404).json({ success: false, error: 'Community not found.' });
+    }
+
+    const alreadyMember = Array.isArray(community.members) && community.members.some(
+      (m) => (m.username && m.username.toLowerCase() === cleanUser) || m === cleanUser
+    );
+
+    if (alreadyMember) {
+      return res.status(200).json({
+        success: true,
+        message: 'Already a member of this community.',
+        community,
+      });
+    }
+
+    community.members.push({
+      username: cleanUser,
+      role: 'member',
+      joinedAt: new Date(),
+    });
+    community.memberCount = community.members.length;
+    const saved = await community.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Joined community successfully.',
+      community: saved,
+    });
+  } catch (err) {
+    console.error('[Join Community Error]:', err);
+    return res.status(500).json({ success: false, error: 'Failed to join community.' });
+  }
+});
+
+/**
+ * POST /api/communities/:id/leave
+ * Leave a community
+ */
+router.post('/:id/leave', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'Community ID is required.' });
+    }
+
+    const cleanUser = String(user || '').trim().toLowerCase();
+    if (!cleanUser) {
+      return res.status(400).json({ success: false, error: 'User is required to leave.' });
+    }
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(200).json({
+        success: true,
+        message: 'Left community successfully (offline mode).',
+        offline: true,
+      });
+    }
+
+    const community = await Community.findById(id);
+    if (!community) {
+      return res.status(404).json({ success: false, error: 'Community not found.' });
+    }
+
+    if (community.creator && community.creator.toLowerCase() === cleanUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'The creator cannot leave their own community. You may delete it instead.',
+      });
+    }
+
+    community.members = community.members.filter(
+      (m) => (m.username && m.username.toLowerCase() !== cleanUser) && m !== cleanUser
+    );
+    community.memberCount = Math.max(1, community.members.length);
+    const saved = await community.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Left community successfully.',
+      community: saved,
+    });
+  } catch (err) {
+    console.error('[Leave Community Error]:', err);
+    return res.status(500).json({ success: false, error: 'Failed to leave community.' });
+  }
+});
+
 export default router;

@@ -7002,6 +7002,7 @@ function App() {
   const [isSubmittingEditCommunity, setIsSubmittingEditCommunity] = useState(false);
   const [editCommunityFeedback, setEditCommunityFeedback] = useState(null);
   const editCommunityAvatarInputRef = useRef(null);
+  const [joiningCommunityId, setJoiningCommunityId] = useState(null);
 
   const fetchCommunities = useCallback(async () => {
     try {
@@ -7270,6 +7271,158 @@ function App() {
       } catch {}
       return updated;
     });
+  };
+
+  const handleJoinCommunity = async (communityId) => {
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+    if (!currentUser) return;
+
+    setJoiningCommunityId(communityId);
+    try {
+      const res = await fetch(`/api/communities/${communityId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: currentUser }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.community) {
+        setCommunitiesList((prev) => {
+          const updated = prev.map((c) =>
+            ((c._id || c.id) === communityId ? { ...c, ...data.community } : c)
+          );
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      } else {
+        // Fallback / local update
+        setCommunitiesList((prev) => {
+          const updated = prev.map((c) => {
+            if ((c._id || c.id) === communityId) {
+              const currentMembers = Array.isArray(c.members) ? [...c.members] : [];
+              const exists = currentMembers.some(
+                (m) => (m.username && m.username.toLowerCase() === currentUser.toLowerCase()) || m === currentUser
+              );
+              if (!exists) {
+                currentMembers.push({ username: currentUser.toLowerCase(), role: 'member', joinedAt: new Date() });
+              }
+              return {
+                ...c,
+                members: currentMembers,
+                memberCount: currentMembers.length,
+              };
+            }
+            return c;
+          });
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+    } catch {
+      // Offline fallback
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === communityId) {
+            const currentMembers = Array.isArray(c.members) ? [...c.members] : [];
+            const exists = currentMembers.some(
+              (m) => (m.username && m.username.toLowerCase() === currentUser.toLowerCase()) || m === currentUser
+            );
+            if (!exists) {
+              currentMembers.push({ username: currentUser.toLowerCase(), role: 'member', joinedAt: new Date() });
+            }
+            return {
+              ...c,
+              members: currentMembers,
+              memberCount: currentMembers.length,
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    } finally {
+      setJoiningCommunityId(null);
+    }
+  };
+
+  const handleLeaveCommunity = async (communityId) => {
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
+    if (!currentUser) return;
+
+    setJoiningCommunityId(communityId);
+    try {
+      const res = await fetch(`/api/communities/${communityId}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: currentUser }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.community) {
+        setCommunitiesList((prev) => {
+          const updated = prev.map((c) =>
+            ((c._id || c.id) === communityId ? { ...c, ...data.community } : c)
+          );
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      } else {
+        // Fallback / local update
+        setCommunitiesList((prev) => {
+          const updated = prev.map((c) => {
+            if ((c._id || c.id) === communityId) {
+              const currentMembers = Array.isArray(c.members)
+                ? c.members.filter(
+                    (m) => (m.username && m.username.toLowerCase() !== currentUser.toLowerCase()) && m !== currentUser
+                  )
+                : [];
+              return {
+                ...c,
+                members: currentMembers,
+                memberCount: Math.max(1, currentMembers.length),
+              };
+            }
+            return c;
+          });
+          try {
+            localStorage.setItem('planet_communities', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+    } catch {
+      // Offline fallback
+      setCommunitiesList((prev) => {
+        const updated = prev.map((c) => {
+          if ((c._id || c.id) === communityId) {
+            const currentMembers = Array.isArray(c.members)
+              ? c.members.filter(
+                  (m) => (m.username && m.username.toLowerCase() !== currentUser.toLowerCase()) && m !== currentUser
+                )
+              : [];
+            return {
+              ...c,
+              members: currentMembers,
+              memberCount: Math.max(1, currentMembers.length),
+            };
+          }
+          return c;
+        });
+        try {
+          localStorage.setItem('planet_communities', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    } finally {
+      setJoiningCommunityId(null);
+    }
   };
 
   if (
@@ -16456,10 +16609,20 @@ function App() {
                   <div className="communities-grid" id="communities-grid">
                     {communitiesList.map((community) => {
                       const commId = community._id || community.id;
+                      const currentUsername = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
                       const isCreator = Boolean(
-                        loggedInUser &&
+                        currentUsername &&
                         community.creator &&
-                        loggedInUser.toLowerCase() === community.creator.toLowerCase()
+                        currentUsername === community.creator.toLowerCase()
+                      );
+                      const isMember = Boolean(
+                        isCreator ||
+                        (Array.isArray(community.members) &&
+                          community.members.some(
+                            (m) =>
+                              (typeof m === 'string' && m.toLowerCase() === currentUsername) ||
+                              (m && typeof m === 'object' && m.username && m.username.toLowerCase() === currentUsername)
+                          ))
                       );
                       return (
                         <div key={commId} className="community-card" id={`community-card-${commId}`}>
@@ -16506,32 +16669,68 @@ function App() {
                               )}
                             </div>
 
-                            {isCreator && (
-                              <div className="community-card-actions">
+                            <div className="community-card-actions">
+                              {isCreator ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="community-edit-btn"
+                                    id={`edit-community-btn-${commId}`}
+                                    onClick={() => handleOpenEditCommunity(community)}
+                                    title="Edit community details"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    <span>Edit Details</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="community-delete-btn"
+                                    id={`delete-community-btn-${commId}`}
+                                    onClick={() => handleDeleteCommunity(commId)}
+                                    title="Delete community"
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              ) : isMember ? (
+                                <div className="community-membership-actions">
+                                  <span className="community-joined-badge">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Joined
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="community-leave-btn"
+                                    id={`leave-community-btn-${commId}`}
+                                    onClick={() => handleLeaveCommunity(commId)}
+                                    disabled={joiningCommunityId === commId}
+                                    title="Leave community"
+                                  >
+                                    {joiningCommunityId === commId ? 'Leaving...' : 'Leave'}
+                                  </button>
+                                </div>
+                              ) : (
                                 <button
                                   type="button"
-                                  className="community-edit-btn"
-                                  id={`edit-community-btn-${commId}`}
-                                  onClick={() => handleOpenEditCommunity(community)}
-                                  title="Edit community details"
+                                  className="community-join-btn"
+                                  id={`join-community-btn-${commId}`}
+                                  onClick={() => handleJoinCommunity(commId)}
+                                  disabled={joiningCommunityId === commId}
+                                  title="Join community"
                                 >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
                                   </svg>
-                                  <span>Edit Details</span>
+                                  <span>{joiningCommunityId === commId ? 'Joining...' : 'Join Community'}</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  className="community-delete-btn"
-                                  id={`delete-community-btn-${commId}`}
-                                  onClick={() => handleDeleteCommunity(commId)}
-                                  title="Delete community"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
