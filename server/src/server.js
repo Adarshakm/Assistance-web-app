@@ -103,7 +103,7 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories'], (req, res, n
           phoneBookName: c.name,
           username: (c.name || 'user').toLowerCase().replace(/\s+/g, '_'),
           phone: c.phone,
-          status: 'Hey there! I am using Assistance',
+          status: 'Hey there! I am using Planet',
           avatar: c.avatar || null,
           registered: true,
         })),

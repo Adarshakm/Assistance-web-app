@@ -342,10 +342,10 @@ export class WebRTCCallManager {
    * Setup or retrieve remote audio playback element
    */
   getOrCreateAudioElement() {
-    let el = document.getElementById('assistance-remote-voice-audio');
+    let el = document.getElementById('planet-remote-voice-audio') || document.getElementById('assistance-remote-voice-audio');
     if (!el) {
       el = document.createElement('audio');
-      el.id = 'assistance-remote-voice-audio';
+      el.id = 'planet-remote-voice-audio';
       el.autoplay = true;
       el.playsInline = true;
       el.style.display = 'none';

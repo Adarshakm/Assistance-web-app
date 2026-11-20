@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema(
     status: {
       type: String,
       trim: true,
-      default: 'Hey there! I am using Assistance',
+      default: 'Hey there! I am using Planet',
     },
     location: {
       type: String,

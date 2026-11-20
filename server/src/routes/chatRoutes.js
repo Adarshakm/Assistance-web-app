@@ -309,7 +309,7 @@ router.post('/send', async (req, res) => {
         `Got it! I am online now.`,
         `Hi there! Hope you are doing great today!`,
         `Thanks for reaching out! Let me know if you need any assistance.`,
-        `Hello! Nice to connect with you on Assistance!`,
+        `Hello! Nice to connect with you on Planet!`,
       ];
       if (cleanMediaType === 'image') {
         replyTexts = [
@@ -639,7 +639,7 @@ router.get('/recent', async (req, res) => {
             conv.username = u.username;
             conv.phone = u.phone;
             conv.avatar = u.avatar || null;
-            conv.status = u.status || 'Active on Assistance';
+            conv.status = u.status || 'Active on Planet';
           }
         }
       } catch (e) {

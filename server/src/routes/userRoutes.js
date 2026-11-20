@@ -206,7 +206,7 @@ router.post('/login', async (req, res) => {
 
           const fallbackEmail = cleanContact.includes('@')
             ? cleanContact.toLowerCase()
-            : (cleanUsername.includes('@') ? cleanUsername.toLowerCase() : `${baseUsername}@assistance.app`);
+            : (cleanUsername.includes('@') ? cleanUsername.toLowerCase() : `${baseUsername}@planet.app`);
           const fallbackPhone = contactDigits || idDigits || '';
 
           const newUser = new User({
@@ -215,7 +215,7 @@ router.post('/login', async (req, res) => {
             email: fallbackEmail,
             phone: fallbackPhone,
             password: password || 'password123',
-            status: 'Hey there! I am using Assistance',
+            status: 'Hey there! I am using Planet',
           });
           existingUser = await newUser.save();
         } catch (createErr) {
@@ -234,7 +234,7 @@ router.post('/login', async (req, res) => {
               _id: cleanUsername.toLowerCase() || 'user',
               username: cleanUsername.toLowerCase() || 'user',
               displayName: cleanUsername || 'User',
-              email: cleanContact || `${cleanUsername}@assistance.app`,
+              email: cleanContact || `${cleanUsername}@planet.app`,
               phone: contactDigits || idDigits || '',
               avatar: null,
             };
@@ -437,7 +437,7 @@ router.get('/profile/:username', async (req, res) => {
         avatar: null,
         coverPhoto: null,
         displayName: cleanUsername,
-        status: 'Hey there! I am using Assistance',
+        status: 'Hey there! I am using Planet',
         location: '',
         website: '',
         education: '',
@@ -934,7 +934,7 @@ const phonesMatch = (p1, p2) => {
 };
 
 // POST /api/users/sync-contacts
-// WhatsApp-style: sync phone contacts against registered Assistance users
+// WhatsApp-style: sync phone contacts against registered Planet users
 router.post('/sync-contacts', async (req, res) => {
   try {
     const { contacts = [] } = req.body;
@@ -966,7 +966,7 @@ router.post('/sync-contacts', async (req, res) => {
           username: matchedUser.username,
           phone: matchedUser.phone || contactPhone,
           email: matchedUser.email || '',
-          status: matchedUser.status || 'Hey there! I am using Assistance',
+          status: matchedUser.status || 'Hey there! I am using Planet',
           avatar: contact.avatar || matchedUser.avatar || null,
           registered: true,
           registeredAt: matchedUser.createdAt,
@@ -1026,7 +1026,7 @@ router.get('/registered-contacts', async (req, res) => {
         username: u.username,
         phone: u.phone || '',
         email: u.email || '',
-        status: u.status || 'Hey there! I am using Assistance',
+        status: u.status || 'Hey there! I am using Planet',
         avatar: u.avatar || null,
         registered: true,
         registeredAt: u.createdAt,

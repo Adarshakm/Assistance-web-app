@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Assistance Web App - Automated Setup Script for New Hostinger KVM VPS
+# Planet Web App - Automated Setup Script for New Hostinger KVM VPS
 # Target OS: Ubuntu 22.04 / 24.04 LTS
 # ==============================================================================
 set -e
 
 echo "=========================================================="
-echo "🚀 Initializing Assistance Web App on New Hostinger VPS"
+echo "🚀 Initializing Planet Web App on New Hostinger VPS"
 echo "=========================================================="
 
 # Check if run as root or with sudo
@@ -53,8 +53,8 @@ client_max_body_size 100M;
 client_body_buffer_size 128k;
 EOF
 
-# Assistance site config
-cat << 'EOF' > /etc/nginx/sites-available/assistance
+# Planet site config
+cat << 'EOF' > /etc/nginx/sites-available/planet
 server {
     listen 80;
     listen [::]:80;
@@ -88,8 +88,9 @@ server {
 EOF
 
 # Enable site and remove default
-ln -sf /etc/nginx/sites-available/assistance /etc/nginx/sites-enabled/assistance
+ln -sf /etc/nginx/sites-available/planet /etc/nginx/sites-enabled/planet
 rm -f /etc/nginx/sites-enabled/default
+rm -f /etc/nginx/sites-enabled/assistance
 
 if nginx -t; then
   systemctl restart nginx
@@ -132,3 +133,4 @@ echo "3. Update your DNS A-Record for webmind.cloud to point to this new VPS IP"
 echo "4. Issue SSL certificate via Certbot by running:"
 echo "   sudo certbot --nginx -d webmind.cloud -d www.webmind.cloud"
 echo ""
+

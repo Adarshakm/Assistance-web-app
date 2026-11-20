@@ -72,5 +72,5 @@ npm run dev
 
 - Backend only: `npm run dev:server` (or `cd server && npm run dev`)
 - Frontend only: `npm run dev:client` (or `cd client && npm run dev`)
-# Assistance-project-main
-# Assistance-social-media
+# Planet-project-main
+# Planet-social-media

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Assistance Web App - 1-Click Deployment Script for Hostinger KVM VPS
+# Planet Web App - 1-Click Deployment Script for Hostinger KVM VPS
 # ==============================================================================
 set -e
 
@@ -8,7 +8,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$APP_DIR"
 
 echo "=========================================="
-echo "🚀 Starting Deployment for Assistance App"
+echo "🚀 Starting Deployment for Planet App"
 echo "📂 Project Directory: $APP_DIR"
 echo "=========================================="
 

@@ -229,7 +229,7 @@ const STORY_SAMPLE_PRESETS = [
     caption: 'Shipping the new stories feature to production! 🚀',
     stickers: [{ id: 'stk_p4', type: 'time', content: '⏰ 10:45 AM', x: 50, y: 80 }],
     mentions: ['sophia_p'],
-    link: { url: 'https://assistance-app.internal', title: 'Release Notes' },
+    link: { url: 'https://planet-app.internal', title: 'Release Notes' },
     audience: 'friends',
   },
 ];
@@ -1077,9 +1077,9 @@ function App() {
   // About section state
   const [aboutText, setAboutText] = useState(() => {
     try {
-      return localStorage.getItem('assistance_about') || 'Hey there! I am using Assistance';
+      return localStorage.getItem('planet_about') || localStorage.getItem('assistance_about') || 'Hey there! I am using Planet';
     } catch {
-      return 'Hey there! I am using Assistance';
+      return 'Hey there! I am using Planet';
     }
   });
   const [isEditingAbout, setIsEditingAbout] = useState(false);
@@ -1888,11 +1888,12 @@ function App() {
           }
           if (data.user.status) {
             setAboutText((prev) => {
-              if (prev && prev !== 'Hey there! I am using Assistance') return prev;
+              if (prev && prev !== 'Hey there! I am using Planet' && prev !== 'Hey there! I am using Assistance') return prev;
               return data.user.status;
             });
             try {
-              if (!localStorage.getItem('assistance_about')) {
+              if (!localStorage.getItem('planet_about') && !localStorage.getItem('assistance_about')) {
+                localStorage.setItem('planet_about', data.user.status);
                 localStorage.setItem('assistance_about', data.user.status);
               }
             } catch {}
@@ -2100,7 +2101,7 @@ function App() {
         body: JSON.stringify({
           username: currentActiveUser,
           displayName: cleanedDisplayName || currentActiveUser,
-          status: cleanedBio || 'Hey there! I am using Assistance',
+          status: cleanedBio || 'Hey there! I am using Planet',
           location: cleanedLocation,
           website: cleanedWebsite,
           education: cleanedEducation,
@@ -2111,7 +2112,7 @@ function App() {
       }).catch(() => {});
 
       setDisplayName(cleanedDisplayName || currentActiveUser);
-      setAboutText(cleanedBio || 'Hey there! I am using Assistance');
+      setAboutText(cleanedBio || 'Hey there! I am using Planet');
       setLocationText(cleanedLocation);
       setWebsiteText(cleanedWebsite);
       setEducationText(cleanedEducation);
@@ -2121,7 +2122,8 @@ function App() {
 
       try {
         localStorage.setItem('assistance_display_name', cleanedDisplayName || currentActiveUser);
-        localStorage.setItem('assistance_about', cleanedBio || 'Hey there! I am using Assistance');
+        localStorage.setItem('planet_about', cleanedBio || 'Hey there! I am using Planet');
+        localStorage.setItem('assistance_about', cleanedBio || 'Hey there! I am using Planet');
         localStorage.setItem('assistance_location', cleanedLocation);
         localStorage.setItem('assistance_website', cleanedWebsite);
         localStorage.setItem('assistance_education', cleanedEducation);
@@ -2229,10 +2231,11 @@ function App() {
   const handleSaveAbout = async (e) => {
     if (e) e.preventDefault();
     const cleaned = editAboutInput.trim();
-    const finalAbout = cleaned || 'Hey there! I am using Assistance';
+    const finalAbout = cleaned || 'Hey there! I am using Planet';
     setAboutText(finalAbout);
     setIsEditingAbout(false);
     try {
+      localStorage.setItem('planet_about', finalAbout);
       localStorage.setItem('assistance_about', finalAbout);
     } catch {}
     if (loggedInUser) {
@@ -4392,7 +4395,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeStoryViewer, viewerListStory, showLinkModal, groupedStories]);
 
-  // Contacts on Assistance
+  // Contacts on Planet
   const [phoneContacts, setPhoneContacts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_phone_contacts');
@@ -4636,7 +4639,7 @@ function App() {
   const [mainSpaceAdFilter, setMainSpaceAdFilter] = useState('all');
 
   const handleCopyReferralLink = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://assistance.app';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://webmind.cloud';
     const link = `${origin}/join?ref=${loggedInUser || 'user'}`;
     try {
       navigator.clipboard?.writeText(link);
@@ -5273,7 +5276,7 @@ function App() {
       username: resolvedUsername,
       phone: contact.phone || '',
       avatar: contact.avatar || '',
-      status: contact.status || (resolvedUsername ? 'Active on Assistance' : 'Phone contact'),
+      status: contact.status || (resolvedUsername ? 'Active on Planet' : 'Phone contact'),
     };
     setActiveChatContact(chatTarget);
     try {
@@ -5340,7 +5343,7 @@ function App() {
                   username: incomingAlert.username || incomingAlert.contact,
                   phone: incomingAlert.phone || '',
                   avatar: incomingAlert.avatar || '',
-                  status: incomingAlert.status || 'Active on Assistance',
+                  status: incomingAlert.status || 'Active on Planet',
                 },
               });
             }
@@ -5853,7 +5856,7 @@ function App() {
         if (isUserInitiated) {
           setSyncFeedback({
             type: 'success',
-            text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Assistance!`,
+            text: `Synced ${data.totalPhoneContacts} phone contacts • ${data.registeredCount} registered on Planet!`,
           });
         }
       } else if (isUserInitiated) {
@@ -5869,7 +5872,7 @@ function App() {
           if (isUserInitiated) {
             setSyncFeedback({
               type: 'success',
-              text: `Connected to Assistance • ${fallbackData.contacts.length} registered contacts available!`,
+              text: `Connected to Planet • ${fallbackData.contacts.length} registered contacts available!`,
             });
           }
         }
@@ -6330,7 +6333,7 @@ function App() {
       username: 'alexchen',
       phone: '+1 (555) 234-5678',
       avatar: null,
-      status: '🚀 Developing new features on Assistance! Online and available.',
+      status: '🚀 Developing new features on Planet! Online and available.',
       registeredAt: 'Just now',
       isRegistered: true,
     },
@@ -6370,7 +6373,7 @@ function App() {
       username: 'davidm',
       phone: '+1 (555) 678-9012',
       avatar: null,
-      status: 'Hey there! I am using Assistance',
+      status: 'Hey there! I am using Planet',
       registeredAt: 'Today',
       isRegistered: true,
     },
@@ -6385,7 +6388,7 @@ function App() {
         username: u.username,
         phone: u.phone || '',
         avatar: u.avatar || null,
-        status: u.status || 'Hey there! I am using Assistance',
+        status: u.status || 'Hey there! I am using Planet',
         registeredAt: u.createdAt || 'Active recently',
         isRegistered: true,
       }));
@@ -7850,7 +7853,7 @@ function App() {
                 <div className="contacts-header-wrapper">
                   <div className="contacts-title-col">
                     <h1 className="heading contacts-heading" id="contacts-heading">
-                      {contactsFilterTab === 'status' ? 'Status Updates' : 'Contacts on Assistance'}
+                      {contactsFilterTab === 'status' ? 'Status Updates' : 'Contacts on Planet'}
                     </h1>
                     <p className="contacts-subheading">
                       {contactsFilterTab === 'status' ? 'Text, image, and video status from your contacts' : 'Synced from phone contacts'}
@@ -7865,7 +7868,7 @@ function App() {
                         id="sync-contacts-btn"
                         onClick={handleDeviceContactSync}
                         disabled={isSyncingContacts}
-                        title="Sync Phone Contacts with Assistance"
+                        title="Sync Phone Contacts with Planet"
                       >
                         <svg
                           className={isSyncingContacts ? 'spin' : ''}
@@ -8027,7 +8030,7 @@ function App() {
                         <p className="contacts-empty-text">
                           {contactsSearchQuery
                             ? `No contact found matching "${contactsSearchQuery}"`
-                            : 'Sync your phone contacts to see which of your friends and colleagues are already on Assistance.'}
+                            : 'Sync your phone contacts to see which of your friends and colleagues are already on Planet.'}
                         </p>
                         {!contactsSearchQuery && (
                           <button
@@ -8068,14 +8071,14 @@ function App() {
                                 ) : (
                                   <span>{getInitials(contact.phoneBookName || contact.username)}</span>
                                 )}
-                                <span className="contact-online-dot" title="Active on Assistance"></span>
+                                <span className="contact-online-dot" title="Active on Planet"></span>
                               </div>
 
                               <div className="contact-info">
                                 <div className="contact-name-row">
                                   <span className="contact-name">{contact.phoneBookName}</span>
                                   <span className="contact-username">@{contact.username}</span>
-                                  <span className="contact-verified-badge" title="Registered Assistance User">
+                                  <span className="contact-verified-badge" title="Registered Planet User">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                                     </svg>
@@ -8103,7 +8106,7 @@ function App() {
                         {filteredInviteContacts.length > 0 && (
                           <>
                             <div className="contacts-sub-header">
-                              <span>Invite to Assistance</span>
+                              <span>Invite to Planet</span>
                               <span className="contacts-sub-badge">{filteredInviteContacts.length}</span>
                             </div>
                             {filteredInviteContacts.map((contact, idx) => (
@@ -8147,7 +8150,7 @@ function App() {
                                     className="contact-invite-btn"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigator.clipboard?.writeText?.('Join me on Assistance: https://assistance.app/join');
+                                      navigator.clipboard?.writeText?.(`Join me on Planet: ${typeof window !== 'undefined' ? window.location.origin : 'https://webmind.cloud'}`);
                                       setSyncFeedback({
                                         type: 'success',
                                         text: `Invitation link copied for ${contact.phoneBookName}!`,
@@ -8979,7 +8982,7 @@ function App() {
                       <p className="contacts-modal-desc">
                         {editingContactOriginal
                           ? 'Update the contact name or phone number and re-sync.'
-                          : 'Add a contact from your phonebook. If they are already registered on Assistance, they will immediately appear in your registered contacts list!'}
+                          : 'Add a contact from your phonebook. If they are already registered on Planet, they will immediately appear in your registered contacts list!'}
                       </p>
                       <form onSubmit={handleSaveContact} className="contacts-modal-form">
                         <div className="form-group">
@@ -9295,7 +9298,7 @@ function App() {
                         <line x1="8" y1="2" x2="8" y2="6"></line>
                         <line x1="3" y1="10" x2="21" y2="10"></line>
                       </svg>
-                      <span>Member of Assistance</span>
+                      <span>Member of Planet</span>
                     </div>
                   </div>
 
@@ -9748,7 +9751,7 @@ function App() {
                             Edit
                           </button>
                         </div>
-                        <p className="profile-about-box-text">{aboutText || 'Hey there! I am using Assistance'}</p>
+                        <p className="profile-about-box-text">{aboutText || 'Hey there! I am using Planet'}</p>
                       </div>
 
                       {/* Employment / Work Experience */}
@@ -9947,7 +9950,7 @@ function App() {
                               placeholder="username"
                             />
                           </div>
-                          <small className="profile-field-hint">Your unique @handle across Assistance</small>
+                          <small className="profile-field-hint">Your unique @handle across Planet</small>
                         </div>
 
                         <div className="profile-form-group">
@@ -11487,7 +11490,7 @@ function App() {
                             <polyline points="17 11 19 13 23 9"></polyline>
                           </svg>
                         </div>
-                        <h3 className="social-invite-title">Invite Friends to Assistance</h3>
+                        <h3 className="social-invite-title">Invite Friends to Planet</h3>
                         <p className="social-invite-desc">
                           Invite your colleagues, family, and peers to chat, collaborate, share posts, and stay connected.
                         </p>
@@ -11517,7 +11520,7 @@ function App() {
                       <div className="social-invite-actions-grid">
                         <a
                           href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            `Hey! Join me on Assistance to chat, share updates, and connect: ${window.location.origin}/?invite=${encodeURIComponent(
+                            `Hey! Join me on Planet to chat, share updates, and connect: ${window.location.origin}/?invite=${encodeURIComponent(
                               loggedInUser || 'friend'
                             )}`
                           )}`}
@@ -11533,9 +11536,9 @@ function App() {
 
                         <a
                           href={`mailto:?subject=${encodeURIComponent(
-                            'Join me on Assistance'
+                            'Join me on Planet'
                           )}&body=${encodeURIComponent(
-                            `Hi!\n\nI'm using Assistance to connect with friends, share posts, and chat. Join me using my invite link:\n\n${window.location.origin}/?invite=${encodeURIComponent(
+                            `Hi!\n\nI'm using Planet to connect with friends, share posts, and chat. Join me using my invite link:\n\n${window.location.origin}/?invite=${encodeURIComponent(
                               loggedInUser || 'friend'
                             )}\n\nLooking forward to seeing you there!`
                           )}`}
@@ -11553,7 +11556,7 @@ function App() {
                       <div className="social-invite-preview-box">
                         <span className="social-invite-preview-label">Sample Invite Message:</span>
                         <p className="social-invite-preview-text">
-                          &quot;Hey! Connect with me on Assistance to chat, share updates, and stay in touch. Join here: {window.location.origin}/?invite={loggedInUser || 'friend'}&quot;
+                          &quot;Hey! Connect with me on Planet to chat, share updates, and stay in touch. Join here: {window.location.origin}/?invite={loggedInUser || 'friend'}&quot;
                         </p>
                       </div>
                     </div>
@@ -11896,7 +11899,7 @@ function App() {
                           <p className="contacts-empty-text">
                             {discoverySearchQuery.trim()
                               ? `No posts found matching "${discoverySearchQuery}".`
-                              : 'No posts shared yet across Assistance.'}
+                              : 'No posts shared yet across Planet.'}
                           </p>
                           {discoverySearchQuery && (
                             <button
@@ -13600,7 +13603,7 @@ function App() {
                           Subscribe for 300 rupees per month
                         </h4>
                         <p className="feed-ad-description">
-                          Upgrade to Assistance Premium! Unlimited HD voice &amp; video calls, verified badge, 100% ad-free experience, and 100 GB cloud storage for ₹300/month.
+                          Upgrade to Planet Premium! Unlimited HD voice &amp; video calls, verified badge, 100% ad-free experience, and 100 GB cloud storage for ₹300/month.
                         </p>
                       </div>
                       <div className="feed-ad-btn-wrap">
@@ -13665,7 +13668,7 @@ function App() {
                           Add one person and get 100 rupees
                         </h4>
                         <p className="feed-ad-description">
-                          Refer friends, family, and colleagues to Assistance! Earn ₹100 instant cash for every person who joins.
+                          Refer friends, family, and colleagues to Planet! Earn ₹100 instant cash for every person who joins.
                         </p>
                       </div>
                       <div className="feed-ad-btn-wrap">
@@ -14888,7 +14891,7 @@ function App() {
                                   {/* Download Photo */}
                                   <a
                                     href={imgSrc}
-                                    download={`assistance-photo-${photo.id}.jpg`}
+                                    download={`planet-photo-${photo.id}.jpg`}
                                     className="photo-action-icon-btn"
                                     title="Download photo"
                                     onClick={(e) => e.stopPropagation()}
@@ -15081,7 +15084,7 @@ function App() {
                         <div className="photo-lightbox-actions">
                           <a
                             href={lightboxPhoto.image || lightboxPhoto.media}
-                            download={`assistance-photo-${lightboxPhoto.id}.jpg`}
+                            download={`planet-photo-${lightboxPhoto.id}.jpg`}
                             className="photo-btn photo-btn-primary"
                           >
                             Download High-Res
@@ -16158,7 +16161,7 @@ function App() {
                               )}
                             </div>
                             <span className="chat-header-status">
-                              {activeChatContact.status || activeChatContact.phone || 'Active on Assistance'}
+                              {activeChatContact.status || activeChatContact.phone || 'Active on Planet'}
                             </span>
                           </div>
                         </div>
@@ -16234,7 +16237,7 @@ function App() {
                         <h3 className="chat-start-title">{activeChatContact.name}</h3>
                         <p className="chat-start-subtitle">
                           {activeChatContact.username ? `@${activeChatContact.username} • ` : ''}
-                          {activeChatContact.phone || 'Assistance Contact'}
+                          {activeChatContact.phone || 'Planet Contact'}
                         </p>
                         <span className="chat-start-badge">Direct Message Box</span>
                       </div>
@@ -17390,7 +17393,7 @@ function App() {
                     </h1>
 
                     <p className="main-space-ad-subtitle">
-                      Elevate your Assistance experience with verified credibility, unlimited crystal-clear calls, 100% ad-free spaces, and priority cloud infrastructure.
+                      Elevate your Planet experience with verified credibility, unlimited crystal-clear calls, 100% ad-free spaces, and priority cloud infrastructure.
                     </p>
 
                     {/* Price Showcase Box */}
@@ -17501,7 +17504,7 @@ function App() {
                         </div>
                         <div className="feature-content">
                           <h4>VIP Fast-Track Support</h4>
-                          <p>Direct priority access to dedicated assistance agents 24 hours a day, 7 days a week.</p>
+                          <p>Direct priority access to dedicated Planet support agents 24 hours a day, 7 days a week.</p>
                         </div>
                       </div>
 
@@ -17582,9 +17585,9 @@ function App() {
                       </h2>
 
                       <p className="main-space-ad-subtitle">
-                        Share Assistance with your network! For every person who joins through your referral link or code, you receive an instant reward of 100 rupees directly to your wallet.
+                        Share Planet with your network! For every person who joins through your referral link or code, you receive an instant reward of 100 rupees directly to your wallet.
                       </p>
-
+                      
                       {/* Price / Reward Showcase Box */}
                       <div className="main-space-price-box referral-price-box">
                         <div className="main-space-price-tag">
@@ -17605,7 +17608,7 @@ function App() {
                             type="text"
                             readOnly
                             className="referral-link-input"
-                            value={typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : `https://assistance.app/join?ref=${loggedInUser || 'user'}`}
+                            value={typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : `https://webmind.cloud/join?ref=${loggedInUser || 'user'}`}
                           />
                           <button
                             type="button"
@@ -17637,8 +17640,8 @@ function App() {
                             type="button"
                             className="referral-share-whatsapp-btn"
                             onClick={() => {
-                              const link = typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : 'https://assistance.app';
-                              const msg = encodeURIComponent(`Hey! Join me on Assistance: ${link}`);
+                              const link = typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : 'https://webmind.cloud';
+                              const msg = encodeURIComponent(`Hey! Join me on Planet: ${link}`);
                               window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
                             }}
                           >
@@ -17713,7 +17716,7 @@ function App() {
                           <div className="step-number-bubble">2</div>
                           <div className="step-text-wrap">
                             <h4>Friend Signs Up</h4>
-                            <p>Your friend opens the link, creates their account, and joins Assistance.</p>
+                            <p>Your friend opens the link, creates their account, and joins Planet.</p>
                           </div>
                         </div>
 
@@ -17905,7 +17908,7 @@ function App() {
                 <p className="incoming-call-prompt">
                   {incomingCall.type === 'video'
                     ? 'is inviting you to a live video call...'
-                    : 'is calling you on Assistance voice...'}
+                    : 'is calling you on Planet voice...'}
                 </p>
               </div>
             </div>
@@ -18214,7 +18217,7 @@ function App() {
               <div className="sub-order-summary-box">
                 <div className="summary-plan-line">
                   <div>
-                    <strong className="plan-name">Assistance Premium Membership</strong>
+                    <strong className="plan-name">Planet Premium Membership</strong>
                     <p className="plan-desc">VIP Status, Unlimited HD Video/Voice, Zero Ads &amp; 100GB Cloud</p>
                   </div>
                   <div className="summary-price-badge">
