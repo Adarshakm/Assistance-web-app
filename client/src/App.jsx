@@ -486,6 +486,111 @@ const INITIAL_CONTACT_STATUSES = [
   },
 ];
 
+// Planet Social Media Categorized Membership Plans: Free, 300 Rupees, 500 Rupees, 1000 Rupees
+export const SUBSCRIPTION_PLANS = [
+  {
+    id: 'free',
+    name: 'Free Plan',
+    tierName: 'Starter',
+    price: 0,
+    priceFormatted: '₹0',
+    cadence: 'Forever Free',
+    badge: 'Basic',
+    popular: false,
+    color: '#71717a',
+    accentClass: 'plan-free',
+    description: 'Essential social network access for everyday personal use.',
+    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '5 GB Cloud Storage', '720p HD Calling'],
+    features: [
+      'Full access to What\'s Happening public feed',
+      'Direct chat and messaging with contacts',
+      'Publish posts, text status & basic photo updates',
+      '1-on-1 voice & 720p video calls',
+      'Follow friends and discover public creators',
+      '5 GB standard media cloud storage',
+      'Standard community support',
+    ],
+    ctaText: 'Current Plan',
+  },
+  {
+    id: '300',
+    name: 'Standard Premium',
+    tierName: 'Verified Member',
+    price: 300,
+    priceFormatted: '₹300',
+    cadence: '300 rupees per month',
+    badge: 'Popular',
+    popular: false,
+    color: '#38bdf8',
+    accentClass: 'plan-300',
+    description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
+    highlights: ['Blue Verified Badge', '100% Ad-Free Experience', 'Unlimited 1080p Calling', '50 GB Cloud Storage'],
+    features: [
+      'Everything in Free Plan, plus:',
+      'Blue Verified Checkmark Badge across profile & feed',
+      '100% Ad-Free browsing across all feeds & tabs',
+      'Unlimited HD voice & 1080p video calls',
+      '50 GB high-speed media cloud storage',
+      'Post videos up to 5 minutes duration',
+      'Custom profile themes, badges & color accents',
+      'Priority message delivery',
+    ],
+    ctaText: 'Subscribe for ₹300/mo',
+  },
+  {
+    id: '500',
+    name: 'Pro Creator',
+    tierName: 'Creator Pro',
+    price: 500,
+    priceFormatted: '₹500',
+    cadence: '500 rupees per month',
+    badge: 'Most Popular',
+    popular: true,
+    color: '#a855f7',
+    accentClass: 'plan-500',
+    description: 'High-power tools, group calls, and reach insights for active creators.',
+    highlights: ['Gold Checkmark Badge', '4K Calling & Screen Share', '50-Person Group Calls', '250 GB Cloud Storage'],
+    features: [
+      'Everything in ₹300 Plan, plus:',
+      'Gold Checkmark Badge & Pro Creator status',
+      'Unlimited 4K Ultra HD Video Calling & Screen Sharing',
+      'Group video calls up to 50 participants',
+      '250 GB ultra-fast media cloud storage',
+      'Post Full HD videos up to 30 minutes duration',
+      'Create & manage up to 10 community discussion feeds',
+      'Audience reach insights & viewer engagement stats',
+      'Priority 24/7 dedicated creator support',
+    ],
+    ctaText: 'Subscribe for ₹500/mo',
+  },
+  {
+    id: '1000',
+    name: 'VIP Executive',
+    tierName: 'VIP Elite',
+    price: 1000,
+    priceFormatted: '₹1000',
+    cadence: '1000 rupees per month',
+    badge: 'VIP Elite',
+    popular: false,
+    color: '#eab308',
+    accentClass: 'plan-1000',
+    description: 'The ultimate tier for businesses, VIPs, and high-impact leaders.',
+    highlights: ['Diamond VIP Badge', '1 TB Cloud Storage', '250-Person Group Calls', 'Algorithm Boost'],
+    features: [
+      'Everything in ₹500 Plan, plus:',
+      'Diamond VIP Badge & Official Verified Business Seal',
+      '1 TB (1,000 GB) Dedicated high-speed cloud vault',
+      'Group calls & webinars up to 250 participants',
+      'Unlimited communities, channels & group spaces',
+      'Featured placement & algorithm boost on feeds',
+      'Uncompressed original 4K video uploads',
+      'Business monetization & direct creator tipping',
+      'Dedicated 1-on-1 VIP concierge & account manager',
+    ],
+    ctaText: 'Subscribe for ₹1000/mo',
+  },
+];
+
 function App() {
   const [currentView, setCurrentView] = useState(() => {
     if (
@@ -4883,14 +4988,20 @@ function App() {
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
 
-  // Subscription and Advertisement (₹300 / month) State
-  const [isSubscribed, setIsSubscribed] = useState(() => {
+  // Categorized Subscription Plans (Free, 300, 500, 1000) State
+  const [currentPlanId, setCurrentPlanId] = useState(() => {
     try {
-      return localStorage.getItem('assistance_subscribed') === 'true';
+      const savedPlan = localStorage.getItem('assistance_subscribed_plan');
+      if (savedPlan) return savedPlan;
+      return localStorage.getItem('assistance_subscribed') === 'true' ? '300' : 'free';
     } catch {
-      return false;
+      return 'free';
     }
   });
+  const [selectedModalPlanId, setSelectedModalPlanId] = useState('300');
+  const isSubscribed = currentPlanId !== 'free';
+  const currentSubscribedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === currentPlanId) || SUBSCRIPTION_PLANS[0];
+
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
   const [upiIdInput, setUpiIdInput] = useState('');
@@ -4899,7 +5010,8 @@ function App() {
   const [subscriptionToast, setSubscriptionToast] = useState(null);
   const [isMainFeedAdDismissed, setIsMainFeedAdDismissed] = useState(false);
 
-  const handleOpenSubscriptionModal = () => {
+  const handleOpenSubscriptionModal = (planId = '300') => {
+    setSelectedModalPlanId(planId || '300');
     setShowSubscriptionModal(true);
   };
 
@@ -4912,30 +5024,43 @@ function App() {
   const handleProcessSubscription = (e) => {
     if (e) e.preventDefault();
     setIsProcessingPayment(true);
+    const chosenPlan = SUBSCRIPTION_PLANS.find((p) => p.id === selectedModalPlanId) || SUBSCRIPTION_PLANS[1];
+
     setTimeout(() => {
       setIsProcessingPayment(false);
-      setIsSubscribed(true);
+      setCurrentPlanId(chosenPlan.id);
       try {
-        localStorage.setItem('assistance_subscribed', 'true');
+        if (chosenPlan.id === 'free') {
+          localStorage.removeItem('assistance_subscribed');
+          localStorage.setItem('assistance_subscribed_plan', 'free');
+        } else {
+          localStorage.setItem('assistance_subscribed', 'true');
+          localStorage.setItem('assistance_subscribed_plan', chosenPlan.id);
+        }
       } catch { }
+
       setShowSubscriptionModal(false);
       setSubscriptionToast({
         type: 'success',
-        text: '🎉 Welcome to Premium! You have successfully subscribed for ₹300 per month (300 rupees per month).',
+        text: chosenPlan.id === 'free'
+          ? 'Switched to Free Plan.'
+          : `🎉 Welcome to ${chosenPlan.name}! You have successfully subscribed to the ${chosenPlan.priceFormatted} per month plan.`,
       });
       setTimeout(() => setSubscriptionToast(null), 5000);
     }, 900);
   };
 
   const handleCancelSubscription = () => {
-    if (window.confirm('Are you sure you want to cancel your ₹300/month subscription?')) {
-      setIsSubscribed(false);
+    const activePlan = SUBSCRIPTION_PLANS.find((p) => p.id === currentPlanId) || SUBSCRIPTION_PLANS[1];
+    if (window.confirm(`Are you sure you want to cancel your ${activePlan.name} (${activePlan.priceFormatted}/month) subscription?`)) {
+      setCurrentPlanId('free');
       try {
         localStorage.removeItem('assistance_subscribed');
+        localStorage.setItem('assistance_subscribed_plan', 'free');
       } catch { }
       setSubscriptionToast({
         type: 'info',
-        text: 'Your ₹300 per month subscription has been canceled.',
+        text: `Your ${activePlan.name} (${activePlan.priceFormatted}/month) subscription has been canceled. You are now on the Free Plan.`,
       });
       setTimeout(() => setSubscriptionToast(null), 4000);
     }
@@ -16034,7 +16159,7 @@ function App() {
                       </button>
                     </div>
 
-                    {/* Featured Advertisement in Main Feed: Subscribe for 300 rupees per month */}
+                    {/* Featured Advertisement in Main Feed: Planet Categorized Membership Plans */}
                     {!isMainFeedAdDismissed && (
                       <div className="feed-advertisement-card" id="feed-advertisement-banner">
                         <div className="feed-ad-top-badge-row">
@@ -16043,9 +16168,9 @@ function App() {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                               </svg>
-                              SPONSORED ADVERTISEMENT
+                              MEMBERSHIP PLANS
                             </span>
-                            <span className="feed-ad-price-pill">₹300 / month</span>
+                            <span className="feed-ad-price-pill">Free • ₹300 • ₹500 • ₹1000</span>
                           </div>
                           <button
                             type="button"
@@ -16069,23 +16194,32 @@ function App() {
                           </div>
                           <div className="feed-ad-text-wrap">
                             <h4 className="feed-ad-headline">
-                              Subscribe for 300 rupees per month
+                              Planet Membership Plans: Free, ₹300, ₹500 &amp; ₹1000
                             </h4>
                             <p className="feed-ad-description">
-                              Upgrade to Planet Premium! Unlimited HD voice &amp; video calls, verified badge, 100% ad-free experience, and 100 GB cloud storage for ₹300/month.
+                              Categorized plans tailored for everyone: Free starter, 300 rupees standard, 500 rupees creator pro, or 1000 rupees VIP executive. Blue/gold/diamond badges, 4K calling, and high-speed cloud vaults.
                             </p>
                           </div>
                           <div className="feed-ad-btn-wrap">
                             {isSubscribed ? (
-                              <span className="feed-ad-active-badge">✓ Subscribed</span>
+                              <div className="feed-ad-sub-status-box">
+                                <span className="feed-ad-active-badge">✓ Active: {currentSubscribedPlan.name} ({currentSubscribedPlan.priceFormatted}/mo)</span>
+                                <button
+                                  type="button"
+                                  className="feed-ad-manage-btn"
+                                  onClick={() => handleOpenSubscriptionModal(currentPlanId)}
+                                >
+                                  Change Plan
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 type="button"
                                 className="feed-ad-subscribe-action-btn"
                                 id="feed-ad-subscribe-btn"
-                                onClick={() => setShowSubscriptionModal(true)}
+                                onClick={() => handleOpenSubscriptionModal('300')}
                               >
-                                Subscribe Now
+                                Explore Plans (Free to ₹1000)
                               </button>
                             )}
                           </div>
@@ -23685,23 +23819,23 @@ function App() {
                         className={`ad-filter-tab-btn ${mainSpaceAdFilter === 'subscription' ? 'active' : ''}`}
                         onClick={() => setMainSpaceAdFilter('subscription')}
                       >
-                        💎 Subscribe for ₹300 / Month
+                        💎 Membership Plans (Free, ₹300, ₹500, ₹1000)
                       </button>
                     </div>
 
-                    {/* Main Space Advertisement 1: Subscribe for 300 rupees per month */}
+                    {/* Main Space Advertisement 1: Categorized Membership Plans (Free, 300, 500, 1000 rupees) */}
                     {(mainSpaceAdFilter === 'all' || mainSpaceAdFilter === 'subscription') && (
-                      <div className="main-space-ad-card" id="main-space-subscription-ad">
+                      <div className="main-space-ad-card membership-plans-main-card" id="main-space-subscription-ad">
                         <div className="main-space-ad-header-row">
                           <span className="main-space-ad-badge">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
                               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                             </svg>
-                            SPONSORED ADVERTISEMENT
+                            OFFICIAL MEMBERSHIP TIERS
                           </span>
                           {isSubscribed && (
                             <span className="main-space-ad-active-tag">
-                              ✓ ACTIVE SUBSCRIBER
+                              ✓ {currentSubscribedPlan.name.toUpperCase()} ACTIVE
                             </span>
                           )}
                         </div>
@@ -23714,34 +23848,31 @@ function App() {
                           </div>
 
                           <h1 className="main-space-ad-title">
-                            Subscribe for <span className="highlight-price">300 rupees per month</span>
+                            Categorized <span className="highlight-price">Membership Plans</span>
                           </h1>
 
                           <p className="main-space-ad-subtitle">
-                            Elevate your Planet experience with verified credibility, unlimited crystal-clear calls, 100% ad-free spaces, and priority cloud infrastructure.
+                            Choose from 4 tiers tailored for your social journey: Free, 300 rupees, 500 rupees, or 1000 rupees per month. Upgrade, switch, or cancel anytime with zero lock-in.
                           </p>
 
-                          {/* Price Showcase Box */}
-                          <div className="main-space-price-box">
-                            <div className="main-space-price-tag">
-                              <span className="currency-symbol">₹</span>
-                              <span className="price-number">300</span>
-                              <span className="price-period">/ month</span>
-                            </div>
-                            <p className="price-guarantee">300 rupees per month • Billed monthly • Cancel anytime</p>
-                          </div>
-
-                          {/* Main CTA Button */}
-                          <div className="main-space-ad-cta-row">
-                            {isSubscribed ? (
-                              <div className="main-space-subscribed-state">
-                                <div className="subscribed-badge-row">
-                                  <span className="active-check">✓</span>
-                                  <div>
-                                    <h3 className="active-title">Your Premium Membership is Active</h3>
-                                    <p className="active-subtitle">Plan: ₹300 / month (300 rupees per month) • Status: Active</p>
-                                  </div>
+                          {/* Active Membership Notification Banner if subscribed */}
+                          {isSubscribed && (
+                            <div className="active-membership-status-banner">
+                              <div className="status-banner-left">
+                                <span className="active-glow-indicator"></span>
+                                <div>
+                                  <strong className="status-plan-heading">Your Active Plan: {currentSubscribedPlan.name}</strong>
+                                  <p className="status-plan-sub">{currentSubscribedPlan.cadence} • All tier perks active</p>
                                 </div>
+                              </div>
+                              <div className="status-banner-actions">
+                                <button
+                                  type="button"
+                                  className="status-switch-btn"
+                                  onClick={() => handleOpenSubscriptionModal(currentPlanId)}
+                                >
+                                  Switch Plan
+                                </button>
                                 <button
                                   type="button"
                                   className="cancel-subscription-btn"
@@ -23750,104 +23881,94 @@ function App() {
                                   Cancel Subscription
                                 </button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="main-space-subscribe-btn"
-                                id="main-space-subscribe-btn"
-                                onClick={() => setShowSubscriptionModal(true)}
-                              >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                                </svg>
-                                <span>Subscribe for 300 rupees per month</span>
-                              </button>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Feature Highlights Grid */}
-                        <div className="main-space-features-section">
-                          <h3 className="features-section-title">Everything included in your ₹300 / month plan:</h3>
-                          <div className="main-space-ad-features-grid">
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle blue">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                  <polyline points="9 12 11 14 15 10"></polyline>
-                                </svg>
-                              </div>
-                              <div className="feature-content">
-                                <h4>Verified Profile Badge</h4>
-                                <p>Blue checkmark verifying your profile across messages, feeds, and directory.</p>
-                              </div>
-                            </div>
+                        {/* 4 Categorized Plans Grid */}
+                        <div className="plans-comparison-grid">
+                          {SUBSCRIPTION_PLANS.map((plan) => {
+                            const isCurrent = currentPlanId === plan.id;
+                            return (
+                              <div
+                                key={plan.id}
+                                className={`membership-plan-card ${plan.accentClass} ${isCurrent ? 'is-current-plan' : ''} ${plan.popular ? 'is-popular-card' : ''}`}
+                              >
+                                {plan.popular && (
+                                  <div className="plan-popular-ribbon">
+                                    <span>★ {plan.badge}</span>
+                                  </div>
+                                )}
+                                {!plan.popular && plan.badge && (
+                                  <div className="plan-regular-badge">
+                                    <span>{plan.badge}</span>
+                                  </div>
+                                )}
 
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle green">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                                </svg>
-                              </div>
-                              <div className="feature-content">
-                                <h4>Unlimited HD Calls</h4>
-                                <p>1080p video calls and high-fidelity audio with contacts with zero duration limits.</p>
-                              </div>
-                            </div>
+                                <div className="plan-card-header">
+                                  <h3 className="plan-title">{plan.name}</h3>
+                                  <p className="plan-tier-subtitle">{plan.tierName}</p>
+                                </div>
 
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle purple">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="12" r="10"></circle>
-                                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-                                </svg>
-                              </div>
-                              <div className="feature-content">
-                                <h4>100% Ad-Free Experience</h4>
-                                <p>Browse social feeds, chats, and discovery spaces without sponsored interruptions.</p>
-                              </div>
-                            </div>
+                                <div className="plan-pricing-block">
+                                  <div className="plan-price-main">
+                                    <span className="price-curr">₹</span>
+                                    <span className="price-val">{plan.price}</span>
+                                    <span className="price-cycle">{plan.price === 0 ? '/ forever' : '/ mo'}</span>
+                                  </div>
+                                  <p className="plan-cadence-label">{plan.cadence}</p>
+                                </div>
 
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle orange">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
-                                </svg>
-                              </div>
-                              <div className="feature-content">
-                                <h4>100 GB Cloud Storage</h4>
-                                <p>High-speed cloud space to share and archive full-resolution photos, videos, and files.</p>
-                              </div>
-                            </div>
+                                <p className="plan-description-text">{plan.description}</p>
 
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle yellow">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                                </svg>
-                              </div>
-                              <div className="feature-content">
-                                <h4>VIP Fast-Track Support</h4>
-                                <p>Direct priority access to dedicated Planet support agents 24 hours a day, 7 days a week.</p>
-                              </div>
-                            </div>
+                                <div className="plan-highlights-pills">
+                                  {plan.highlights.map((hl, hIdx) => (
+                                    <span key={hIdx} className="plan-hl-chip">
+                                      {hl}
+                                    </span>
+                                  ))}
+                                </div>
 
-                            <div className="main-space-feature-card">
-                              <div className="feature-icon-circle pink">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                  <circle cx="9" cy="7" r="4"></circle>
-                                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                </svg>
+                                <div className="plan-features-list">
+                                  <span className="features-list-header">Included features:</span>
+                                  <ul>
+                                    {plan.features.map((feature, fIdx) => (
+                                      <li key={fIdx}>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                          <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        <span>{feature}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                <div className="plan-card-action">
+                                  {isCurrent ? (
+                                    <div className="current-plan-indicator">
+                                      <span>✓ Current Active Plan</span>
+                                    </div>
+                                  ) : plan.id === 'free' ? (
+                                    <button
+                                      type="button"
+                                      className="plan-select-btn outline"
+                                      onClick={handleCancelSubscription}
+                                    >
+                                      Switch to Free
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className={`plan-select-btn ${plan.accentClass}`}
+                                      onClick={() => handleOpenSubscriptionModal(plan.id)}
+                                    >
+                                      {isSubscribed ? `Switch to ${plan.priceFormatted}/mo` : `Choose ${plan.priceFormatted}/mo`}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <div className="feature-content">
-                                <h4>Creator Analytics &amp; Tools</h4>
-                                <p>Audience reach insights, exclusive badges, and early access to all beta features.</p>
-                              </div>
-                            </div>
-                          </div>
+                            );
+                          })}
                         </div>
 
                         {/* Trust Footer */}
@@ -23857,21 +23978,21 @@ function App() {
                               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
-                            <span>Secure Payment Processing</span>
+                            <span>Secure UPI &amp; Card Processing</span>
                           </div>
                           <div className="guarantee-chip">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <circle cx="12" cy="12" r="10"></circle>
                               <polyline points="12 6 12 12 16 14"></polyline>
                             </svg>
-                            <span>Instant Plan Activation</span>
+                            <span>Instant Tier Activation</span>
                           </div>
                           <div className="guarantee-chip">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                               <polyline points="22 4 12 14.01 9 11.01"></polyline>
                             </svg>
-                            <span>Cancel Anytime with One Click</span>
+                            <span>Upgrade, Downgrade or Cancel Anytime</span>
                           </div>
                         </div>
                       </div>
@@ -24513,219 +24634,254 @@ function App() {
           )}
 
           {/* Subscription Checkout / Payment Modal */}
-          {showSubscriptionModal && (
-            <div className="subscription-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sub-modal-title">
-              <div className="subscription-modal-dialog">
-                <div className="subscription-modal-header">
-                  <div className="sub-modal-header-text">
-                    <span className="sub-modal-badge">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                      </svg>
-                      OFFICIAL ADVERTISEMENT
-                    </span>
-                    <h3 id="sub-modal-title">Subscribe for 300 rupees per month</h3>
-                  </div>
-                  <button
-                    type="button"
-                    className="sub-modal-close-btn"
-                    onClick={handleCloseSubscriptionModal}
-                    disabled={isProcessingPayment}
-                    aria-label="Close modal"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="subscription-modal-body">
-                  {/* Order Summary Box */}
-                  <div className="sub-order-summary-box">
-                    <div className="summary-plan-line">
-                      <div>
-                        <strong className="plan-name">Planet Premium Membership</strong>
-                        <p className="plan-desc">VIP Status, Unlimited HD Video/Voice, Zero Ads &amp; 100GB Cloud</p>
-                      </div>
-                      <div className="summary-price-badge">
-                        <span className="badge-amt">₹300</span>
-                        <span className="badge-cadence">/ mo</span>
-                      </div>
+          {showSubscriptionModal && (() => {
+            const selectedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === selectedModalPlanId) || SUBSCRIPTION_PLANS[1];
+            return (
+              <div className="subscription-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sub-modal-title">
+                <div className="subscription-modal-dialog">
+                  <div className="subscription-modal-header">
+                    <div className="sub-modal-header-text">
+                      <span className="sub-modal-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        MEMBERSHIP TIERS
+                      </span>
+                      <h3 id="sub-modal-title">
+                        {selectedPlan.price === 0
+                          ? 'Planet Free Starter Plan'
+                          : `Subscribe to ${selectedPlan.name} (${selectedPlan.cadence})`}
+                      </h3>
                     </div>
-                    <div className="summary-divider"></div>
-                    <div className="summary-total-row">
-                      <span>Total Due Today:</span>
-                      <span className="total-due">₹300 (300 rupees per month)</span>
-                    </div>
+                    <button
+                      type="button"
+                      className="sub-modal-close-btn"
+                      onClick={handleCloseSubscriptionModal}
+                      disabled={isProcessingPayment}
+                      aria-label="Close modal"
+                    >
+                      ×
+                    </button>
                   </div>
 
-                  {/* Payment Methods */}
-                  <div className="payment-methods-selector">
-                    <label className="methods-heading">Select Payment Option</label>
-                    <div className="payment-options-list">
-                      <div
-                        className={`payment-option-card ${selectedPaymentMethod === 'upi' ? 'selected' : ''}`}
-                        onClick={() => setSelectedPaymentMethod('upi')}
-                      >
-                        <input
-                          type="radio"
-                          id="method-upi"
-                          name="payment-method"
-                          checked={selectedPaymentMethod === 'upi'}
-                          onChange={() => setSelectedPaymentMethod('upi')}
-                        />
-                        <label htmlFor="method-upi" className="option-label">
-                          <span className="option-title">UPI / QR (Google Pay, PhonePe, Paytm, BHIM)</span>
-                          <span className="option-subtitle">Instant payment using any UPI application</span>
-                        </label>
-                      </div>
-
-                      <div
-                        className={`payment-option-card ${selectedPaymentMethod === 'card' ? 'selected' : ''}`}
-                        onClick={() => setSelectedPaymentMethod('card')}
-                      >
-                        <input
-                          type="radio"
-                          id="method-card"
-                          name="payment-method"
-                          checked={selectedPaymentMethod === 'card'}
-                          onChange={() => setSelectedPaymentMethod('card')}
-                        />
-                        <label htmlFor="method-card" className="option-label">
-                          <span className="option-title">Debit / Credit Card</span>
-                          <span className="option-subtitle">Visa, MasterCard, RuPay, Maestro</span>
-                        </label>
-                      </div>
-
-                      <div
-                        className={`payment-option-card ${selectedPaymentMethod === 'netbanking' ? 'selected' : ''}`}
-                        onClick={() => setSelectedPaymentMethod('netbanking')}
-                      >
-                        <input
-                          type="radio"
-                          id="method-netbanking"
-                          name="payment-method"
-                          checked={selectedPaymentMethod === 'netbanking'}
-                          onChange={() => setSelectedPaymentMethod('netbanking')}
-                        />
-                        <label htmlFor="method-netbanking" className="option-label">
-                          <span className="option-title">Net Banking</span>
-                          <span className="option-subtitle">All major Indian banks supported</span>
-                        </label>
-                      </div>
+                  <div className="subscription-modal-body">
+                    {/* Category Plan Selector Tabs */}
+                    <div className="sub-modal-plan-selector-tabs" role="tablist" aria-label="Select Membership Plan">
+                      {SUBSCRIPTION_PLANS.map((plan) => (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          className={`modal-plan-tab-btn ${selectedModalPlanId === plan.id ? 'active' : ''} ${plan.accentClass}`}
+                          onClick={() => setSelectedModalPlanId(plan.id)}
+                        >
+                          <span className="tab-plan-name">{plan.name}</span>
+                          <span className="tab-plan-price">{plan.priceFormatted}</span>
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Method Specific Inputs */}
-                    {selectedPaymentMethod === 'upi' && (
-                      <div className="method-fields-container">
-                        <label className="sub-input-label" htmlFor="upi-vpa-input">
-                          UPI ID / VPA
-                        </label>
-                        <input
-                          id="upi-vpa-input"
-                          type="text"
-                          className="sub-text-input"
-                          placeholder="e.g. yourname@oksbi or mobile@upi"
-                          value={upiIdInput}
-                          onChange={(e) => setUpiIdInput(e.target.value)}
-                        />
-                        <small className="sub-input-note">
-                          A payment request of ₹300 will be approved in your UPI app.
-                        </small>
-                      </div>
-                    )}
-
-                    {selectedPaymentMethod === 'card' && (
-                      <div className="method-fields-container">
-                        <label className="sub-input-label" htmlFor="card-number-input">
-                          Card Number
-                        </label>
-                        <input
-                          id="card-number-input"
-                          type="text"
-                          className="sub-text-input"
-                          placeholder="4123 4567 8901 2345"
-                          maxLength="19"
-                          value={cardDetails.number}
-                          onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
-                        />
-                        <div className="sub-two-col-inputs">
-                          <div>
-                            <label className="sub-input-label" htmlFor="card-exp-input">
-                              Expiry (MM/YY)
-                            </label>
-                            <input
-                              id="card-exp-input"
-                              type="text"
-                              className="sub-text-input"
-                              placeholder="08/28"
-                              maxLength="5"
-                              value={cardDetails.expiry}
-                              onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                            />
-                          </div>
-                          <div>
-                            <label className="sub-input-label" htmlFor="card-cvv-input">
-                              CVV
-                            </label>
-                            <input
-                              id="card-cvv-input"
-                              type="password"
-                              className="sub-text-input"
-                              placeholder="•••"
-                              maxLength="4"
-                              value={cardDetails.cvv}
-                              onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                            />
-                          </div>
+                    {/* Order Summary Box */}
+                    <div className="sub-order-summary-box">
+                      <div className="summary-plan-line">
+                        <div>
+                          <strong className="plan-name">{selectedPlan.name} ({selectedPlan.tierName})</strong>
+                          <p className="plan-desc">{selectedPlan.description}</p>
+                        </div>
+                        <div className="summary-price-badge">
+                          <span className="badge-amt">{selectedPlan.priceFormatted}</span>
+                          <span className="badge-cadence">{selectedPlan.price === 0 ? '' : '/ mo'}</span>
                         </div>
                       </div>
-                    )}
+                      <div className="summary-divider"></div>
+                      <div className="summary-total-row">
+                        <span>Total Due Today:</span>
+                        <span className="total-due">{selectedPlan.price === 0 ? '₹0 (Forever Free)' : `${selectedPlan.priceFormatted} (${selectedPlan.cadence})`}</span>
+                      </div>
+                    </div>
 
-                    {selectedPaymentMethod === 'netbanking' && (
-                      <div className="method-fields-container">
-                        <label className="sub-input-label">Select Your Bank</label>
-                        <select className="sub-text-input">
-                          <option>State Bank of India (SBI)</option>
-                          <option>HDFC Bank</option>
-                          <option>ICICI Bank</option>
-                          <option>Axis Bank</option>
-                          <option>Kotak Mahindra Bank</option>
-                          <option>Punjab National Bank</option>
-                          <option>Bank of Baroda</option>
-                        </select>
+                    {/* Free Plan Notice or Payment Methods */}
+                    {selectedPlan.price === 0 ? (
+                      <div className="free-plan-notice-box">
+                        <div className="free-plan-notice-icon">✓</div>
+                        <div className="free-plan-notice-text">
+                          <h4>No Payment Required for Free Plan</h4>
+                          <p>Enjoy public feed updates, 1-on-1 chats, and standard HD calls without any credit card or fees. You can upgrade to ₹300, ₹500, or ₹1000 anytime.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Payment Methods */
+                      <div className="payment-methods-selector">
+                        <label className="methods-heading">Select Payment Option</label>
+                        <div className="payment-options-list">
+                          <div
+                            className={`payment-option-card ${selectedPaymentMethod === 'upi' ? 'selected' : ''}`}
+                            onClick={() => setSelectedPaymentMethod('upi')}
+                          >
+                            <input
+                              type="radio"
+                              id="method-upi"
+                              name="payment-method"
+                              checked={selectedPaymentMethod === 'upi'}
+                              onChange={() => setSelectedPaymentMethod('upi')}
+                            />
+                            <label htmlFor="method-upi" className="option-label">
+                              <span className="option-title">UPI / QR (Google Pay, PhonePe, Paytm, BHIM)</span>
+                              <span className="option-subtitle">Instant payment using any UPI application</span>
+                            </label>
+                          </div>
+
+                          <div
+                            className={`payment-option-card ${selectedPaymentMethod === 'card' ? 'selected' : ''}`}
+                            onClick={() => setSelectedPaymentMethod('card')}
+                          >
+                            <input
+                              type="radio"
+                              id="method-card"
+                              name="payment-method"
+                              checked={selectedPaymentMethod === 'card'}
+                              onChange={() => setSelectedPaymentMethod('card')}
+                            />
+                            <label htmlFor="method-card" className="option-label">
+                              <span className="option-title">Debit / Credit Card</span>
+                              <span className="option-subtitle">Visa, MasterCard, RuPay, Maestro</span>
+                            </label>
+                          </div>
+
+                          <div
+                            className={`payment-option-card ${selectedPaymentMethod === 'netbanking' ? 'selected' : ''}`}
+                            onClick={() => setSelectedPaymentMethod('netbanking')}
+                          >
+                            <input
+                              type="radio"
+                              id="method-netbanking"
+                              name="payment-method"
+                              checked={selectedPaymentMethod === 'netbanking'}
+                              onChange={() => setSelectedPaymentMethod('netbanking')}
+                            />
+                            <label htmlFor="method-netbanking" className="option-label">
+                              <span className="option-title">Net Banking</span>
+                              <span className="option-subtitle">All major Indian banks supported</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Method Specific Inputs */}
+                        {selectedPaymentMethod === 'upi' && (
+                          <div className="method-fields-container">
+                            <label className="sub-input-label" htmlFor="upi-vpa-input">
+                              UPI ID / VPA
+                            </label>
+                            <input
+                              id="upi-vpa-input"
+                              type="text"
+                              className="sub-text-input"
+                              placeholder="e.g. yourname@oksbi or mobile@upi"
+                              value={upiIdInput}
+                              onChange={(e) => setUpiIdInput(e.target.value)}
+                            />
+                            <small className="sub-input-note">
+                              A payment request of {selectedPlan.priceFormatted} will be approved in your UPI app.
+                            </small>
+                          </div>
+                        )}
+
+                        {selectedPaymentMethod === 'card' && (
+                          <div className="method-fields-container">
+                            <label className="sub-input-label" htmlFor="card-number-input">
+                              Card Number
+                            </label>
+                            <input
+                              id="card-number-input"
+                              type="text"
+                              className="sub-text-input"
+                              placeholder="4123 4567 8901 2345"
+                              maxLength="19"
+                              value={cardDetails.number}
+                              onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
+                            />
+                            <div className="sub-two-col-inputs">
+                              <div>
+                                <label className="sub-input-label" htmlFor="card-exp-input">
+                                  Expiry (MM/YY)
+                                </label>
+                                <input
+                                  id="card-exp-input"
+                                  type="text"
+                                  className="sub-text-input"
+                                  placeholder="08/28"
+                                  maxLength="5"
+                                  value={cardDetails.expiry}
+                                  onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <label className="sub-input-label" htmlFor="card-cvv-input">
+                                  CVV
+                                </label>
+                                <input
+                                  id="card-cvv-input"
+                                  type="password"
+                                  className="sub-text-input"
+                                  placeholder="•••"
+                                  maxLength="4"
+                                  value={cardDetails.cvv}
+                                  onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedPaymentMethod === 'netbanking' && (
+                          <div className="method-fields-container">
+                            <label className="sub-input-label">Select Your Bank</label>
+                            <select className="sub-text-input">
+                              <option>State Bank of India (SBI)</option>
+                              <option>HDFC Bank</option>
+                              <option>ICICI Bank</option>
+                              <option>Axis Bank</option>
+                              <option>Kotak Mahindra Bank</option>
+                              <option>Punjab National Bank</option>
+                              <option>Bank of Baroda</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
 
-                <div className="subscription-modal-footer">
-                  <button
-                    type="button"
-                    className="sub-cancel-action-btn"
-                    onClick={handleCloseSubscriptionModal}
-                    disabled={isProcessingPayment}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-confirm-pay-btn"
-                    id="sub-confirm-pay-btn"
-                    onClick={handleProcessSubscription}
-                    disabled={isProcessingPayment}
-                  >
-                    {isProcessingPayment ? (
-                      <span className="pay-spinner-wrap">
-                        <span className="spinner-dot"></span>
-                        Processing ₹300 Payment...
-                      </span>
-                    ) : (
-                      <span>Confirm &amp; Subscribe (₹300/mo)</span>
-                    )}
-                  </button>
+                  <div className="subscription-modal-footer">
+                    <button
+                      type="button"
+                      className="sub-cancel-action-btn"
+                      onClick={handleCloseSubscriptionModal}
+                      disabled={isProcessingPayment}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="sub-confirm-pay-btn"
+                      id="sub-confirm-pay-btn"
+                      onClick={handleProcessSubscription}
+                      disabled={isProcessingPayment}
+                    >
+                      {isProcessingPayment ? (
+                        <span className="pay-spinner-wrap">
+                          <span className="spinner-dot"></span>
+                          Processing {selectedPlan.priceFormatted} Payment...
+                        </span>
+                      ) : selectedPlan.price === 0 ? (
+                        <span>{currentPlanId === 'free' ? 'Keep Free Plan' : 'Switch to Free Plan'}</span>
+                      ) : (
+                        <span>Confirm &amp; Subscribe ({selectedPlan.priceFormatted}/mo)</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Share Post Modal */}
           {isShareModalOpen && sharingPost && (
