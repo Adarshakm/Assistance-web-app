@@ -499,12 +499,13 @@ export const SUBSCRIPTION_PLANS = [
     popular: false,
     color: '#71717a',
     accentClass: 'plan-free',
-    description: 'Essential social network access (1 group limit, 2 video posts/day).',
-    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '2 Video Posts / Day', '1 Group Limit', '5 GB Cloud Storage'],
+    description: 'Essential social network access (1 group, 2 videos/day, 5 images/day).',
+    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '5 Images / Day', '2 Videos / Day', '1 Group Limit'],
     features: [
       'Full access to What\'s Happening public feed',
       'Direct chat and messaging with contacts',
-      'Publish posts, text status & basic photo updates',
+      'Publish posts, text status & basic updates',
+      'Post up to 5 images per day (Upgrade for unlimited)',
       'Post up to 2 videos per day (Upgrade for unlimited)',
       'Create 1 Group only (Upgrade to create more groups)',
       '1-on-1 voice & 720p video calls',
@@ -526,9 +527,10 @@ export const SUBSCRIPTION_PLANS = [
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
-    highlights: ['Blue Verified Badge', 'Unlimited Video Posts', 'Unlimited Groups', '100% Ad-Free Experience', '50 GB Cloud Storage'],
+    highlights: ['Blue Verified Badge', 'Unlimited Image Posts', 'Unlimited Video Posts', 'Unlimited Groups', '50 GB Storage'],
     features: [
       'Everything in Free Plan, plus:',
+      'Unlimited daily image and photo posts',
       'Unlimited daily video posts (Up to 5 min duration)',
       'Create and manage unlimited groups',
       'Blue Verified Checkmark Badge across profile & feed',
@@ -552,9 +554,10 @@ export const SUBSCRIPTION_PLANS = [
     color: '#a855f7',
     accentClass: 'plan-500',
     description: 'High-power tools, group calls, and reach insights for active creators.',
-    highlights: ['Gold Checkmark Badge', 'Unlimited Video Posts (30 min)', 'Unlimited Groups & 50-Person Calls', '4K Calling & Screen Share'],
+    highlights: ['Gold Checkmark Badge', 'Unlimited High-Res Images', 'Unlimited Video Posts (30 min)', '4K Calling & Screen Share'],
     features: [
       'Everything in ₹300 Plan, plus:',
+      'Unlimited high-resolution image posts',
       'Unlimited daily video posts up to 30 min duration',
       'Create unlimited groups & communities',
       'Gold Checkmark Badge & Pro Creator status',
@@ -3112,6 +3115,15 @@ function App() {
   };
 
   const handlePostImageSelect = async (e) => {
+    if (currentPlanId === 'free' && getDailyImagePostCount() >= 5) {
+      if (e.target) e.target.value = '';
+      setShowImageLimitUpgradeModal(true);
+      setPostFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 5 images per day. Please upgrade your subscription plan to post more images.',
+      });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
@@ -3255,6 +3267,15 @@ function App() {
       return;
     }
 
+    if (postImage && currentPlanId === 'free' && getDailyImagePostCount() >= 5) {
+      setShowImageLimitUpgradeModal(true);
+      setPostFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 5 images per day. Please upgrade your subscription plan to post more images.',
+      });
+      return;
+    }
+
     setIsSubmittingPost(true);
     setPostFeedback(null);
 
@@ -3290,6 +3311,8 @@ function App() {
     setPosts((prev) => [optimisticPost, ...prev]);
     if (postVideo) {
       recordDailyVideoPost();
+    } else if (postImage) {
+      recordDailyImagePost();
     }
     setPostContent('');
     setPostImage(null);
@@ -3774,6 +3797,15 @@ function App() {
   };
 
   const handleImageUpload = async (e) => {
+    if (currentPlanId === 'free' && getDailyImagePostCount() >= 5) {
+      if (e.target) e.target.value = '';
+      setShowImageLimitUpgradeModal(true);
+      setPhotoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 5 images per day. Please upgrade your subscription plan to post more images.',
+      });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -3802,6 +3834,14 @@ function App() {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (currentPlanId === 'free' && getDailyImagePostCount() >= 5) {
+      setShowImageLimitUpgradeModal(true);
+      setPhotoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 5 images per day. Please upgrade your subscription plan to post more images.',
+      });
+      return;
     }
     if (!uploadedImage) {
       setPhotoShareFeedback({ type: 'error', text: 'Please select or upload an image to share.' });
@@ -3840,6 +3880,7 @@ function App() {
 
     // Prepend to posts list instantly (0ms UI latency)
     setPosts((prev) => [optimisticPost, ...prev]);
+    recordDailyImagePost();
 
     const imagePayload = uploadedImage;
     const captionPayload = captionTrimmed;
@@ -5065,6 +5106,7 @@ function App() {
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showVideoLimitUpgradeModal, setShowVideoLimitUpgradeModal] = useState(false);
+  const [showImageLimitUpgradeModal, setShowImageLimitUpgradeModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
   const [upiIdInput, setUpiIdInput] = useState('');
   const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
@@ -5099,6 +5141,39 @@ function App() {
       const today = new Date().toISOString().slice(0, 10);
       const current = getDailyVideoPostCount();
       localStorage.setItem('planet_daily_video_posts', JSON.stringify({
+        date: today,
+        count: current + 1,
+      }));
+    } catch { }
+  };
+
+  // Daily Image Posts Tracking (Free plan limit: 5 image posts per day)
+  const getDailyImagePostCount = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem('planet_daily_image_posts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.date === today) {
+          return Number(parsed.count) || 0;
+        }
+      }
+    } catch { }
+    const todayPrefix = new Date().toISOString().slice(0, 10);
+    const countFromPosts = (posts || []).filter((p) => {
+      const isAuthor = !loggedInUser || p.author === loggedInUser || p.authorName === loggedInUser;
+      const isToday = p.createdAt && String(p.createdAt).startsWith(todayPrefix);
+      const isImage = (p.mediaType === 'image' || (p.image && String(p.image).length > 0)) && p.mediaType !== 'video';
+      return isAuthor && isToday && isImage;
+    }).length;
+    return countFromPosts;
+  };
+
+  const recordDailyImagePost = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const current = getDailyImagePostCount();
+      localStorage.setItem('planet_daily_image_posts', JSON.stringify({
         date: today,
         count: current + 1,
       }));
@@ -16607,9 +16682,15 @@ function App() {
                           <button
                             type="button"
                             className="create-post-attach-btn"
-                            onClick={() => postImageInputRef.current?.click()}
+                            onClick={() => {
+                              if (currentPlanId === 'free' && getDailyImagePostCount() >= 5) {
+                                setShowImageLimitUpgradeModal(true);
+                                return;
+                              }
+                              postImageInputRef.current?.click();
+                            }}
                             disabled={isSubmittingPost || isUploadingPostImage || isUploadingPostVideo}
-                            title="Add an image to your post"
+                            title={currentPlanId === 'free' && getDailyImagePostCount() >= 5 ? 'Free plan daily image limit reached (5/5). Upgrade for unlimited.' : 'Add an image to your post'}
                           >
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -16618,6 +16699,15 @@ function App() {
                             </svg>
                             <span>{isUploadingPostImage ? 'Processing...' : postImage ? 'Change Image' : 'Image'}</span>
                           </button>
+                          {currentPlanId === 'free' && (
+                            <span
+                              className={`video-daily-quota-pill image-daily-quota-pill ${getDailyImagePostCount() >= 5 ? 'exhausted' : ''}`}
+                              title={getDailyImagePostCount() >= 5 ? 'Daily image limit reached (5/5). Upgrade to post more.' : `${getDailyImagePostCount()}/5 daily images used on Free plan.`}
+                              onClick={getDailyImagePostCount() >= 5 ? () => setShowImageLimitUpgradeModal(true) : undefined}
+                            >
+                              📷 {getDailyImagePostCount()}/5 images today
+                            </span>
+                          )}
 
                           <button
                             type="button"
@@ -24945,6 +25035,98 @@ function App() {
                     type="button"
                     className="group-limit-cancel-btn"
                     onClick={() => setShowVideoLimitUpgradeModal(false)}
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Free Plan Image Post Limit Upgrade Modal */}
+          {showImageLimitUpgradeModal && (
+            <div
+              className="group-modal-backdrop group-limit-modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowImageLimitUpgradeModal(false);
+                }
+              }}
+            >
+              <div className="group-modal-dialog group-limit-dialog" role="dialog" aria-modal="true" aria-labelledby="image-limit-title">
+                <button
+                  type="button"
+                  className="group-limit-close-btn"
+                  onClick={() => setShowImageLimitUpgradeModal(false)}
+                  aria-label="Close modal"
+                >
+                  &times;
+                </button>
+
+                <div className="group-limit-icon-wrap">
+                  <div className="group-limit-icon-circle image-limit-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </div>
+                  <span className="group-limit-badge image-badge">DAILY POST LIMIT REACHED</span>
+                </div>
+
+                <div className="group-limit-header">
+                  <h2 className="group-limit-title" id="image-limit-title">
+                    Free Plan Image Limit
+                  </h2>
+                  <p className="group-limit-sub">
+                    In the <strong>Free plan</strong>, you can only post <strong>5 images per day</strong> ({getDailyImagePostCount()}/5 used today). To post more images, please upgrade your subscription plan.
+                  </p>
+                </div>
+
+                <div className="group-limit-info-box">
+                  <p className="group-limit-note">
+                    Upgrade to enjoy unlimited image posts, high-res uploads, and cloud vault storage:
+                  </p>
+
+                  <div className="group-limit-tiers-preview">
+                    <div className="limit-tier-pill">
+                      <span className="tier-pill-name">Free Plan</span>
+                      <span className="tier-pill-val">5 Images / Day</span>
+                    </div>
+                    <div className="limit-tier-pill highlight">
+                      <span className="tier-pill-name">Standard ₹300</span>
+                      <span className="tier-pill-val">Unlimited Images</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-purple">
+                      <span className="tier-pill-name">Pro Creator ₹500</span>
+                      <span className="tier-pill-val">Unlimited + High-Res</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-gold">
+                      <span className="tier-pill-name">VIP Elite ₹1000</span>
+                      <span className="tier-pill-val">Unlimited + 1 TB Vault</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="group-limit-actions">
+                  <button
+                    type="button"
+                    className="group-limit-upgrade-btn"
+                    id="image-limit-upgrade-btn"
+                    onClick={() => {
+                      setShowImageLimitUpgradeModal(false);
+                      handleOpenSubscriptionModal('300');
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>Upgrade Subscription Plan</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="group-limit-cancel-btn"
+                    onClick={() => setShowImageLimitUpgradeModal(false)}
                   >
                     Maybe Later
                   </button>

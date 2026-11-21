@@ -26067,3 +26067,24 @@ body.light-theme .social-modal-footer {
   background: rgba(239, 68, 68, 0.1) !important;
   border-color: rgba(239, 68, 68, 0.25) !important;
 }
+
+
+/* ==========================================================================
+   Free Plan Daily Image Post Limit Styles
+   ========================================================================== */
+
+.image-daily-quota-pill {
+  margin-left: 4px;
+}
+
+.image-limit-icon {
+  background: rgba(56, 189, 248, 0.12) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  color: #38bdf8 !important;
+}
+
+.image-badge {
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.1) !important;
+  border-color: rgba(56, 189, 248, 0.25) !important;
+}
