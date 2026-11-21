@@ -499,13 +499,14 @@ export const SUBSCRIPTION_PLANS = [
     popular: false,
     color: '#71717a',
     accentClass: 'plan-free',
-    description: 'Essential social network access for everyday personal use.',
-    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '5 GB Cloud Storage', '720p HD Calling'],
+    description: 'Essential social network access for personal use with a 1 group limit.',
+    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '1 Group Limit', '5 GB Cloud Storage'],
     features: [
       'Full access to What\'s Happening public feed',
       'Direct chat and messaging with contacts',
       'Publish posts, text status & basic photo updates',
       '1-on-1 voice & 720p video calls',
+      'Create 1 Group only (Upgrade to create more groups)',
       'Follow friends and discover public creators',
       '5 GB standard media cloud storage',
       'Standard community support',
@@ -524,9 +525,10 @@ export const SUBSCRIPTION_PLANS = [
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
-    highlights: ['Blue Verified Badge', '100% Ad-Free Experience', 'Unlimited 1080p Calling', '50 GB Cloud Storage'],
+    highlights: ['Blue Verified Badge', 'Unlimited Groups', '100% Ad-Free Experience', '50 GB Cloud Storage'],
     features: [
       'Everything in Free Plan, plus:',
+      'Create and manage unlimited groups',
       'Blue Verified Checkmark Badge across profile & feed',
       '100% Ad-Free browsing across all feeds & tabs',
       'Unlimited HD voice & 1080p video calls',
@@ -549,9 +551,10 @@ export const SUBSCRIPTION_PLANS = [
     color: '#a855f7',
     accentClass: 'plan-500',
     description: 'High-power tools, group calls, and reach insights for active creators.',
-    highlights: ['Gold Checkmark Badge', '4K Calling & Screen Share', '50-Person Group Calls', '250 GB Cloud Storage'],
+    highlights: ['Gold Checkmark Badge', 'Unlimited Groups & 50-Person Calls', '4K Calling & Screen Share', '250 GB Storage'],
     features: [
       'Everything in ₹300 Plan, plus:',
+      'Create unlimited groups & communities',
       'Gold Checkmark Badge & Pro Creator status',
       'Unlimited 4K Ultra HD Video Calling & Screen Sharing',
       'Group video calls up to 50 participants',
@@ -575,9 +578,10 @@ export const SUBSCRIPTION_PLANS = [
     color: '#eab308',
     accentClass: 'plan-1000',
     description: 'The ultimate tier for businesses, VIPs, and high-impact leaders.',
-    highlights: ['Diamond VIP Badge', '1 TB Cloud Storage', '250-Person Group Calls', 'Algorithm Boost'],
+    highlights: ['Diamond VIP Badge', 'Unlimited Groups & 250-Person Calls', '1 TB Cloud Storage', 'Algorithm Boost'],
     features: [
       'Everything in ₹500 Plan, plus:',
+      'Create unlimited groups, channels & spaces',
       'Diamond VIP Badge & Official Verified Business Seal',
       '1 TB (1,000 GB) Dedicated high-speed cloud vault',
       'Group calls & webinars up to 250 participants',
@@ -4867,6 +4871,7 @@ function App() {
     }
   });
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showGroupLimitUpgradeModal, setShowGroupLimitUpgradeModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [newGroupSelectedMembers, setNewGroupSelectedMembers] = useState([]);
@@ -6880,8 +6885,22 @@ function App() {
     });
   };
 
+  const handleOpenCreateGroup = () => {
+    if (currentPlanId === 'free' && userGroups.length >= 1) {
+      setShowGroupLimitUpgradeModal(true);
+      return;
+    }
+    setCreateGroupError('');
+    setShowCreateGroupModal(true);
+  };
+
   const handleCreateGroup = (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (currentPlanId === 'free' && userGroups.length >= 1) {
+      setCreateGroupError('In the Free plan, you can only create one Group. Please upgrade your subscription plan to create more groups.');
+      setShowGroupLimitUpgradeModal(true);
+      return;
+    }
     const trimmedName = String(newGroupName || '').trim();
     if (!trimmedName) {
       setCreateGroupError('Please enter a group name');
@@ -11273,6 +11292,11 @@ function App() {
                         </h1>
                         <p className="groups-subheading">
                           Create and manage your groups
+                          {currentPlanId === 'free' && (
+                            <span className="groups-plan-limit-pill">
+                              (Free Plan: {userGroups.length}/1 group • <button type="button" className="groups-upgrade-link-btn" onClick={() => handleOpenSubscriptionModal('300')}>Upgrade to create more</button>)
+                            </span>
+                          )}
                         </p>
                       </div>
 
@@ -11281,11 +11305,8 @@ function App() {
                           type="button"
                           className="create-group-btn"
                           id="create-group-btn"
-                          onClick={() => {
-                            setCreateGroupError('');
-                            setShowCreateGroupModal(true);
-                          }}
-                          title="Create a new group"
+                          onClick={handleOpenCreateGroup}
+                          title={currentPlanId === 'free' && userGroups.length >= 1 ? 'Upgrade subscription to create more groups' : 'Create a new group'}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -11315,10 +11336,7 @@ function App() {
                           type="button"
                           className="create-group-hero-btn"
                           id="create-group-hero-btn"
-                          onClick={() => {
-                            setCreateGroupError('');
-                            setShowCreateGroupModal(true);
-                          }}
+                          onClick={handleOpenCreateGroup}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -11439,6 +11457,22 @@ function App() {
                           </div>
 
                           <form onSubmit={handleCreateGroup} className="group-modal-form">
+                            {currentPlanId === 'free' && userGroups.length >= 1 && (
+                              <div className="group-modal-limit-warning" role="alert">
+                                <span className="warning-text">⚠️ On the Free plan, you can only create 1 group. Please upgrade your subscription plan to create more groups.</span>
+                                <button
+                                  type="button"
+                                  className="group-warning-upgrade-link"
+                                  onClick={() => {
+                                    setShowCreateGroupModal(false);
+                                    handleOpenSubscriptionModal('300');
+                                  }}
+                                >
+                                  Upgrade Plan
+                                </button>
+                              </div>
+                            )}
+
                             {createGroupError && (
                               <div className="group-modal-error" role="alert">
                                 {createGroupError}
@@ -11614,6 +11648,96 @@ function App() {
                               </button>
                             </div>
                           </form>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Free Plan Group Limit Upgrade Modal */}
+                    {showGroupLimitUpgradeModal && (
+                      <div
+                        className="group-modal-backdrop group-limit-modal-backdrop"
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            setShowGroupLimitUpgradeModal(false);
+                          }
+                        }}
+                      >
+                        <div className="group-modal-dialog group-limit-dialog" role="dialog" aria-modal="true" aria-labelledby="group-limit-title">
+                          <button
+                            type="button"
+                            className="group-limit-close-btn"
+                            onClick={() => setShowGroupLimitUpgradeModal(false)}
+                            aria-label="Close modal"
+                          >
+                            &times;
+                          </button>
+
+                          <div className="group-limit-icon-wrap">
+                            <div className="group-limit-icon-circle">
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                              </svg>
+                            </div>
+                            <span className="group-limit-badge">PLAN LIMIT REACHED</span>
+                          </div>
+
+                          <div className="group-limit-header">
+                            <h2 className="group-limit-title" id="group-limit-title">
+                              Free Plan Group Limit
+                            </h2>
+                            <p className="group-limit-sub">
+                              In the <strong>Free plan</strong>, only <strong>one Group</strong> can be created ({userGroups.length}/1 group used). To create more groups, please upgrade your subscription plan.
+                            </p>
+                          </div>
+
+                          <div className="group-limit-info-box">
+                            <p className="group-limit-note">
+                              Upgrade to any of our premium membership tiers to unlock unlimited groups:
+                            </p>
+
+                            <div className="group-limit-tiers-preview">
+                              <div className="limit-tier-pill">
+                                <span className="tier-pill-name">Free Plan</span>
+                                <span className="tier-pill-val">1 Group Only</span>
+                              </div>
+                              <div className="limit-tier-pill highlight">
+                                <span className="tier-pill-name">Standard ₹300</span>
+                                <span className="tier-pill-val">Unlimited Groups</span>
+                              </div>
+                              <div className="limit-tier-pill highlight-purple">
+                                <span className="tier-pill-name">Pro Creator ₹500</span>
+                                <span className="tier-pill-val">Unlimited + 50 Calls</span>
+                              </div>
+                              <div className="limit-tier-pill highlight-gold">
+                                <span className="tier-pill-name">VIP Elite ₹1000</span>
+                                <span className="tier-pill-val">Unlimited + 1 TB Vault</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="group-limit-actions">
+                            <button
+                              type="button"
+                              className="group-limit-upgrade-btn"
+                              id="group-limit-upgrade-btn"
+                              onClick={() => {
+                                setShowGroupLimitUpgradeModal(false);
+                                handleOpenSubscriptionModal('300');
+                              }}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                              </svg>
+                              <span>Upgrade Subscription Plan</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="group-limit-cancel-btn"
+                              onClick={() => setShowGroupLimitUpgradeModal(false)}
+                            >
+                              Maybe Later
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
