@@ -3642,20 +3642,6 @@ function App() {
     }
   };
 
-  const filteredShareContacts = useMemo(() => {
-    const query = String(shareContactSearch || '').trim().toLowerCase();
-    const list = effectiveRegisteredList && effectiveRegisteredList.length > 0
-      ? effectiveRegisteredList
-      : phoneContacts;
-    if (!query) return (list || []).slice(0, 15);
-    return (list || []).filter((c) => {
-      const name = String(c.phoneBookName || c.displayName || c.name || c.username || '').toLowerCase();
-      const phone = String(c.phone || '').toLowerCase();
-      const user = String(c.username || '').toLowerCase();
-      return name.includes(query) || phone.includes(query) || user.includes(query);
-    }).slice(0, 20);
-  }, [shareContactSearch, effectiveRegisteredList, phoneContacts]);
-
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -6857,6 +6843,20 @@ function App() {
       return name.includes(query) || phone.includes(query) || username.includes(query);
     });
   }, [createGroupSearchQuery, effectiveRegisteredList, phoneContacts]);
+
+  const filteredShareContacts = useMemo(() => {
+    const query = String(shareContactSearch || '').trim().toLowerCase();
+    const list = effectiveRegisteredList && effectiveRegisteredList.length > 0
+      ? effectiveRegisteredList
+      : phoneContacts;
+    if (!query) return (list || []).slice(0, 15);
+    return (list || []).filter((c) => {
+      const name = String(c.phoneBookName || c.displayName || c.name || c.username || '').toLowerCase();
+      const phone = String(c.phone || '').toLowerCase();
+      const user = String(c.username || '').toLowerCase();
+      return name.includes(query) || phone.includes(query) || user.includes(query);
+    }).slice(0, 20);
+  }, [shareContactSearch, effectiveRegisteredList, phoneContacts]);
 
   const filteredStatusContacts = useMemo(() => {
     const query = String(contactsSearchQuery || '').trim().toLowerCase();
