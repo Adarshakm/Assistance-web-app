@@ -1470,6 +1470,21 @@ function App() {
   const [isSavingPostEdit, setIsSavingPostEdit] = useState(false);
   const [editPostFeedback, setEditPostFeedback] = useState(null);
   const [selectedPostImageModal, setSelectedPostImageModal] = useState(null);
+
+  // Share Post Feature State
+  const [sharingPost, setSharingPost] = useState(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareContactSearch, setShareContactSearch] = useState('');
+  const [sharedContactsMap, setSharedContactsMap] = useState({});
+  const [postSharesCountMap, setPostSharesCountMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_post_shares_count');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [posts, setPosts] = useState(() => {
     try {
       const saved = localStorage.getItem('assistance_posts');
@@ -3514,6 +3529,132 @@ function App() {
       setIsSavingPostEdit(false);
     }
   };
+
+  // --- Share Post Feature Handlers ---
+  const handleOpenSharePostModal = (post) => {
+    if (!post) return;
+    setSharingPost(post);
+    setShareCopied(false);
+    setShareContactSearch('');
+    setIsShareModalOpen(true);
+  };
+
+  const getPostShareUrl = (post) => {
+    if (!post) return typeof window !== 'undefined' ? window.location.origin : 'https://webmind.cloud';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://webmind.cloud';
+    return `${origin}/#post-${post.id}`;
+  };
+
+  const recordPostShare = (postId) => {
+    if (!postId) return;
+    setPostSharesCountMap((prev) => {
+      const current = prev[postId] || 0;
+      const updated = { ...prev, [postId]: current + 1 };
+      try {
+        localStorage.setItem('planet_post_shares_count', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+  };
+
+  const handleCopyPostLink = async (post) => {
+    if (!post) return;
+    const url = getPostShareUrl(post);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setShareCopied(true);
+      recordPostShare(post.id);
+      setTimeout(() => setShareCopied(false), 2500);
+    } catch { }
+  };
+
+  const handleShareToWhatsApp = (post) => {
+    if (!post) return;
+    const url = getPostShareUrl(post);
+    const authorName = post.authorName || post.author || 'someone';
+    const textSnippet = post.content ? ` "${post.content.slice(0, 100)}${post.content.length > 100 ? '...' : ''}"` : '';
+    const msg = encodeURIComponent(`Check out this post by @${authorName} on Planet:${textSnippet}\n${url}`);
+    recordPostShare(post.id);
+    window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+  };
+
+  const handleNativeSharePost = async (post) => {
+    if (!post) return;
+    const url = getPostShareUrl(post);
+    const authorName = post.authorName || post.author || 'someone';
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Post by @${authorName} on Planet`,
+          text: post.content ? post.content.slice(0, 140) : `Check out this post on Planet`,
+          url: url,
+        });
+        recordPostShare(post.id);
+      } catch { }
+    } else {
+      handleCopyPostLink(post);
+    }
+  };
+
+  const handleSendPostToContact = async (contact, post) => {
+    const contactKey = contact?.username || contact?.phone || contact?.id;
+    if (!contactKey || !post) return;
+    const url = getPostShareUrl(post);
+    const authorName = post.authorName || post.author || 'user';
+    const postSnippet = post.content ? `"${post.content.slice(0, 80)}${post.content.length > 80 ? '...' : ''}"` : 'Post attachment';
+    const messageText = `Shared post from @${authorName}:\n${postSnippet}\n${url}`;
+
+    const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim();
+    const currentUserName = (myProfileData?.displayName || currentUser || 'User').trim();
+    const recipientName = contact.phoneBookName || contact.displayName || contact.name || contact.username || 'Contact';
+
+    try {
+      await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: currentUser || 'guest',
+          senderName: currentUserName,
+          recipient: contactKey,
+          recipientName: recipientName,
+          text: messageText,
+          mediaType: 'text',
+          mediaUrl: '',
+          fileName: '',
+          fileSize: '',
+        }),
+      });
+
+      setSharedContactsMap((prev) => ({ ...prev, [`${post.id}_${contactKey}`]: true }));
+      recordPostShare(post.id);
+    } catch {
+      setSharedContactsMap((prev) => ({ ...prev, [`${post.id}_${contactKey}`]: true }));
+      recordPostShare(post.id);
+    }
+  };
+
+  const filteredShareContacts = useMemo(() => {
+    const query = String(shareContactSearch || '').trim().toLowerCase();
+    const list = effectiveRegisteredList && effectiveRegisteredList.length > 0
+      ? effectiveRegisteredList
+      : phoneContacts;
+    if (!query) return (list || []).slice(0, 15);
+    return (list || []).filter((c) => {
+      const name = String(c.phoneBookName || c.displayName || c.name || c.username || '').toLowerCase();
+      const phone = String(c.phone || '').toLowerCase();
+      const user = String(c.username || '').toLowerCase();
+      return name.includes(query) || phone.includes(query) || user.includes(query);
+    }).slice(0, 20);
+  }, [shareContactSearch, effectiveRegisteredList, phoneContacts]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -11822,6 +11963,22 @@ function App() {
 
                                     <button
                                       type="button"
+                                      className="post-action-btn share-btn"
+                                      onClick={() => handleOpenSharePostModal(post)}
+                                      title="Share post"
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                      </svg>
+                                      <span>{postSharesCountMap[post.id] ? postSharesCountMap[post.id] : 'Share'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
                                       className="post-action-btn delete-btn"
                                       onClick={() => handleDeletePost(post.id)}
                                       title="Delete post"
@@ -14347,6 +14504,22 @@ function App() {
                                       <span>{(post.comments || []).length > 0 ? (post.comments || []).length : 'Comment'}</span>
                                     </button>
 
+                                    <button
+                                      type="button"
+                                      className="post-action-btn share-btn"
+                                      onClick={() => handleOpenSharePostModal(post)}
+                                      title="Share post"
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                      </svg>
+                                      <span>{postSharesCountMap[post.id] ? postSharesCountMap[post.id] : 'Share'}</span>
+                                    </button>
+
                                     {isPostOwner && (
                                       <button
                                         type="button"
@@ -15264,6 +15437,22 @@ function App() {
                                       <span>
                                         {post.commentsCount ?? (post.comments || []).length}
                                       </span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="post-action-btn share-btn"
+                                      onClick={() => handleOpenSharePostModal(post)}
+                                      title="Share post"
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                      </svg>
+                                      <span>{postSharesCountMap[post.id] ? postSharesCountMap[post.id] : 'Share'}</span>
                                     </button>
 
                                     {isPostOwner && (
@@ -16455,6 +16644,22 @@ function App() {
                                       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
                                     </svg>
                                     <span>{(post.comments || []).length > 0 ? (post.comments || []).length : 'Comment'}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="post-action-btn share-btn"
+                                    onClick={() => handleOpenSharePostModal(post)}
+                                    title="Share post"
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="18" cy="5" r="3"></circle>
+                                      <circle cx="6" cy="12" r="3"></circle>
+                                      <circle cx="18" cy="19" r="3"></circle>
+                                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                    </svg>
+                                    <span>{postSharesCountMap[post.id] ? postSharesCountMap[post.id] : 'Share'}</span>
                                   </button>
 
                                   {post.author && loggedInUser && String(post.author).toLowerCase() === String(loggedInUser).toLowerCase() && (
@@ -24517,6 +24722,159 @@ function App() {
                       <span>Confirm &amp; Subscribe (₹300/mo)</span>
                     )}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Share Post Modal */}
+          {isShareModalOpen && sharingPost && (
+            <div
+              className="share-post-modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setIsShareModalOpen(false);
+                  setSharingPost(null);
+                }
+              }}
+            >
+              <div className="share-post-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="share-post-modal-title">
+                <div className="share-post-modal-header">
+                  <h2 className="share-post-modal-title" id="share-post-modal-title">
+                    Share Post
+                  </h2>
+                  <button
+                    type="button"
+                    className="share-post-close-btn"
+                    onClick={() => {
+                      setIsShareModalOpen(false);
+                      setSharingPost(null);
+                    }}
+                    aria-label="Close share modal"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <div className="share-post-modal-body">
+                  {/* Preview of Post Being Shared */}
+                  <div className="share-post-preview-card">
+                    <div className="share-post-preview-author">
+                      <div className="share-post-preview-avatar">
+                        {sharingPost.authorAvatar ? (
+                          <img src={sharingPost.authorAvatar} alt="" />
+                        ) : (
+                          <span>{(sharingPost.authorName || sharingPost.author || 'U').slice(0, 1).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="share-post-preview-name">
+                        {sharingPost.authorName || sharingPost.author || 'User'}
+                      </span>
+                    </div>
+                    {sharingPost.content && (
+                      <p className="share-post-preview-text">{sharingPost.content}</p>
+                    )}
+                  </div>
+
+                  {/* Quick Channels */}
+                  <div className="share-post-quick-channels">
+                    <button
+                      type="button"
+                      className={`share-channel-btn ${shareCopied ? 'copied' : ''}`}
+                      onClick={() => handleCopyPostLink(sharingPost)}
+                    >
+                      {shareCopied ? (
+                        <>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                          <span>Copy Link</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="share-channel-btn"
+                      onClick={() => handleShareToWhatsApp(sharingPost)}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z" />
+                      </svg>
+                      <span>WhatsApp</span>
+                    </button>
+
+                    {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                      <button
+                        type="button"
+                        className="share-channel-btn"
+                        style={{ gridColumn: 'span 2' }}
+                        onClick={() => handleNativeSharePost(sharingPost)}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                          <polyline points="16 6 12 2 8 6"></polyline>
+                          <line x1="12" y1="2" x2="12" y2="15"></line>
+                        </svg>
+                        <span>More Share Options...</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Share to Planet Contacts in Chat */}
+                  {filteredShareContacts.length > 0 && (
+                    <div className="share-post-contacts-section">
+                      <div className="share-contacts-header">
+                        <h4 className="share-contacts-title">Send to Contact in Chat</h4>
+                      </div>
+                      <input
+                        type="text"
+                        className="share-contacts-search-input"
+                        placeholder="Search contact to send..."
+                        value={shareContactSearch}
+                        onChange={(e) => setShareContactSearch(e.target.value)}
+                      />
+                      <div className="share-contacts-list">
+                        {filteredShareContacts.map((contact, idx) => {
+                          const contactKey = contact.username || contact.phone || contact.id || `contact-${idx}`;
+                          const isSent = Boolean(sharedContactsMap[`${sharingPost.id}_${contactKey}`]);
+                          const displayName = contact.phoneBookName || contact.displayName || contact.name || contact.username || 'Contact';
+                          const initial = displayName.slice(0, 1).toUpperCase();
+
+                          return (
+                            <div key={contactKey} className="share-contact-row">
+                              <div className="share-contact-info">
+                                <div className="share-contact-avatar">
+                                  {contact.avatar ? (
+                                    <img src={contact.avatar} alt="" />
+                                  ) : (
+                                    <span>{initial}</span>
+                                  )}
+                                </div>
+                                <span className="share-contact-name">{displayName}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className={`share-contact-send-btn ${isSent ? 'sent' : ''}`}
+                                disabled={isSent}
+                                onClick={() => handleSendPostToContact(contact, sharingPost)}
+                              >
+                                {isSent ? 'Sent ✓' : 'Send'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
