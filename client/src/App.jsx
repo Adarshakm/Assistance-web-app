@@ -4625,6 +4625,24 @@ function App() {
   const [newContactAvatar, setNewContactAvatar] = useState('');
   const contactAvatarInputRef = useRef(null);
 
+  // Groups on Planet
+  const [userGroups, setUserGroups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_user_groups');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [newGroupSelectedMembers, setNewGroupSelectedMembers] = useState([]);
+  const [newGroupAvatar, setNewGroupAvatar] = useState('');
+  const [createGroupSearchQuery, setCreateGroupSearchQuery] = useState('');
+  const [createGroupError, setCreateGroupError] = useState('');
+  const groupAvatarInputRef = useRef(null);
+
   // --- Contact Status Features: Text Status, Image Status, Video Status ---
   const [contactStatusesList, setContactStatusesList] = useState(() => {
     try {
@@ -6588,6 +6606,116 @@ function App() {
     const phoneMatch = String(contact.phone || '').includes(query);
     return nameMatch || phoneMatch;
   });
+
+  const handleGroupAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImageFile(file, 256, 0.82);
+    if (compressed) {
+      setNewGroupAvatar(compressed);
+    }
+  };
+
+  const toggleGroupMemberSelection = (contact) => {
+    const contactKey = contact.phone || contact.username || contact.id;
+    setNewGroupSelectedMembers((prev) => {
+      const exists = prev.some((m) => (m.phone || m.username || m.id) === contactKey);
+      if (exists) {
+        return prev.filter((m) => (m.phone || m.username || m.id) !== contactKey);
+      } else {
+        return [...prev, contact];
+      }
+    });
+  };
+
+  const handleCreateGroup = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const trimmedName = String(newGroupName || '').trim();
+    if (!trimmedName) {
+      setCreateGroupError('Please enter a group name');
+      return;
+    }
+
+    const newGroup = {
+      id: `group_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      name: trimmedName,
+      description: String(newGroupDescription || '').trim(),
+      avatar: newGroupAvatar || '',
+      creator: loggedInUser || 'You',
+      createdAt: new Date().toISOString(),
+      members: [
+        {
+          name: loggedInUser ? `${loggedInUser} (Admin)` : 'You (Admin)',
+          username: loggedInUser || 'You',
+          role: 'admin',
+        },
+        ...newGroupSelectedMembers.map((m) => ({
+          name: m.phoneBookName || m.displayName || m.name || m.username || 'Member',
+          username: m.username || '',
+          phone: m.phone || '',
+          avatar: m.avatar || '',
+          role: 'member',
+        })),
+      ],
+    };
+
+    const updated = [newGroup, ...userGroups];
+    setUserGroups(updated);
+    try {
+      localStorage.setItem('planet_user_groups', JSON.stringify(updated));
+    } catch { }
+
+    setNewGroupName('');
+    setNewGroupDescription('');
+    setNewGroupAvatar('');
+    setNewGroupSelectedMembers([]);
+    setCreateGroupSearchQuery('');
+    setCreateGroupError('');
+    setShowCreateGroupModal(false);
+  };
+
+  const handleDeleteGroup = (groupId) => {
+    if (typeof window !== 'undefined' && !window.confirm('Are you sure you want to delete this group?')) {
+      return;
+    }
+    const updated = userGroups.filter((g) => g.id !== groupId);
+    setUserGroups(updated);
+    try {
+      localStorage.setItem('planet_user_groups', JSON.stringify(updated));
+    } catch { }
+  };
+
+  const handleOpenGroupChat = (group) => {
+    const chatTarget = {
+      name: group.name,
+      username: group.name,
+      phone: '',
+      avatar: group.avatar || '',
+      status: `${group.members?.length || 1} member${group.members?.length === 1 ? '' : 's'}`,
+      isGroup: true,
+      groupId: group.id,
+    };
+    setActiveChatContact(chatTarget);
+    try {
+      localStorage.setItem('assistance_active_chat_contact', JSON.stringify(chatTarget));
+    } catch { }
+    navigateTo('messages');
+  };
+
+  const filteredGroupCandidateContacts = useMemo(() => {
+    const query = String(createGroupSearchQuery || '').trim().toLowerCase();
+    const list = effectiveRegisteredList && effectiveRegisteredList.length > 0
+      ? effectiveRegisteredList
+      : phoneContacts;
+
+    if (!query) return list;
+    return list.filter((c) => {
+      const name = String(c.phoneBookName || c.displayName || c.name || c.username || '').toLowerCase();
+      const phone = String(c.phone || '').toLowerCase();
+      const username = String(c.username || '').toLowerCase();
+      return name.includes(query) || phone.includes(query) || username.includes(query);
+    });
+  }, [createGroupSearchQuery, effectiveRegisteredList, phoneContacts]);
 
   const filteredStatusContacts = useMemo(() => {
     const query = String(contactsSearchQuery || '').trim().toLowerCase();
@@ -10859,6 +10987,364 @@ function App() {
                               </button>
                               <button type="submit" className="contacts-modal-submit-btn">
                                 {editingContactOriginal ? 'Save Changes' : 'Save & Sync'}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : currentView === 'groups' ? (
+                <div className="groups-space" id="groups-space">
+                  <div className="groups-container" id="groups-container">
+                    {/* Header with Title and Create Group Button */}
+                    <div className="groups-header-wrapper">
+                      <div className="groups-title-col">
+                        <div className="groups-pill-tag">Directory</div>
+                        <h1 className="heading groups-heading" id="groups-heading">
+                          Groups
+                        </h1>
+                        <p className="groups-subheading">
+                          Create and manage your groups
+                        </p>
+                      </div>
+
+                      <div className="groups-header-actions">
+                        <button
+                          type="button"
+                          className="create-group-btn"
+                          id="create-group-btn"
+                          onClick={() => {
+                            setCreateGroupError('');
+                            setShowCreateGroupModal(true);
+                          }}
+                          title="Create a new group"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>Create Group</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Groups Content: ONLY the Create Group feature & created groups */}
+                    {userGroups.length === 0 ? (
+                      <div className="groups-empty-state-card" id="groups-empty-state">
+                        <div className="groups-empty-icon" aria-hidden="true">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                          </svg>
+                        </div>
+                        <h3 className="groups-empty-title">No Groups Yet</h3>
+                        <p className="groups-empty-desc">
+                          Create a group to start chatting and collaborating with your contacts.
+                        </p>
+                        <button
+                          type="button"
+                          className="create-group-hero-btn"
+                          id="create-group-hero-btn"
+                          onClick={() => {
+                            setCreateGroupError('');
+                            setShowCreateGroupModal(true);
+                          }}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                          </svg>
+                          <span>Create Group</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="groups-grid" id="groups-grid">
+                        {userGroups.map((group) => {
+                          const initials = (group.name || 'G').slice(0, 2).toUpperCase();
+                          return (
+                            <div key={group.id} className="group-card" id={`group-card-${group.id}`}>
+                              <div className="group-card-header">
+                                <div className="group-avatar-wrap">
+                                  {group.avatar ? (
+                                    <img src={group.avatar} alt={group.name} className="group-avatar-img" />
+                                  ) : (
+                                    <div className="group-avatar-fallback">{initials}</div>
+                                  )}
+                                </div>
+                                <div className="group-info-wrap">
+                                  <h3 className="group-name" title={group.name}>{group.name}</h3>
+                                  <div className="group-meta-pill">
+                                    <span className="group-member-count">
+                                      {group.members?.length || 1} {group.members?.length === 1 ? 'member' : 'members'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {group.description && (
+                                <p className="group-desc">{group.description}</p>
+                              )}
+
+                              <div className="group-members-preview">
+                                <div className="group-members-avatars">
+                                  {(group.members || []).slice(0, 5).map((m, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="group-member-bubble"
+                                      title={m.name || m.username}
+                                    >
+                                      {m.avatar ? (
+                                        <img src={m.avatar} alt="" />
+                                      ) : (
+                                        <span>{(m.name || m.username || 'U').slice(0, 1).toUpperCase()}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {(group.members?.length || 0) > 5 && (
+                                    <div className="group-member-bubble more">
+                                      +{group.members.length - 5}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="group-card-actions">
+                                <button
+                                  type="button"
+                                  className="group-action-msg-btn"
+                                  onClick={() => handleOpenGroupChat(group)}
+                                  title="Open Group Chat"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                  <span>Message Group</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="group-action-delete-btn"
+                                  onClick={() => handleDeleteGroup(group.id)}
+                                  title="Delete Group"
+                                  aria-label="Delete Group"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Create Group Modal */}
+                    {showCreateGroupModal && (
+                      <div
+                        className="group-modal-backdrop"
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            setShowCreateGroupModal(false);
+                            setCreateGroupError('');
+                          }
+                        }}
+                      >
+                        <div className="group-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="create-group-modal-title">
+                          <div className="group-modal-header">
+                            <h2 className="group-modal-title" id="create-group-modal-title">
+                              Create Group
+                            </h2>
+                            <button
+                              type="button"
+                              className="group-modal-close-btn"
+                              onClick={() => {
+                                setShowCreateGroupModal(false);
+                                setCreateGroupError('');
+                              }}
+                              aria-label="Close modal"
+                            >
+                              &times;
+                            </button>
+                          </div>
+
+                          <form onSubmit={handleCreateGroup} className="group-modal-form">
+                            {createGroupError && (
+                              <div className="group-modal-error" role="alert">
+                                {createGroupError}
+                              </div>
+                            )}
+
+                            {/* Group Avatar Upload */}
+                            <div className="group-avatar-upload-row">
+                              <div
+                                className="group-avatar-upload-circle"
+                                onClick={() => groupAvatarInputRef.current?.click()}
+                                title="Upload Group Icon"
+                              >
+                                {newGroupAvatar ? (
+                                  <img src={newGroupAvatar} alt="Group avatar preview" className="group-avatar-preview" />
+                                ) : (
+                                  <div className="group-avatar-placeholder">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                      <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                    <span>Icon</span>
+                                  </div>
+                                )}
+                              </div>
+                              <input
+                                ref={groupAvatarInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={handleGroupAvatarChange}
+                              />
+                              <div className="group-avatar-upload-hint">
+                                <p className="avatar-hint-title">Group Icon</p>
+                                <p className="avatar-hint-sub">Click to upload photo or leave blank for initials</p>
+                              </div>
+                            </div>
+
+                            {/* Group Name Input */}
+                            <div className="group-form-group">
+                              <label htmlFor="group-name-input" className="group-form-label">
+                                Group Name <span className="required-star">*</span>
+                              </label>
+                              <input
+                                id="group-name-input"
+                                type="text"
+                                className="group-form-input"
+                                placeholder="e.g. Friends Circle, Design Team"
+                                value={newGroupName}
+                                onChange={(e) => {
+                                  setNewGroupName(e.target.value);
+                                  if (createGroupError) setCreateGroupError('');
+                                }}
+                                autoFocus
+                                required
+                              />
+                            </div>
+
+                            {/* Group Description Input */}
+                            <div className="group-form-group">
+                              <label htmlFor="group-desc-input" className="group-form-label">
+                                Description <span className="optional-tag">(optional)</span>
+                              </label>
+                              <textarea
+                                id="group-desc-input"
+                                className="group-form-textarea"
+                                placeholder="What is this group about?"
+                                rows="2"
+                                value={newGroupDescription}
+                                onChange={(e) => setNewGroupDescription(e.target.value)}
+                              ></textarea>
+                            </div>
+
+                            {/* Add Members Section */}
+                            <div className="group-form-group">
+                              <div className="group-members-label-row">
+                                <label className="group-form-label">
+                                  Add Members
+                                </label>
+                                <span className="group-selected-badge">
+                                  {newGroupSelectedMembers.length} selected
+                                </span>
+                              </div>
+
+                              <div className="group-member-search-wrap">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="11" cy="11" r="8"></circle>
+                                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                                <input
+                                  type="text"
+                                  className="group-member-search-input"
+                                  placeholder="Search contacts to add..."
+                                  value={createGroupSearchQuery}
+                                  onChange={(e) => setCreateGroupSearchQuery(e.target.value)}
+                                />
+                                {createGroupSearchQuery && (
+                                  <button
+                                    type="button"
+                                    className="group-search-clear-btn"
+                                    onClick={() => setCreateGroupSearchQuery('')}
+                                  >
+                                    &times;
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="group-candidates-list">
+                                {filteredGroupCandidateContacts.length === 0 ? (
+                                  <div className="group-no-candidates">No contacts found</div>
+                                ) : (
+                                  filteredGroupCandidateContacts.map((contact, idx) => {
+                                    const contactKey = contact.phone || contact.username || contact.id || `idx-${idx}`;
+                                    const isSelected = newGroupSelectedMembers.some(
+                                      (m) => (m.phone || m.username || m.id) === contactKey
+                                    );
+                                    const displayName = contact.phoneBookName || contact.displayName || contact.name || contact.username || 'Contact';
+                                    const initial = displayName.slice(0, 1).toUpperCase();
+
+                                    return (
+                                      <div
+                                        key={contactKey}
+                                        className={`group-candidate-item ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => toggleGroupMemberSelection(contact)}
+                                      >
+                                        <div className="candidate-avatar">
+                                          {contact.avatar ? (
+                                            <img src={contact.avatar} alt="" />
+                                          ) : (
+                                            <span>{initial}</span>
+                                          )}
+                                        </div>
+                                        <div className="candidate-info">
+                                          <span className="candidate-name">{displayName}</span>
+                                          {contact.phone && (
+                                            <span className="candidate-sub">{contact.phone}</span>
+                                          )}
+                                        </div>
+                                        <div className="candidate-checkbox" aria-hidden="true">
+                                          {isSelected ? (
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                              <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                          ) : (
+                                            <span className="candidate-checkbox-empty"></span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="group-modal-actions">
+                              <button
+                                type="button"
+                                className="group-modal-cancel-btn"
+                                onClick={() => {
+                                  setShowCreateGroupModal(false);
+                                  setCreateGroupError('');
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="group-modal-submit-btn"
+                                id="create-group-submit-btn"
+                              >
+                                Create Group
                               </button>
                             </div>
                           </form>
