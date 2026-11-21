@@ -9497,11 +9497,14 @@ function App() {
                     {/* Header with Title and Sync Controls */}
                     <div className="contacts-header-wrapper">
                       <div className="contacts-title-col">
+                        <div className="contacts-pill-tag">Directory</div>
                         <h1 className="heading contacts-heading" id="contacts-heading">
-                          {contactsFilterTab === 'status' ? 'Status Updates' : 'Contacts on Planet'}
+                          {contactsFilterTab === 'status' ? 'Status Updates' : 'My Contacts'}
                         </h1>
                         <p className="contacts-subheading">
-                          {contactsFilterTab === 'status' ? 'Text, image, and video status from your contacts' : 'Synced from phone contacts'}
+                          {contactsFilterTab === 'status'
+                            ? 'Real-time text, photo, and video status stories'
+                            : 'Synced device contacts with instant messenger access'}
                         </p>
                       </div>
 
@@ -9577,11 +9580,56 @@ function App() {
                               <polyline points="7 10 12 15 17 10" />
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Export Contacts
+                            Export
                           </button>
                         </div>
                       )}
                     </div>
+
+                    {/* Quick Stats Grid */}
+                    {contactsFilterTab === 'contacts' && (
+                      <div className="contacts-stats-grid" id="contacts-stats-grid">
+                        <div className="contacts-stat-card">
+                          <div className="contacts-stat-top">
+                            <span className="contacts-stat-label">Total Synced</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="9" cy="7" r="4"></circle>
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                          </div>
+                          <div className="contacts-stat-value">{phoneContacts.length}</div>
+                          <div className="contacts-stat-sub">From your address book</div>
+                        </div>
+
+                        <div className="contacts-stat-card active-stat">
+                          <div className="contacts-stat-top">
+                            <span className="contacts-stat-label">On Planet</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                          </div>
+                          <div className="contacts-stat-value">{registeredContacts.length}</div>
+                          <div className="contacts-stat-sub">Active registered users</div>
+                        </div>
+
+                        <div className="contacts-stat-card">
+                          <div className="contacts-stat-top">
+                            <span className="contacts-stat-label">Invite Available</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="8.5" cy="7" r="4"></circle>
+                              <line x1="20" y1="8" x2="20" y2="14"></line>
+                              <line x1="23" y1="11" x2="17" y2="11"></line>
+                            </svg>
+                          </div>
+                          <div className="contacts-stat-value">{nonRegisteredContacts.length}</div>
+                          <div className="contacts-stat-sub">Direct link invite</div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Sync Feedback Message */}
                     {syncFeedback && (
@@ -9623,18 +9671,23 @@ function App() {
                         aria-label="Search contacts"
                       />
                       {contactsSearchQuery && (
-                        <button
-                          type="button"
-                          className="contacts-search-clear"
-                          onClick={() => setContactsSearchQuery('')}
-                          aria-label="Clear search"
-                        >
-                          ×
-                        </button>
+                        <div className="contacts-search-actions">
+                          <span className="contacts-search-count">
+                            {contactsFilterTab === 'status' ? filteredStatuses.length : (filteredRegisteredContacts.length + filteredInviteContacts.length)} found
+                          </span>
+                          <button
+                            type="button"
+                            className="contacts-search-clear"
+                            onClick={() => setContactsSearchQuery('')}
+                            aria-label="Clear search"
+                          >
+                            ×
+                          </button>
+                        </div>
                       )}
                     </div>
 
-                    {/* Contacts Options: "my contacts" and "Status" */}
+                    {/* Contacts Options: "My Contacts" and "Status" */}
                     <div className="contacts-tabs-bar">
                       <button
                         type="button"
@@ -9642,7 +9695,13 @@ function App() {
                         onClick={() => setContactsFilterTab('contacts')}
                         id="contacts-tab-my-contacts"
                       >
-                        <span className="contacts-tab-label">my contacts</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="9" cy="7" r="4"></circle>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span className="contacts-tab-label">My Contacts</span>
                         <span className="contacts-tab-badge">{filteredRegisteredContacts.length}</span>
                       </button>
                       <button
@@ -9651,7 +9710,11 @@ function App() {
                         onClick={() => setContactsFilterTab('status')}
                         id="contacts-tab-status"
                       >
-                        <span className="contacts-tab-label">Status</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span className="contacts-tab-label">Status Updates</span>
                         <span className="contacts-tab-badge">{allAvailableStatuses.length}</span>
                       </button>
                     </div>
@@ -9662,7 +9725,7 @@ function App() {
                         {filteredRegisteredContacts.length === 0 ? (
                           <div className="contacts-empty-state">
                             <div className="contacts-empty-icon">
-                              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                 <circle cx="9" cy="7" r="4"></circle>
                                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -9670,12 +9733,12 @@ function App() {
                               </svg>
                             </div>
                             <h3 className="contacts-empty-title">
-                              {contactsSearchQuery ? 'No matching contacts' : 'No contacts registered yet'}
+                              {contactsSearchQuery ? 'No matching contacts' : 'No registered contacts yet'}
                             </h3>
                             <p className="contacts-empty-text">
                               {contactsSearchQuery
                                 ? `No contact found matching "${contactsSearchQuery}"`
-                                : 'Sync your phone contacts to see which of your friends and colleagues are already on Planet.'}
+                                : 'Sync your device contacts to discover friends, team members, and collaborators on Planet.'}
                             </p>
                             {!contactsSearchQuery && (
                               <button
@@ -9708,7 +9771,7 @@ function App() {
                                   <div
                                     className="contact-avatar"
                                     style={{
-                                      backgroundColor: contact.avatar ? 'transparent' : getAvatarColor(contact.phoneBookName || contact.username),
+                                      backgroundColor: contact.avatar ? 'transparent' : undefined,
                                     }}
                                   >
                                     {contact.avatar ? (
@@ -9731,9 +9794,11 @@ function App() {
                                       </span>
                                     </div>
 
-                                    <div className="contact-status" title={contact.status}>
-                                      {contact.status}
-                                    </div>
+                                    {contact.status && (
+                                      <div className="contact-status" title={contact.status}>
+                                        “{contact.status}”
+                                      </div>
+                                    )}
 
                                     <div className="contact-meta-row">
                                       <span className="contact-phone">
@@ -9745,13 +9810,70 @@ function App() {
                                     </div>
                                   </div>
                                 </div>
+
+                                <div className="contact-card-actions">
+                                  <button
+                                    type="button"
+                                    className="contact-action-btn primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenChatWithContact(contact);
+                                    }}
+                                    title={`Message ${contact.phoneBookName}`}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    <span>Message</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="contact-action-btn icon-only"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditContactModal(contact);
+                                    }}
+                                    title="Edit contact"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="contact-action-btn icon-only danger"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`Delete ${contact.phoneBookName || contact.username} from contacts?`)) {
+                                        handleDeleteContact(contact);
+                                      }
+                                    }}
+                                    title="Delete contact"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6"></polyline>
+                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
                             ))}
 
                             {filteredInviteContacts.length > 0 && (
                               <>
                                 <div className="contacts-sub-header">
-                                  <span>Invite to Planet</span>
+                                  <div className="contacts-sub-header-left">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                      <circle cx="8.5" cy="7" r="4"></circle>
+                                      <line x1="20" y1="8" x2="20" y2="14"></line>
+                                      <line x1="23" y1="11" x2="17" y2="11"></line>
+                                    </svg>
+                                    <span>Invite to Planet</span>
+                                  </div>
                                   <span className="contacts-sub-badge">{filteredInviteContacts.length}</span>
                                 </div>
                                 {filteredInviteContacts.map((contact, idx) => (
@@ -9771,7 +9893,7 @@ function App() {
                                     <div className="contact-card-left">
                                       <div
                                         className="contact-avatar invite"
-                                        style={{ backgroundColor: contact.avatar ? 'transparent' : '#9ca3af' }}
+                                        style={{ backgroundColor: contact.avatar ? 'transparent' : undefined }}
                                       >
                                         {contact.avatar ? (
                                           <img src={contact.avatar} alt={contact.phoneBookName} className="contact-avatar-img" />
@@ -9803,6 +9925,36 @@ function App() {
                                         }}
                                       >
                                         Invite
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="contact-action-btn icon-only"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditContactModal(contact);
+                                        }}
+                                        title="Edit contact"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="contact-action-btn icon-only danger"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (window.confirm(`Delete ${contact.phoneBookName} from contacts?`)) {
+                                            handleDeleteContact(contact);
+                                          }
+                                        }}
+                                        title="Delete contact"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="3 6 5 6 21 6"></polyline>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
                                       </button>
                                     </div>
                                   </div>
