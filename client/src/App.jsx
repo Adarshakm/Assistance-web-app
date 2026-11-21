@@ -499,14 +499,15 @@ export const SUBSCRIPTION_PLANS = [
     popular: false,
     color: '#71717a',
     accentClass: 'plan-free',
-    description: 'Essential social network access for personal use with a 1 group limit.',
-    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '1 Group Limit', '5 GB Cloud Storage'],
+    description: 'Essential social network access (1 group limit, 2 video posts/day).',
+    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '2 Video Posts / Day', '1 Group Limit', '5 GB Cloud Storage'],
     features: [
       'Full access to What\'s Happening public feed',
       'Direct chat and messaging with contacts',
       'Publish posts, text status & basic photo updates',
-      '1-on-1 voice & 720p video calls',
+      'Post up to 2 videos per day (Upgrade for unlimited)',
       'Create 1 Group only (Upgrade to create more groups)',
+      '1-on-1 voice & 720p video calls',
       'Follow friends and discover public creators',
       '5 GB standard media cloud storage',
       'Standard community support',
@@ -525,15 +526,15 @@ export const SUBSCRIPTION_PLANS = [
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
-    highlights: ['Blue Verified Badge', 'Unlimited Groups', '100% Ad-Free Experience', '50 GB Cloud Storage'],
+    highlights: ['Blue Verified Badge', 'Unlimited Video Posts', 'Unlimited Groups', '100% Ad-Free Experience', '50 GB Cloud Storage'],
     features: [
       'Everything in Free Plan, plus:',
+      'Unlimited daily video posts (Up to 5 min duration)',
       'Create and manage unlimited groups',
       'Blue Verified Checkmark Badge across profile & feed',
       '100% Ad-Free browsing across all feeds & tabs',
       'Unlimited HD voice & 1080p video calls',
       '50 GB high-speed media cloud storage',
-      'Post videos up to 5 minutes duration',
       'Custom profile themes, badges & color accents',
       'Priority message delivery',
     ],
@@ -551,15 +552,15 @@ export const SUBSCRIPTION_PLANS = [
     color: '#a855f7',
     accentClass: 'plan-500',
     description: 'High-power tools, group calls, and reach insights for active creators.',
-    highlights: ['Gold Checkmark Badge', 'Unlimited Groups & 50-Person Calls', '4K Calling & Screen Share', '250 GB Storage'],
+    highlights: ['Gold Checkmark Badge', 'Unlimited Video Posts (30 min)', 'Unlimited Groups & 50-Person Calls', '4K Calling & Screen Share'],
     features: [
       'Everything in ₹300 Plan, plus:',
+      'Unlimited daily video posts up to 30 min duration',
       'Create unlimited groups & communities',
       'Gold Checkmark Badge & Pro Creator status',
       'Unlimited 4K Ultra HD Video Calling & Screen Sharing',
       'Group video calls up to 50 participants',
       '250 GB ultra-fast media cloud storage',
-      'Post Full HD videos up to 30 minutes duration',
       'Create & manage up to 10 community discussion feeds',
       'Audience reach insights & viewer engagement stats',
       'Priority 24/7 dedicated creator support',
@@ -3140,6 +3141,15 @@ function App() {
   };
 
   const handlePostVideoSelect = (e) => {
+    if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      if (e.target) e.target.value = '';
+      setShowVideoLimitUpgradeModal(true);
+      setPostFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
@@ -3236,6 +3246,15 @@ function App() {
     const trimmed = postContent.trim();
     if ((!trimmed && !postImage && !postVideo) || isSubmittingPost || isUploadingPostImage || isUploadingPostVideo) return;
 
+    if (postVideo && currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      setShowVideoLimitUpgradeModal(true);
+      setPostFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
+    }
+
     setIsSubmittingPost(true);
     setPostFeedback(null);
 
@@ -3269,6 +3288,9 @@ function App() {
     };
 
     setPosts((prev) => [optimisticPost, ...prev]);
+    if (postVideo) {
+      recordDailyVideoPost();
+    }
     setPostContent('');
     setPostImage(null);
     setPostVideo(null);
@@ -3893,6 +3915,15 @@ function App() {
   };
 
   const handleVideoUpload = (e) => {
+    if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      if (e.target) e.target.value = '';
+      setShowVideoLimitUpgradeModal(true);
+      setVideoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -3956,6 +3987,14 @@ function App() {
 
   const handleApplyVideoUrl = (e) => {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      setShowVideoLimitUpgradeModal(true);
+      setVideoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
+    }
     const trimmed = videoUrlInput.trim();
     if (!trimmed) {
       setVideoShareFeedback({ type: 'error', text: 'Please enter a valid video stream or YouTube/Vimeo URL.' });
@@ -3983,6 +4022,14 @@ function App() {
   };
 
   const handleSelectVideoPreset = (preset) => {
+    if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      setShowVideoLimitUpgradeModal(true);
+      setVideoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
+    }
     setUploadedVideo(preset.url);
     setUploadedVideoMeta({
       name: preset.title,
@@ -4000,6 +4047,14 @@ function App() {
     if (e) {
       if (typeof e.preventDefault === 'function') e.preventDefault();
       if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+      setShowVideoLimitUpgradeModal(true);
+      setVideoShareFeedback({
+        type: 'error',
+        text: 'In the Free plan, you can only post 2 videos per day. Please upgrade your subscription plan to post more videos.',
+      });
+      return;
     }
     if (!uploadedVideo) {
       setVideoShareFeedback({ type: 'error', text: 'Please select or attach a video to share.' });
@@ -4044,6 +4099,7 @@ function App() {
 
     // Prepend to posts list instantly (0ms UI latency)
     setPosts((prev) => [optimisticPost, ...prev]);
+    recordDailyVideoPost();
 
     const videoPayload = uploadedVideo;
     const contentPayload = combinedContent;
@@ -5008,12 +5064,46 @@ function App() {
   const currentSubscribedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === currentPlanId) || SUBSCRIPTION_PLANS[0];
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showVideoLimitUpgradeModal, setShowVideoLimitUpgradeModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
   const [upiIdInput, setUpiIdInput] = useState('');
   const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [subscriptionToast, setSubscriptionToast] = useState(null);
   const [isMainFeedAdDismissed, setIsMainFeedAdDismissed] = useState(false);
+
+  // Daily Video Posts Tracking (Free plan limit: 2 video posts per day)
+  const getDailyVideoPostCount = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const saved = localStorage.getItem('planet_daily_video_posts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.date === today) {
+          return Number(parsed.count) || 0;
+        }
+      }
+    } catch { }
+    const todayPrefix = new Date().toISOString().slice(0, 10);
+    const countFromPosts = (posts || []).filter((p) => {
+      const isAuthor = !loggedInUser || p.author === loggedInUser || p.authorName === loggedInUser;
+      const isToday = p.createdAt && String(p.createdAt).startsWith(todayPrefix);
+      const isVideo = p.mediaType === 'video' || (p.video && String(p.video).length > 0);
+      return isAuthor && isToday && isVideo;
+    }).length;
+    return countFromPosts;
+  };
+
+  const recordDailyVideoPost = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const current = getDailyVideoPostCount();
+      localStorage.setItem('planet_daily_video_posts', JSON.stringify({
+        date: today,
+        count: current + 1,
+      }));
+    } catch { }
+  };
 
   const handleOpenSubscriptionModal = (planId = '300') => {
     setSelectedModalPlanId(planId || '300');
@@ -16532,9 +16622,15 @@ function App() {
                           <button
                             type="button"
                             className="create-post-attach-btn"
-                            onClick={() => postVideoInputRef.current?.click()}
+                            onClick={() => {
+                              if (currentPlanId === 'free' && getDailyVideoPostCount() >= 2) {
+                                setShowVideoLimitUpgradeModal(true);
+                                return;
+                              }
+                              postVideoInputRef.current?.click();
+                            }}
                             disabled={isSubmittingPost || isUploadingPostImage || isUploadingPostVideo}
-                            title="Add a video to your post"
+                            title={currentPlanId === 'free' && getDailyVideoPostCount() >= 2 ? 'Free plan daily video limit reached (2/2). Upgrade for unlimited.' : 'Add a video to your post'}
                           >
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polygon points="23 7 16 12 23 17 23 7"></polygon>
@@ -16542,6 +16638,15 @@ function App() {
                             </svg>
                             <span>{isUploadingPostVideo ? 'Loading Video...' : postVideo ? 'Change Video' : 'Video'}</span>
                           </button>
+                          {currentPlanId === 'free' && (
+                            <span
+                              className={`video-daily-quota-pill ${getDailyVideoPostCount() >= 2 ? 'exhausted' : ''}`}
+                              title={getDailyVideoPostCount() >= 2 ? 'Daily video limit reached (2/2). Upgrade to post more.' : `${getDailyVideoPostCount()}/2 daily videos used on Free plan.`}
+                              onClick={getDailyVideoPostCount() >= 2 ? () => setShowVideoLimitUpgradeModal(true) : undefined}
+                            >
+                              📹 {getDailyVideoPostCount()}/2 videos today
+                            </span>
+                          )}
                         </div>
 
                         <button
@@ -24751,6 +24856,97 @@ function App() {
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.99.99 0 0 1 0-1.41C3.32 8.78 7.46 7 12 7s8.68 1.78 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
                     </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Free Plan Video Post Limit Upgrade Modal */}
+          {showVideoLimitUpgradeModal && (
+            <div
+              className="group-modal-backdrop group-limit-modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowVideoLimitUpgradeModal(false);
+                }
+              }}
+            >
+              <div className="group-modal-dialog group-limit-dialog" role="dialog" aria-modal="true" aria-labelledby="video-limit-title">
+                <button
+                  type="button"
+                  className="group-limit-close-btn"
+                  onClick={() => setShowVideoLimitUpgradeModal(false)}
+                  aria-label="Close modal"
+                >
+                  &times;
+                </button>
+
+                <div className="group-limit-icon-wrap">
+                  <div className="group-limit-icon-circle video-limit-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                  </div>
+                  <span className="group-limit-badge video-badge">DAILY POST LIMIT REACHED</span>
+                </div>
+
+                <div className="group-limit-header">
+                  <h2 className="group-limit-title" id="video-limit-title">
+                    Free Plan Video Limit
+                  </h2>
+                  <p className="group-limit-sub">
+                    In the <strong>Free plan</strong>, you can only post <strong>2 videos per day</strong> ({getDailyVideoPostCount()}/2 used today). To post more videos, please upgrade your subscription plan.
+                  </p>
+                </div>
+
+                <div className="group-limit-info-box">
+                  <p className="group-limit-note">
+                    Upgrade to enjoy unlimited video posts, higher video duration, and crystal-clear resolution:
+                  </p>
+
+                  <div className="group-limit-tiers-preview">
+                    <div className="limit-tier-pill">
+                      <span className="tier-pill-name">Free Plan</span>
+                      <span className="tier-pill-val">2 Videos / Day</span>
+                    </div>
+                    <div className="limit-tier-pill highlight">
+                      <span className="tier-pill-name">Standard ₹300</span>
+                      <span className="tier-pill-val">Unlimited Videos (5m)</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-purple">
+                      <span className="tier-pill-name">Pro Creator ₹500</span>
+                      <span className="tier-pill-val">Unlimited Full HD (30m)</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-gold">
+                      <span className="tier-pill-name">VIP Elite ₹1000</span>
+                      <span className="tier-pill-val">Unlimited 4K Original</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="group-limit-actions">
+                  <button
+                    type="button"
+                    className="group-limit-upgrade-btn"
+                    id="video-limit-upgrade-btn"
+                    onClick={() => {
+                      setShowVideoLimitUpgradeModal(false);
+                      handleOpenSubscriptionModal('300');
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>Upgrade Subscription Plan</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="group-limit-cancel-btn"
+                    onClick={() => setShowVideoLimitUpgradeModal(false)}
+                  >
+                    Maybe Later
                   </button>
                 </div>
               </div>
