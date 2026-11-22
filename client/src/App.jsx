@@ -1566,6 +1566,22 @@ function App() {
     }
   });
 
+  // Profile Visibility Settings state
+  const [profileVisibilitySettings, setProfileVisibilitySettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_profile_visibility_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      audience: 'everyone',
+      showOnlineStatus: true,
+      searchDiscovery: true,
+      showFollowersCount: true,
+      showContactDetails: false,
+    };
+  });
+  const [profileVisibilityFeedback, setProfileVisibilityFeedback] = useState(null);
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3114,6 +3130,20 @@ function App() {
     try {
       localStorage.setItem('assistance_account_privacy', value);
     } catch { }
+  };
+
+  const handleUpdateProfileVisibility = (key, value) => {
+    setProfileVisibilitySettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_profile_visibility_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setProfileVisibilityFeedback('Visibility settings updated ✨');
+    setTimeout(() => {
+      setProfileVisibilityFeedback(null);
+    }, 2500);
   };
 
   const handlePostImageSelect = async (e) => {
@@ -16428,6 +16458,155 @@ function App() {
                           </svg>
                           <span>Private account</span>
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Feature 2: Profile Visibility Settings */}
+                    <div className="privacy-card" id="profile-visibility-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="profile-visibility-title">
+                            Profile visibility settings
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Control who can view your profile, discover your account, and see your activity status.
+                          </p>
+                        </div>
+                        {profileVisibilityFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {profileVisibilityFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Main Profile Visibility Scope Selector */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can see your profile</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Profile visibility audience"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="visibility-scope-everyone"
+                            aria-checked={profileVisibilitySettings.audience === 'everyone'}
+                            className={`visibility-scope-option ${profileVisibilitySettings.audience === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('audience', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🌐</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Public to all members & visitors</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="visibility-scope-followers"
+                            aria-checked={profileVisibilitySettings.audience === 'followers'}
+                            className={`visibility-scope-option ${profileVisibilitySettings.audience === 'followers' ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('audience', 'followers')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Followers only</span>
+                              <span className="visibility-scope-desc">Only approved connections</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="visibility-scope-private"
+                            aria-checked={profileVisibilitySettings.audience === 'private'}
+                            className={`visibility-scope-option ${profileVisibilitySettings.audience === 'private' ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('audience', 'private')}
+                          >
+                            <div className="visibility-scope-icon">🔒</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Only Me</span>
+                              <span className="visibility-scope-desc">Hidden from public directory</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Visibility Toggles */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show online activity status</span>
+                            <span className="visibility-toggle-desc">Let contacts know when you are active on Planet</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="visibility-toggle-online"
+                            aria-checked={profileVisibilitySettings.showOnlineStatus}
+                            aria-label="Show online activity status"
+                            className={`visibility-switch-btn ${profileVisibilitySettings.showOnlineStatus ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('showOnlineStatus', !profileVisibilitySettings.showOnlineStatus)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Appear in search & discovery</span>
+                            <span className="visibility-toggle-desc">Allow people to find your profile via search bar and suggested creators</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="visibility-toggle-search"
+                            aria-checked={profileVisibilitySettings.searchDiscovery}
+                            aria-label="Appear in search and discovery"
+                            className={`visibility-switch-btn ${profileVisibilitySettings.searchDiscovery ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('searchDiscovery', !profileVisibilitySettings.searchDiscovery)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show followers count</span>
+                            <span className="visibility-toggle-desc">Display the number of followers and following on your public profile header</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="visibility-toggle-followers"
+                            aria-checked={profileVisibilitySettings.showFollowersCount}
+                            aria-label="Show followers count"
+                            className={`visibility-switch-btn ${profileVisibilitySettings.showFollowersCount ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('showFollowersCount', !profileVisibilitySettings.showFollowersCount)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show contact details</span>
+                            <span className="visibility-toggle-desc">Allow verified contacts to see your email address and phone number</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="visibility-toggle-contact"
+                            aria-checked={profileVisibilitySettings.showContactDetails}
+                            aria-label="Show contact details"
+                            className={`visibility-switch-btn ${profileVisibilitySettings.showContactDetails ? 'active' : ''}`}
+                            onClick={() => handleUpdateProfileVisibility('showContactDetails', !profileVisibilitySettings.showContactDetails)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

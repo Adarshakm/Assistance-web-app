@@ -4236,6 +4236,249 @@ body.light-theme .privacy-side-btn.active {
 }
 
 /* ==========================================================================
+   Profile Visibility Settings Styles
+   ========================================================================== */
+.privacy-card-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.privacy-feedback-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  animation: fadeIn 0.2s ease-in;
+  white-space: nowrap;
+}
+
+.visibility-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1.5rem;
+}
+
+.visibility-section-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a1a1aa;
+}
+
+.visibility-scope-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .visibility-scope-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+.visibility-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.875rem 0.85rem;
+  border-radius: 12px;
+  border: 1.5px solid #27272a;
+  background-color: #0d0d10;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  color: #ffffff;
+}
+
+.visibility-scope-option:hover {
+  background-color: #141419;
+  border-color: #3f3f46;
+  transform: translateY(-1px);
+}
+
+.visibility-scope-option.active {
+  background-color: #18181b;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff, 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.visibility-scope-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.visibility-scope-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.visibility-scope-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.visibility-scope-desc {
+  font-size: 0.75rem;
+  color: #71717a;
+  line-height: 1.35;
+}
+
+.visibility-scope-option.active .visibility-scope-desc {
+  color: #a1a1aa;
+}
+
+.visibility-toggles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid #27272a;
+  padding-top: 1.25rem;
+}
+
+.visibility-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: #09090b;
+  border: 1px solid #1f1f23;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+}
+
+.visibility-toggle-item:hover {
+  background: #101014;
+  border-color: #27272a;
+}
+
+.visibility-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.visibility-toggle-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.visibility-toggle-desc {
+  font-size: 0.78rem;
+  color: #71717a;
+  line-height: 1.35;
+}
+
+.visibility-switch-btn {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 9999px;
+  background: #27272a;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: background-color 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.visibility-switch-btn:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.visibility-switch-btn.active {
+  background: #22c55e;
+}
+
+.visibility-switch-thumb {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+}
+
+.visibility-switch-btn.active .visibility-switch-thumb {
+  transform: translateX(20px);
+}
+
+/* Light Theme Support for Visibility Settings */
+body.light-theme .visibility-section-label {
+  color: #71717a;
+}
+
+body.light-theme .visibility-scope-option {
+  background-color: #fafafa;
+  border-color: #e4e4e7;
+  color: #09090b;
+}
+
+body.light-theme .visibility-scope-option:hover {
+  background-color: #f4f4f5;
+  border-color: #d4d4d8;
+}
+
+body.light-theme .visibility-scope-option.active {
+  background-color: #ffffff;
+  border-color: #09090b;
+  box-shadow: 0 0 0 1px #09090b, 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .visibility-scope-title {
+  color: #09090b;
+}
+
+body.light-theme .visibility-scope-desc {
+  color: #71717a;
+}
+
+body.light-theme .visibility-toggles-list {
+  border-color: #e4e4e7;
+}
+
+body.light-theme .visibility-toggle-item {
+  background: #fafafa;
+  border-color: #e4e4e7;
+}
+
+body.light-theme .visibility-toggle-item:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+}
+
+body.light-theme .visibility-toggle-title {
+  color: #09090b;
+}
+
+body.light-theme .visibility-toggle-desc {
+  color: #71717a;
+}
+
+body.light-theme .visibility-switch-btn {
+  background: #d4d4d8;
+}
+
+body.light-theme .visibility-switch-btn.active {
+  background: #16a34a;
+}
+
+/* ==========================================================================
    My Profile Page (Professional View)
    ========================================================================== */
 .profile-space {
