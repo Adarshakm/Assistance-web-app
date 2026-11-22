@@ -1682,6 +1682,41 @@ function App() {
   const [blockNewUserInput, setBlockNewUserInput] = useState('');
   const [blockInputError, setBlockInputError] = useState('');
 
+  // General Account Settings state (Settings & Personalization)
+  const [generalAccountSettings, setGeneralAccountSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_general_account_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    const savedDisplayName = typeof window !== 'undefined' ? (localStorage.getItem('assistance_display_name') || '') : '';
+    return {
+      displayName: savedDisplayName || 'Planet User',
+      email: 'user@planet.internal',
+      isEmailVerified: true,
+      phone: '+91 98765 43210',
+      isPhoneVerified: true,
+      language: 'en-US',
+      timezone: 'Asia/Kolkata',
+      country: 'India',
+      accountType: 'Personal',
+      accountId: 'PLN-948201',
+      memberSince: 'November 2026',
+      autoSyncDevices: true,
+      autoplayMedia: true,
+      securityPrompts: true,
+    };
+  });
+  const [generalAccountForm, setGeneralAccountForm] = useState(() => ({
+    displayName: generalAccountSettings?.displayName || '',
+    email: generalAccountSettings?.email || 'user@planet.internal',
+    phone: generalAccountSettings?.phone || '+91 98765 43210',
+    language: generalAccountSettings?.language || 'en-US',
+    timezone: generalAccountSettings?.timezone || 'Asia/Kolkata',
+    country: generalAccountSettings?.country || 'India',
+  }));
+  const [generalAccountFeedback, setGeneralAccountFeedback] = useState(null);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3369,6 +3404,115 @@ function App() {
     setTimeout(() => {
       setBlockedAccountsFeedback(null);
     }, 2500);
+  };
+
+  const handleSaveGeneralAccountSettings = (e) => {
+    e.preventDefault();
+    const updated = {
+      ...generalAccountSettings,
+      displayName: (generalAccountForm.displayName || '').trim() || generalAccountSettings.displayName,
+      email: (generalAccountForm.email || '').trim() || generalAccountSettings.email,
+      phone: (generalAccountForm.phone || '').trim() || generalAccountSettings.phone,
+      language: generalAccountForm.language,
+      timezone: generalAccountForm.timezone,
+      country: generalAccountForm.country,
+    };
+
+    setGeneralAccountSettings(updated);
+    try {
+      localStorage.setItem('planet_general_account_settings', JSON.stringify(updated));
+      if (updated.displayName) {
+        localStorage.setItem('assistance_display_name', updated.displayName);
+        setDisplayName(updated.displayName);
+      }
+    } catch { }
+
+    if (loggedInUser && updated.displayName) {
+      try {
+        fetch('/api/users/update-profile-info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: loggedInUser,
+            displayName: updated.displayName,
+          }),
+        }).catch(() => {});
+      } catch { }
+    }
+
+    setGeneralAccountFeedback('General account settings saved ✨');
+    setTimeout(() => {
+      setGeneralAccountFeedback(null);
+    }, 2500);
+  };
+
+  const handleToggleGeneralAccountSetting = (key) => {
+    setGeneralAccountSettings((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('planet_general_account_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setGeneralAccountFeedback('Preference updated ✨');
+    setTimeout(() => {
+      setGeneralAccountFeedback(null);
+    }, 2000);
+  };
+
+  const handleDownloadAccountData = () => {
+    const dataToExport = {
+      planetExportVersion: '1.0',
+      exportedAt: new Date().toISOString(),
+      account: {
+        username: loggedInUser || 'planet_user',
+        displayName: generalAccountSettings.displayName,
+        email: generalAccountSettings.email,
+        phone: generalAccountSettings.phone,
+        accountId: generalAccountSettings.accountId,
+        memberSince: generalAccountSettings.memberSince,
+        accountType: generalAccountSettings.accountType,
+      },
+      preferences: {
+        language: generalAccountSettings.language,
+        timezone: generalAccountSettings.timezone,
+        country: generalAccountSettings.country,
+        autoSyncDevices: generalAccountSettings.autoSyncDevices,
+        autoplayMedia: generalAccountSettings.autoplayMedia,
+        securityPrompts: generalAccountSettings.securityPrompts,
+      },
+      subscription: {
+        currentPlanId,
+        isSubscribed,
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `planet-account-data-${loggedInUser || 'user'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setGeneralAccountFeedback('Account data archive downloaded 📥');
+    setTimeout(() => {
+      setGeneralAccountFeedback(null);
+    }, 2500);
+  };
+
+  const handleDeactivateAccount = () => {
+    setShowDeactivateModal(false);
+    setGeneralAccountFeedback('Account deactivated. Signing out...');
+    setTimeout(() => {
+      setLoggedInUser('');
+      try {
+        localStorage.removeItem('assistance_user');
+      } catch { }
+      navigateTo('login');
+    }, 1500);
   };
 
   const handlePostImageSelect = async (e) => {
@@ -25538,6 +25682,348 @@ function App() {
                             ))}
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : currentView === 'settings-and-personalization' ? (
+                <div className="settings-space" id="settings-space">
+                  <div className="settings-container" id="settings-container">
+                    {/* Settings Main Header */}
+                    <div className="settings-header">
+                      <div className="settings-header-icon" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="3"></circle>
+                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                      </div>
+                      <div className="settings-header-text">
+                        <h1 className="settings-main-title">Settings and Personalization</h1>
+                        <p className="settings-main-desc">Manage your account identity, regional preferences, device sync, and archives.</p>
+                      </div>
+                    </div>
+
+                    {/* Feature 1: General Account Settings */}
+                    <div className="settings-card" id="general-account-settings-card">
+                      <div className="settings-card-header">
+                        <div className="settings-card-title-wrap">
+                          <h2 className="settings-card-title" id="general-account-settings-title">
+                            General account settings
+                          </h2>
+                          <p className="settings-card-desc">
+                            Update your primary credentials, contact details, language preferences, and personal data archive.
+                          </p>
+                        </div>
+                        {generalAccountFeedback && (
+                          <span className="settings-feedback-pill" role="status">
+                            {generalAccountFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Account Summary Badges */}
+                      <div className="settings-meta-grid">
+                        <div className="settings-meta-item">
+                          <span className="settings-meta-label">Account ID</span>
+                          <span className="settings-meta-val" id="general-account-id">{generalAccountSettings.accountId}</span>
+                        </div>
+                        <div className="settings-meta-item">
+                          <span className="settings-meta-label">Account Type</span>
+                          <span className="settings-meta-val highlight" id="general-account-type">{generalAccountSettings.accountType}</span>
+                        </div>
+                        <div className="settings-meta-item">
+                          <span className="settings-meta-label">Member Since</span>
+                          <span className="settings-meta-val" id="general-account-member-since">{generalAccountSettings.memberSince}</span>
+                        </div>
+                      </div>
+
+                      {/* General Account Form */}
+                      <form className="settings-form" onSubmit={handleSaveGeneralAccountSettings}>
+                        <div className="settings-form-grid">
+                          {/* Username Display */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-username">Username</label>
+                            <div className="settings-input-with-adornment">
+                              <span className="settings-input-prefix">@</span>
+                              <input
+                                type="text"
+                                id="general-settings-username"
+                                className="settings-field-input"
+                                value={loggedInUser || 'planet_user'}
+                                disabled
+                                readOnly
+                                title="Primary username handle"
+                              />
+                              <span className="settings-input-badge">Active Handle</span>
+                            </div>
+                            <span className="settings-field-hint">Your public username handle used for profile identification and mentions.</span>
+                          </div>
+
+                          {/* Full Name / Display Name */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-display-name">Display Name</label>
+                            <input
+                              type="text"
+                              id="general-settings-display-name"
+                              className="settings-field-input"
+                              placeholder="Your full name"
+                              value={generalAccountForm.displayName}
+                              onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, displayName: e.target.value })}
+                            />
+                            <span className="settings-field-hint">Your display name shown across chats, feeds, profile, and community posts.</span>
+                          </div>
+
+                          {/* Primary Email */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-email">Primary Email Address</label>
+                            <div className="settings-input-with-adornment">
+                              <input
+                                type="email"
+                                id="general-settings-email"
+                                className="settings-field-input"
+                                placeholder="name@example.com"
+                                value={generalAccountForm.email}
+                                onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, email: e.target.value })}
+                                required
+                              />
+                              <span className="settings-input-badge verified">✓ Verified</span>
+                            </div>
+                            <span className="settings-field-hint">Used for password recovery, critical account alerts, and security notifications.</span>
+                          </div>
+
+                          {/* Phone Number */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-phone">Phone Number</label>
+                            <div className="settings-input-with-adornment">
+                              <input
+                                type="tel"
+                                id="general-settings-phone"
+                                className="settings-field-input"
+                                placeholder="+91 98765 43210"
+                                value={generalAccountForm.phone}
+                                onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, phone: e.target.value })}
+                              />
+                              <span className="settings-input-badge verified">✓ Verified</span>
+                            </div>
+                            <span className="settings-field-hint">Phone number associated with account verification and two-factor safety.</span>
+                          </div>
+
+                          {/* Display Language */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-language">Display Language</label>
+                            <select
+                              id="general-settings-language"
+                              className="settings-field-select"
+                              value={generalAccountForm.language}
+                              onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, language: e.target.value })}
+                            >
+                              <option value="en-US">English (United States)</option>
+                              <option value="en-GB">English (United Kingdom)</option>
+                              <option value="hi-IN">Hindi (हिन्दी)</option>
+                              <option value="es-ES">Spanish (Español)</option>
+                              <option value="fr-FR">French (Français)</option>
+                              <option value="de-DE">German (Deutsch)</option>
+                              <option value="ja-JP">Japanese (日本語)</option>
+                              <option value="ar-SA">Arabic (العربية)</option>
+                            </select>
+                            <span className="settings-field-hint">Default language for system navigation, notifications, and menus.</span>
+                          </div>
+
+                          {/* Timezone */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-timezone">Timezone</label>
+                            <select
+                              id="general-settings-timezone"
+                              className="settings-field-select"
+                              value={generalAccountForm.timezone}
+                              onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, timezone: e.target.value })}
+                            >
+                              <option value="Asia/Kolkata">(GMT+05:30) Chennai, Kolkata, Mumbai, New Delhi</option>
+                              <option value="UTC">(GMT+00:00) UTC / London</option>
+                              <option value="America/New_York">(GMT-05:00) Eastern Time (US &amp; Canada)</option>
+                              <option value="America/Chicago">(GMT-06:00) Central Time (US &amp; Canada)</option>
+                              <option value="America/Los_Angeles">(GMT-08:00) Pacific Time (US &amp; Canada)</option>
+                              <option value="Europe/Paris">(GMT+01:00) Central European Time (Paris, Berlin)</option>
+                              <option value="Asia/Dubai">(GMT+04:00) Dubai, Abu Dhabi</option>
+                              <option value="Asia/Singapore">(GMT+08:00) Singapore, Kuala Lumpur</option>
+                              <option value="Asia/Tokyo">(GMT+09:00) Tokyo, Osaka</option>
+                              <option value="Australia/Sydney">(GMT+11:00) Sydney, Melbourne</option>
+                            </select>
+                            <span className="settings-field-hint">Determines date formats and message timestamps.</span>
+                          </div>
+
+                          {/* Country / Region */}
+                          <div className="settings-field-group">
+                            <label className="settings-field-label" htmlFor="general-settings-country">Country / Region</label>
+                            <select
+                              id="general-settings-country"
+                              className="settings-field-select"
+                              value={generalAccountForm.country}
+                              onChange={(e) => setGeneralAccountForm({ ...generalAccountForm, country: e.target.value })}
+                            >
+                              <option value="India">India</option>
+                              <option value="United States">United States</option>
+                              <option value="United Kingdom">United Kingdom</option>
+                              <option value="Canada">Canada</option>
+                              <option value="Australia">Australia</option>
+                              <option value="Germany">Germany</option>
+                              <option value="France">France</option>
+                              <option value="United Arab Emirates">United Arab Emirates</option>
+                              <option value="Singapore">Singapore</option>
+                              <option value="Japan">Japan</option>
+                            </select>
+                            <span className="settings-field-hint">Regional settings for local currency and compliance rules.</span>
+                          </div>
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="settings-form-actions">
+                          <button
+                            type="submit"
+                            id="general-settings-save-btn"
+                            className="settings-save-btn"
+                          >
+                            Save Changes
+                          </button>
+                        </div>
+                      </form>
+
+                      {/* General Preferences Toggles */}
+                      <div className="settings-section-divider" />
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Account Preferences</label>
+                        <div className="visibility-toggles-list">
+                          <div className="visibility-toggle-item">
+                            <div className="visibility-toggle-info">
+                              <span className="visibility-toggle-title">Sync account data across devices</span>
+                              <span className="visibility-toggle-desc">Automatically synchronize your chat history, contacts, and personal preferences</span>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              id="general-toggle-autosync"
+                              aria-checked={generalAccountSettings.autoSyncDevices}
+                              aria-label="Sync account data across devices"
+                              className={`visibility-switch-btn ${generalAccountSettings.autoSyncDevices ? 'active' : ''}`}
+                              onClick={() => handleToggleGeneralAccountSetting('autoSyncDevices')}
+                            >
+                              <span className="visibility-switch-thumb" />
+                            </button>
+                          </div>
+
+                          <div className="visibility-toggle-item">
+                            <div className="visibility-toggle-info">
+                              <span className="visibility-toggle-title">Autoplay media on feeds</span>
+                              <span className="visibility-toggle-desc">Automatically play feed videos with muted audio while scrolling</span>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              id="general-toggle-autoplay"
+                              aria-checked={generalAccountSettings.autoplayMedia}
+                              aria-label="Autoplay media on feeds"
+                              className={`visibility-switch-btn ${generalAccountSettings.autoplayMedia ? 'active' : ''}`}
+                              onClick={() => handleToggleGeneralAccountSetting('autoplayMedia')}
+                            >
+                              <span className="visibility-switch-thumb" />
+                            </button>
+                          </div>
+
+                          <div className="visibility-toggle-item">
+                            <div className="visibility-toggle-info">
+                              <span className="visibility-toggle-title">Security verification prompts</span>
+                              <span className="visibility-toggle-desc">Prompt for two-factor approval when signing in from an unrecognized browser or device</span>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              id="general-toggle-security"
+                              aria-checked={generalAccountSettings.securityPrompts}
+                              aria-label="Security verification prompts"
+                              className={`visibility-switch-btn ${generalAccountSettings.securityPrompts ? 'active' : ''}`}
+                              onClick={() => handleToggleGeneralAccountSetting('securityPrompts')}
+                            >
+                              <span className="visibility-switch-thumb" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Data Archive & Export */}
+                      <div className="settings-section-divider" />
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Data and Privacy Archive</label>
+                        <div className="settings-data-card">
+                          <div className="settings-data-info">
+                            <span className="settings-data-title">Download your account data</span>
+                            <span className="settings-data-desc">Export a copy of your personal Planet information, profile settings, posts, and media in JSON format.</span>
+                          </div>
+                          <button
+                            type="button"
+                            id="general-download-data-btn"
+                            className="settings-download-btn"
+                            onClick={handleDownloadAccountData}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                              <polyline points="7 10 12 15 17 10"></polyline>
+                              <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Download Archive
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Account Management & Deactivation */}
+                      <div className="settings-section-divider" />
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Account Management</label>
+                        <div className="settings-danger-box">
+                          <div className="settings-danger-info">
+                            <span className="settings-danger-title">Deactivate account</span>
+                            <span className="settings-danger-desc">Temporarily hide your profile, posts, comments, and interactions until you sign in again.</span>
+                          </div>
+                          <button
+                            type="button"
+                            id="general-deactivate-account-btn"
+                            className="settings-deactivate-btn"
+                            onClick={() => setShowDeactivateModal(true)}
+                          >
+                            Deactivate
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deactivation Confirmation Modal */}
+                  {showDeactivateModal && (
+                    <div className="post-image-modal-backdrop" onClick={() => setShowDeactivateModal(false)}>
+                      <div
+                        className="post-image-modal-content"
+                        style={{ maxWidth: 440, padding: '1.75rem', background: '#09090b', borderRadius: 16, border: '1px solid #27272a' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#f87171', fontSize: '1.15rem' }}>Deactivate Account?</h3>
+                        <p style={{ margin: '0 0 1.25rem 0', color: '#a1a1aa', fontSize: '0.88rem', lineHeight: 1.45 }}>
+                          Deactivating will temporarily hide your profile, posts, and messages on Planet. You can reactivate anytime simply by logging back in.
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="settings-download-btn"
+                            onClick={() => setShowDeactivateModal(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="blocked-account-submit-btn"
+                            onClick={handleDeactivateAccount}
+                          >
+                            Confirm Deactivate
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
