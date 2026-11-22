@@ -513,6 +513,7 @@ export const SUBSCRIPTION_PLANS = [
       'Follow friends and discover public creators',
       '5 GB standard media cloud storage',
       'Standard community support',
+      '₹100 Referral Program locked (Upgrade to ₹300 Plan)',
     ],
     ctaText: 'Current Plan',
   },
@@ -528,7 +529,7 @@ export const SUBSCRIPTION_PLANS = [
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
-    highlights: ['Blue Verified Badge', 'Unlimited Image Posts', 'Unlimited Video Posts', 'Join & Create Unlimited Groups', '50 GB Storage'],
+    highlights: ['Blue Verified Badge', 'Unlimited Image Posts', 'Unlimited Video Posts', 'Join & Create Unlimited Groups', '₹100 Referral Rewards', '50 GB Storage'],
     features: [
       'Everything in Free Plan, plus:',
       'Unlimited daily image and photo posts',
@@ -536,6 +537,7 @@ export const SUBSCRIPTION_PLANS = [
       'Create and manage unlimited groups',
       'Join and participate in unlimited groups',
       'Blue Verified Checkmark Badge across profile & feed',
+      'Exclusive Referral Program: Earn 100 rupees instant cash for every person you add',
       '100% Ad-Free browsing across all feeds & tabs',
       'Unlimited HD voice & 1080p video calls',
       '50 GB high-speed media cloud storage',
@@ -5369,6 +5371,16 @@ function App() {
   const [mainSpaceAdFilter, setMainSpaceAdFilter] = useState('all');
 
   const handleCopyReferralLink = () => {
+    if (currentPlanId !== '300') {
+      setSubscriptionToast({
+        type: 'warning',
+        text: '🔒 The ₹100 referral reward is exclusive to ₹300 Subscription Plan users. Upgrade to unlock!',
+      });
+      setTimeout(() => setSubscriptionToast(null), 5000);
+      setSelectedModalPlanId('300');
+      setShowSubscriptionModal(true);
+      return;
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://webmind.cloud';
     const link = `${origin}/join?ref=${loggedInUser || 'user'}`;
     try {
@@ -5378,12 +5390,22 @@ function App() {
     setTimeout(() => setReferralCopied(false), 2500);
     setSubscriptionToast({
       type: 'info',
-      text: '📋 Referral link copied! Share with friends: "Add one person and get 100 rupees".',
+      text: '📋 Referral link copied! Share with friends: "Add one person and get 100 rupees (₹300 Plan Exclusive)".',
     });
     setTimeout(() => setSubscriptionToast(null), 4000);
   };
 
   const handleSimulateAddPerson = () => {
+    if (currentPlanId !== '300') {
+      setSubscriptionToast({
+        type: 'warning',
+        text: '🔒 The ₹100 referral reward is only available for ₹300 Subscription Plan users. Upgrade to start earning!',
+      });
+      setTimeout(() => setSubscriptionToast(null), 5000);
+      setSelectedModalPlanId('300');
+      setShowSubscriptionModal(true);
+      return;
+    }
     const nextCount = referralCount + 1;
     setReferralCount(nextCount);
     try {
@@ -5398,6 +5420,14 @@ function App() {
 
   const handleConfirmWithdraw = (e) => {
     if (e) e.preventDefault();
+    if (currentPlanId !== '300') {
+      setSubscriptionToast({
+        type: 'warning',
+        text: '🔒 Referral payout is exclusive to active ₹300 Subscription Plan members.',
+      });
+      setTimeout(() => setSubscriptionToast(null), 5000);
+      return;
+    }
     if (referralCount <= 0) return;
     setIsProcessingWithdraw(true);
     setTimeout(() => {
@@ -17570,9 +17600,11 @@ function App() {
                                 <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                               </svg>
-                              REFERRAL PROGRAM
+                              REFERRAL PROGRAM • ₹300 PLAN EXCLUSIVE
                             </span>
-                            <span className="feed-ad-price-pill referral-pill">Get ₹100 / Person</span>
+                            <span className="feed-ad-price-pill referral-pill">
+                              {currentPlanId === '300' ? 'Get ₹100 / Person (Active)' : '₹100 / Person (₹300 Plan Only)'}
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -17602,17 +17634,32 @@ function App() {
                               Add one person and get 100 rupees
                             </h4>
                             <p className="feed-ad-description">
-                              Refer friends, family, and colleagues to Planet! Earn ₹100 instant cash for every person who joins.
+                              {currentPlanId === '300'
+                                ? 'Your ₹300 Plan is active! Refer friends, family, and colleagues to Planet to earn ₹100 instant cash for every person who joins.'
+                                : 'Exclusive to ₹300 Plan members: Refer friends to Planet and earn ₹100 instant cash for every person who joins. Upgrade to unlock!'}
                             </p>
                           </div>
                           <div className="feed-ad-btn-wrap">
-                            <button
-                              type="button"
-                              className="feed-ad-subscribe-action-btn referral-action-btn"
-                              onClick={handleCopyReferralLink}
-                            >
-                              {referralCopied ? '✓ Copied Link' : 'Copy Referral Link'}
-                            </button>
+                            {currentPlanId === '300' ? (
+                              <button
+                                type="button"
+                                className="feed-ad-subscribe-action-btn referral-action-btn"
+                                onClick={handleCopyReferralLink}
+                              >
+                                {referralCopied ? '✓ Copied Link' : 'Copy Referral Link'}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="feed-ad-subscribe-action-btn referral-action-btn"
+                                onClick={() => {
+                                  setSelectedModalPlanId('300');
+                                  setShowSubscriptionModal(true);
+                                }}
+                              >
+                                🔒 Unlock with ₹300 Plan
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -25712,10 +25759,12 @@ function App() {
                               <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
                               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                             </svg>
-                            REFERRAL ADVERTISEMENT
+                            REFERRAL PROGRAM • ₹300 PLAN EXCLUSIVE
                           </span>
-                          <span className="referral-earnings-pill">
-                            Earned: ₹{referralCount * 100} ({referralCount} Added)
+                          <span className={`referral-earnings-pill ${currentPlanId === '300' ? 'active-plan' : 'locked-plan'}`}>
+                            {currentPlanId === '300'
+                              ? `✓ ₹300 Plan Active • Earned: ₹${referralCount * 100} (${referralCount} Added)`
+                              : '🔒 Locked: Requires ₹300/mo Subscription'}
                           </span>
                         </div>
 
@@ -25734,7 +25783,7 @@ function App() {
                           </h2>
 
                           <p className="main-space-ad-subtitle">
-                            Share Planet with your network! For every person who joins through your referral link or code, you receive an instant reward of 100 rupees directly to your wallet.
+                            Exclusive referral reward for ₹300 Subscription Plan users! Share Planet with your network. For every person who joins through your referral link, you receive an instant reward of 100 rupees directly to your wallet.
                           </p>
 
                           {/* Price / Reward Showcase Box */}
@@ -25745,19 +25794,59 @@ function App() {
                               <span className="price-period">/ per person</span>
                             </div>
                             <p className="price-guarantee">
-                              Add one person and get 100 rupees • Unlimited referrals • Instant UPI payout
+                              Add one person and get 100 rupees • Exclusive for ₹300 Plan Users • Instant UPI payout
                             </p>
                           </div>
 
+                          {/* Plan Lock Notice if user is not on ₹300 plan */}
+                          {currentPlanId !== '300' && (
+                            <div className="referral-plan-lock-notice" id="referral-plan-lock-notice">
+                              <div className="lock-notice-header">
+                                <div className="lock-notice-icon-box">
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                  </svg>
+                                </div>
+                                <div className="lock-notice-content">
+                                  <h4 className="lock-notice-title">100 Rupees Referral is Exclusive to ₹300 Plan Users</h4>
+                                  <p className="lock-notice-desc">
+                                    You are currently on the Free Starter plan. To activate your referral link, earn ₹100 cash per person added, and withdraw to UPI, upgrade to the <strong>₹300/month Standard Premium Plan</strong>.
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="referral-unlock-plan-btn"
+                                id="referral-unlock-upgrade-btn"
+                                onClick={() => {
+                                  setSelectedModalPlanId('300');
+                                  setShowSubscriptionModal(true);
+                                }}
+                              >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                </svg>
+                                <span>Upgrade to ₹300/mo Plan to Unlock Referrals</span>
+                              </button>
+                            </div>
+                          )}
+
                           {/* Referral Link & Share Box */}
-                          <div className="referral-share-card">
-                            <label className="referral-input-label">Your Unique Referral Link</label>
+                          <div className={`referral-share-card ${currentPlanId !== '300' ? 'locked-feature' : ''}`}>
+                            <label className="referral-input-label">
+                              Your Unique Referral Link {currentPlanId !== '300' && '(Locked - Requires ₹300 Plan)'}
+                            </label>
                             <div className="referral-link-row">
                               <input
                                 type="text"
                                 readOnly
                                 className="referral-link-input"
-                                value={typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : `https://webmind.cloud/join?ref=${loggedInUser || 'user'}`}
+                                value={
+                                  currentPlanId === '300'
+                                    ? (typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : `https://webmind.cloud/join?ref=${loggedInUser || 'user'}`)
+                                    : '🔒 Locked: Subscribe to ₹300/mo Plan to activate your unique invite link'
+                                }
                               />
                               <button
                                 type="button"
@@ -25771,13 +25860,21 @@ function App() {
                                     </svg>
                                     <span>Copied!</span>
                                   </>
-                                ) : (
+                                ) : currentPlanId === '300' ? (
                                   <>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                     </svg>
                                     <span>Copy Link</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    <span>Unlock</span>
                                   </>
                                 )}
                               </button>
@@ -25789,6 +25886,16 @@ function App() {
                                 type="button"
                                 className="referral-share-whatsapp-btn"
                                 onClick={() => {
+                                  if (currentPlanId !== '300') {
+                                    setSubscriptionToast({
+                                      type: 'warning',
+                                      text: '🔒 The ₹100 referral reward is exclusive to ₹300 Subscription Plan users. Please upgrade to unlock!',
+                                    });
+                                    setTimeout(() => setSubscriptionToast(null), 5000);
+                                    setSelectedModalPlanId('300');
+                                    setShowSubscriptionModal(true);
+                                    return;
+                                  }
                                   const link = typeof window !== 'undefined' ? `${window.location.origin}/join?ref=${loggedInUser || 'user'}` : 'https://webmind.cloud';
                                   const msg = encodeURIComponent(`Hey! Join me on Planet: ${link}`);
                                   window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
@@ -25805,13 +25912,13 @@ function App() {
                                 className="referral-simulate-btn"
                                 id="simulate-add-person-btn"
                                 onClick={handleSimulateAddPerson}
-                                title="Simulate a friend joining using your link"
+                                title={currentPlanId === '300' ? "Simulate a friend joining using your link" : "Upgrade to ₹300 Plan to activate referral rewards"}
                               >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <line x1="12" y1="5" x2="12" y2="19"></line>
                                   <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                                Add 1 Person (+₹100)
+                                {currentPlanId === '300' ? 'Add 1 Person (+₹100)' : '🔒 Add 1 Person (₹300 Plan)'}
                               </button>
                             </div>
                           </div>
@@ -25820,31 +25927,45 @@ function App() {
                           <div className="referral-dashboard-row">
                             <div className="referral-stat-box">
                               <span className="stat-label">People Added</span>
-                              <span className="stat-value">{referralCount}</span>
-                              <span className="stat-caption">Friends joined</span>
+                              <span className="stat-value">{currentPlanId === '300' ? referralCount : '0'}</span>
+                              <span className="stat-caption">{currentPlanId === '300' ? 'Friends joined' : 'Locked (Requires ₹300 Plan)'}</span>
                             </div>
                             <div className="referral-stat-box">
                               <span className="stat-label">Reward per Person</span>
                               <span className="stat-value">₹100</span>
-                              <span className="stat-caption">Instant cash bonus</span>
+                              <span className="stat-caption">{currentPlanId === '300' ? 'Instant cash bonus' : '₹300 Plan Exclusive'}</span>
                             </div>
-                            <div className="referral-stat-box highlight">
+                            <div className={`referral-stat-box ${currentPlanId === '300' ? 'highlight' : ''}`}>
                               <span className="stat-label">Total Cash Earned</span>
-                              <span className="stat-value">₹{referralCount * 100}</span>
-                              <span className="stat-caption">100 rupees × {referralCount}</span>
+                              <span className="stat-value">{currentPlanId === '300' ? `₹${referralCount * 100}` : '₹0'}</span>
+                              <span className="stat-caption">{currentPlanId === '300' ? `100 rupees × ${referralCount}` : 'Upgrade to ₹300 Plan to Earn'}</span>
                             </div>
                           </div>
 
                           {referralCount > 0 && (
                             <div className="referral-withdraw-cta-row">
-                              <button
-                                type="button"
-                                className="referral-withdraw-btn"
-                                id="referral-withdraw-btn"
-                                onClick={() => setShowWithdrawModal(true)}
-                              >
-                                Withdraw ₹{referralCount * 100} to Bank / UPI
-                              </button>
+                              {currentPlanId === '300' ? (
+                                <button
+                                  type="button"
+                                  className="referral-withdraw-btn"
+                                  id="referral-withdraw-btn"
+                                  onClick={() => setShowWithdrawModal(true)}
+                                >
+                                  Withdraw ₹{referralCount * 100} to Bank / UPI
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="referral-withdraw-btn"
+                                  id="referral-withdraw-btn"
+                                  onClick={() => {
+                                    setSelectedModalPlanId('300');
+                                    setShowSubscriptionModal(true);
+                                  }}
+                                >
+                                  🔒 Upgrade to ₹300 Plan to Withdraw ₹{referralCount * 100}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -25856,16 +25977,16 @@ function App() {
                             <div className="referral-step-card">
                               <div className="step-number-bubble">1</div>
                               <div className="step-text-wrap">
-                                <h4>Share Your Invite Link</h4>
-                                <p>Send your unique referral link or code to friends, colleagues, or groups on chat.</p>
+                                <h4>Subscribe to ₹300 Plan</h4>
+                                <p>Active ₹300/month Standard Premium membership unlocks your 100 rupees referral eligibility.</p>
                               </div>
                             </div>
 
                             <div className="referral-step-card">
                               <div className="step-number-bubble">2</div>
                               <div className="step-text-wrap">
-                                <h4>Friend Signs Up</h4>
-                                <p>Your friend opens the link, creates their account, and joins Planet.</p>
+                                <h4>Share Your Invite Link</h4>
+                                <p>Send your unique referral link or code to friends, colleagues, or groups on chat.</p>
                               </div>
                             </div>
 
@@ -25886,7 +26007,7 @@ function App() {
                               <circle cx="12" cy="12" r="10"></circle>
                               <polyline points="12 6 12 12 16 14"></polyline>
                             </svg>
-                            <span>Instant ₹100 Credited</span>
+                            <span>Instant ₹100 Credited • ₹300 Plan Exclusive</span>
                           </div>
                           <div className="guarantee-chip">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -27022,7 +27143,7 @@ function App() {
                     <div className="summary-plan-line">
                       <div>
                         <strong className="plan-name">Referral Cash Available</strong>
-                        <p className="plan-desc">From {referralCount} person(s) added (100 rupees per person)</p>
+                        <p className="plan-desc">From {referralCount} person(s) added (100 rupees per person) • ₹300 Plan Exclusive Benefit</p>
                       </div>
                       <div className="summary-price-badge">
                         <span className="badge-amt">₹{referralCount * 100}</span>
@@ -27043,7 +27164,7 @@ function App() {
                       onChange={(e) => setWithdrawUpiInput(e.target.value)}
                     />
                     <small className="sub-input-note">
-                      ₹{referralCount * 100} will be transferred instantly via IMPS / UPI to this address.
+                      ₹{referralCount * 100} will be transferred instantly via IMPS / UPI to this address (₹300 Plan Members Only).
                     </small>
                   </div>
                 </div>
