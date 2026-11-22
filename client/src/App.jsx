@@ -699,18 +699,6 @@ function App() {
       return 'settings-and-personalization';
     }
     if (
-      window.location.pathname === '/blocking-and-safety' ||
-      window.location.hash === '#blocking-and-safety' ||
-      window.location.pathname === '/blocking-safety' ||
-      window.location.hash === '#blocking-safety' ||
-      window.location.pathname === '/blocking' ||
-      window.location.hash === '#blocking' ||
-      window.location.pathname === '/safety' ||
-      window.location.hash === '#safety'
-    ) {
-      return 'blocking-and-safety';
-    }
-    if (
       window.location.pathname === '/voice-and-video-call' ||
       window.location.hash === '#voice-and-video-call' ||
       window.location.pathname === '/voice-video-call' ||
@@ -807,9 +795,7 @@ function App() {
                                                         ? '/file-and-document-sharing'
                                                         : view === 'settings-and-personalization'
                                                                       ? '/settings-and-personalization'
-                                                                      : view === 'blocking-and-safety'
-                                                                        ? '/blocking-and-safety'
-                                                                        : view === 'voice-and-video-call'
+                                                                      : view === 'voice-and-video-call'
                                                                           ? '/voice-and-video-call'
                                                                           : view === 'blank'
                                                                             ? '/blank'
@@ -954,17 +940,6 @@ function App() {
         window.location.hash === '#settings'
       ) {
         setCurrentView('settings-and-personalization');
-      } else if (
-        window.location.pathname === '/blocking-and-safety' ||
-        window.location.hash === '#blocking-and-safety' ||
-        window.location.pathname === '/blocking-safety' ||
-        window.location.hash === '#blocking-safety' ||
-        window.location.pathname === '/blocking' ||
-        window.location.hash === '#blocking' ||
-        window.location.pathname === '/safety' ||
-        window.location.hash === '#safety'
-      ) {
-        setCurrentView('blocking-and-safety');
       } else if (
         window.location.pathname === '/voice-and-video-call' ||
         window.location.hash === '#voice-and-video-call' ||
@@ -9403,7 +9378,6 @@ function App() {
     currentView === 'communities' ||
     currentView === 'file-and-document-sharing' ||
     currentView === 'settings-and-personalization' ||
-    currentView === 'blocking-and-safety' ||
     currentView === 'voice-and-video-call'
   ) {
     return (
@@ -9728,27 +9702,6 @@ function App() {
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                   </svg>
                   {!isSidebarCollapsed && <span>Settings and Personalization</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'blocking-and-safety' ? 'active' : ''}`}
-                  id="blocking-and-safety-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'blocking-and-safety'
-                        ? 'blank'
-                        : 'blocking-and-safety'
-                    )
-                  }
-                  title="Blocking and Safety"
-                  aria-label="Blocking and Safety"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Blocking and Safety</span>}
                 </button>
               </nav>
             </div>
