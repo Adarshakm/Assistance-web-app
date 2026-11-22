@@ -16358,44 +16358,76 @@ function App() {
                 <div className="privacy-space" id="privacy-space">
                   <div className="privacy-container" id="privacy-container">
                     <div className="privacy-card" id="account-privacy-card">
-                      <h2 className="privacy-card-title" id="account-privacy-title">
-                        Public and private accounts
-                      </h2>
-                      <div
-                        className="account-privacy-options"
-                        id="account-privacy-options"
-                        role="radiogroup"
-                        aria-label="Public and private accounts"
-                      >
-                        <label
-                          htmlFor="privacy-public"
-                          className={`account-privacy-option ${accountPrivacy === 'public' ? 'active' : ''}`}
-                        >
-                          <input
-                            type="radio"
-                            id="privacy-public"
-                            name="account-privacy"
-                            value="public"
-                            checked={accountPrivacy === 'public'}
-                            onChange={() => handleAccountPrivacyChange('public')}
-                          />
-                          <span className="privacy-option-label">Public account</span>
-                        </label>
+                      <div className="privacy-card-header">
+                        <h2 className="privacy-card-title" id="account-privacy-title">
+                          Public and private accounts
+                        </h2>
+                        <span className="privacy-status-badge" id="account-privacy-status-badge">
+                          {accountPrivacy === 'public' ? '🌐 Public' : '🔒 Private'}
+                        </span>
+                      </div>
 
-                        <label
-                          htmlFor="privacy-private"
-                          className={`account-privacy-option ${accountPrivacy === 'private' ? 'active' : ''}`}
+                      <p className="privacy-card-desc">
+                        {accountPrivacy === 'public'
+                          ? 'When your account is public, your profile and posts can be seen by anyone on Planet.'
+                          : 'When your account is private, only followers you approve can see what you share.'}
+                      </p>
+
+                      {/* Single Button Selection: Left (Public) and Right (Private) */}
+                      <div
+                        className={`account-privacy-single-btn ${accountPrivacy === 'private' ? 'is-right' : 'is-left'}`}
+                        id="account-privacy-single-btn"
+                        role="radiogroup"
+                        aria-label="Public and private accounts selection"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowLeft') {
+                            handleAccountPrivacyChange('public');
+                          } else if (e.key === 'ArrowRight') {
+                            handleAccountPrivacyChange('private');
+                          } else if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleAccountPrivacyChange(accountPrivacy === 'public' ? 'private' : 'public');
+                          }
+                        }}
+                      >
+                        {/* Sliding Active Pill Background (Smoothly moves left and right) */}
+                        <div className="privacy-slider-thumb" aria-hidden="true" />
+
+                        {/* Left Side: Public Account */}
+                        <button
+                          type="button"
+                          id="privacy-btn-left-public"
+                          role="radio"
+                          aria-checked={accountPrivacy === 'public'}
+                          className={`privacy-side-btn left ${accountPrivacy === 'public' ? 'active' : ''}`}
+                          onClick={() => handleAccountPrivacyChange('public')}
+                          title="Select Public account (Left)"
                         >
-                          <input
-                            type="radio"
-                            id="privacy-private"
-                            name="account-privacy"
-                            value="private"
-                            checked={accountPrivacy === 'private'}
-                            onChange={() => handleAccountPrivacyChange('private')}
-                          />
-                          <span className="privacy-option-label">Private account</span>
-                        </label>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                          </svg>
+                          <span>Public account</span>
+                        </button>
+
+                        {/* Right Side: Private Account */}
+                        <button
+                          type="button"
+                          id="privacy-btn-right-private"
+                          role="radio"
+                          aria-checked={accountPrivacy === 'private'}
+                          className={`privacy-side-btn right ${accountPrivacy === 'private' ? 'active' : ''}`}
+                          onClick={() => handleAccountPrivacyChange('private')}
+                          title="Select Private account (Right)"
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                          </svg>
+                          <span>Private account</span>
+                        </button>
                       </div>
                     </div>
                   </div>
