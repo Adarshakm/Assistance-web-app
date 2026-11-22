@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="planetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.9" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="#09090b" stroke="#27272a" stroke-width="2" />
+  <circle cx="32" cy="32" r="16" fill="url(#planetGrad)" />
+  <ellipse cx="32" cy="32" rx="26" ry="7.5" fill="none" stroke="url(#ringGrad)" stroke-width="2.5" transform="rotate(-24 32 32)" />
+  <circle cx="51" cy="24" r="3" fill="#38bdf8" />
+</svg>
