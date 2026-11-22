@@ -906,73 +906,73 @@ function App() {
         ? '/groups'
         : view === 'messages'
           ? '/messages'
-        : view === 'login'
-          ? '/login'
-          : view === 'forgot-password'
-            ? '/forgot-password'
-            : view === 'reset-password'
-              ? '/reset-password'
-              : view === 'account'
-                ? '/account'
-                : view === 'contacts'
-                  ? '/contacts'
-                  : view === 'profile'
-                    ? '/profile'
-                    : view === 'social'
-                      ? '/social-connections'
-                      : view === 'search-and-discovery'
-                        ? '/search-and-discovery'
-                        : view === 'user-profile'
-                          ? (selectedProfileUser?.username ? `/user/${selectedProfileUser.username}` : '/user-profile')
-                          : view === 'privacy'
-                            ? '/privacy-security'
-                            : view === 'whats-happening'
-                              ? '/whats-happening'
-                              : view === 'people-i-follow'
-                                ? '/people-i-follow'
-                                : view === 'friends-only'
-                                  ? '/friends-only'
-                                  : view === 'photo-sharing'
-                                    ? '/photo-sharing'
-                                    : view === 'video-sharing'
-                                      ? '/video-sharing'
-                                      : view === 'blank' || view === 'main' || view === 'main-space'
-                                        ? '/blank'
-                                        : view === 'stories'
-                                          ? '/stories'
-                                          : view === 'live-stream'
-                                            ? '/live-stream'
-                                            : view === 'communities'
-                                              ? '/communities'
-                                              : view === 'community-management'
-                                                ? '/community-management'
-                                                : view === 'events-and-meetups'
-                                                  ? '/events-and-meetups'
-                                                  : view === 'public-page'
-                                                    ? '/public-page'
-                                                    : view === 'file-and-document-sharing'
-                                                      ? '/file-and-document-sharing'
-                                                      : view === 'learning-and-knowledge-sharing'
-                                                        ? '/learning-and-knowledge-sharing'
-                                                        : view === 'developer-and-technology-community'
-                                                          ? '/developer-and-technology-community'
-                                                          : view === 'business-and-professional-networking'
-                                                            ? '/business-and-professional-networking'
-                                                            : view === 'polls-and-voting'
-                                                              ? '/polls-and-voting'
-                                                              : view === 'advertising'
-                                                                ? '/advertising'
-                                                                : view === 'subscription-and-payments'
-                                                                  ? '/subscription-and-payments'
-                                                                  : view === 'settings-and-personalization'
-                                                                    ? '/settings-and-personalization'
-                                                                    : view === 'blocking-and-safety'
-                                                                      ? '/blocking-and-safety'
-                                                                      : view === 'voice-and-video-call'
-                                                                        ? '/voice-and-video-call'
-                                                                        : view === 'blank'
-                                                                          ? '/blank'
-                                                                          : '/';
+          : view === 'login'
+            ? '/login'
+            : view === 'forgot-password'
+              ? '/forgot-password'
+              : view === 'reset-password'
+                ? '/reset-password'
+                : view === 'account'
+                  ? '/account'
+                  : view === 'contacts'
+                    ? '/contacts'
+                    : view === 'profile'
+                      ? '/profile'
+                      : view === 'social'
+                        ? '/social-connections'
+                        : view === 'search-and-discovery'
+                          ? '/search-and-discovery'
+                          : view === 'user-profile'
+                            ? (selectedProfileUser?.username ? `/user/${selectedProfileUser.username}` : '/user-profile')
+                            : view === 'privacy'
+                              ? '/privacy-security'
+                              : view === 'whats-happening'
+                                ? '/whats-happening'
+                                : view === 'people-i-follow'
+                                  ? '/people-i-follow'
+                                  : view === 'friends-only'
+                                    ? '/friends-only'
+                                    : view === 'photo-sharing'
+                                      ? '/photo-sharing'
+                                      : view === 'video-sharing'
+                                        ? '/video-sharing'
+                                        : view === 'blank' || view === 'main' || view === 'main-space'
+                                          ? '/blank'
+                                          : view === 'stories'
+                                            ? '/stories'
+                                            : view === 'live-stream'
+                                              ? '/live-stream'
+                                              : view === 'communities'
+                                                ? '/communities'
+                                                : view === 'community-management'
+                                                  ? '/community-management'
+                                                  : view === 'events-and-meetups'
+                                                    ? '/events-and-meetups'
+                                                    : view === 'public-page'
+                                                      ? '/public-page'
+                                                      : view === 'file-and-document-sharing'
+                                                        ? '/file-and-document-sharing'
+                                                        : view === 'learning-and-knowledge-sharing'
+                                                          ? '/learning-and-knowledge-sharing'
+                                                          : view === 'developer-and-technology-community'
+                                                            ? '/developer-and-technology-community'
+                                                            : view === 'business-and-professional-networking'
+                                                              ? '/business-and-professional-networking'
+                                                              : view === 'polls-and-voting'
+                                                                ? '/polls-and-voting'
+                                                                : view === 'advertising'
+                                                                  ? '/advertising'
+                                                                  : view === 'subscription-and-payments'
+                                                                    ? '/subscription-and-payments'
+                                                                    : view === 'settings-and-personalization'
+                                                                      ? '/settings-and-personalization'
+                                                                      : view === 'blocking-and-safety'
+                                                                        ? '/blocking-and-safety'
+                                                                        : view === 'voice-and-video-call'
+                                                                          ? '/voice-and-video-call'
+                                                                          : view === 'blank'
+                                                                            ? '/blank'
+                                                                            : '/';
     if (window.location.pathname !== path) {
       window.history.pushState({}, '', path);
     }
@@ -1581,6 +1581,22 @@ function App() {
     };
   });
   const [profileVisibilityFeedback, setProfileVisibilityFeedback] = useState(null);
+
+  // Message Permission Settings state
+  const [messagePermissionSettings, setMessagePermissionSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_message_permission_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      whoCanMessage: 'everyone',
+      filterMessageRequests: true,
+      readReceipts: true,
+      typingIndicators: true,
+      allowGroupInvites: true,
+    };
+  });
+  const [messagePermissionFeedback, setMessagePermissionFeedback] = useState(null);
 
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
@@ -3143,6 +3159,20 @@ function App() {
     setProfileVisibilityFeedback('Visibility settings updated ✨');
     setTimeout(() => {
       setProfileVisibilityFeedback(null);
+    }, 2500);
+  };
+
+  const handleUpdateMessagePermission = (key, value) => {
+    setMessagePermissionSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_message_permission_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setMessagePermissionFeedback('Message permissions updated ✨');
+    setTimeout(() => {
+      setMessagePermissionFeedback(null);
     }, 2500);
   };
 
@@ -16603,6 +16633,155 @@ function App() {
                             aria-label="Show contact details"
                             className={`visibility-switch-btn ${profileVisibilitySettings.showContactDetails ? 'active' : ''}`}
                             onClick={() => handleUpdateProfileVisibility('showContactDetails', !profileVisibilitySettings.showContactDetails)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 3: Message Permission */}
+                    <div className="privacy-card" id="message-permission-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="message-permission-title">
+                            Message permission
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Manage who can send you direct messages, message requests, and chat invitations.
+                          </p>
+                        </div>
+                        {messagePermissionFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {messagePermissionFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Main Message Permission Scope */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can message you</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can send you direct messages"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="msg-permission-scope-everyone"
+                            aria-checked={messagePermissionSettings.whoCanMessage === 'everyone'}
+                            className={`visibility-scope-option ${messagePermissionSettings.whoCanMessage === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('whoCanMessage', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">💬</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Anyone on Planet can message you</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="msg-permission-scope-contacts"
+                            aria-checked={messagePermissionSettings.whoCanMessage === 'contacts'}
+                            className={`visibility-scope-option ${messagePermissionSettings.whoCanMessage === 'contacts' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('whoCanMessage', 'contacts')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Contacts & Following</span>
+                              <span className="visibility-scope-desc">People you follow & saved contacts</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="msg-permission-scope-none"
+                            aria-checked={messagePermissionSettings.whoCanMessage === 'none'}
+                            className={`visibility-scope-option ${messagePermissionSettings.whoCanMessage === 'none' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('whoCanMessage', 'none')}
+                          >
+                            <div className="visibility-scope-icon">🚫</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">No One</span>
+                              <span className="visibility-scope-desc">Block incoming new messages</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Message Controls */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Filter message requests</span>
+                            <span className="visibility-toggle-desc">Put messages from people you don't follow into a separate requests folder</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="msg-permission-toggle-requests"
+                            aria-checked={messagePermissionSettings.filterMessageRequests}
+                            aria-label="Filter message requests"
+                            className={`visibility-switch-btn ${messagePermissionSettings.filterMessageRequests ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('filterMessageRequests', !messagePermissionSettings.filterMessageRequests)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Read receipts (Seen status)</span>
+                            <span className="visibility-toggle-desc">Let senders know when you have read their messages with blue checkmarks</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="msg-permission-toggle-read-receipts"
+                            aria-checked={messagePermissionSettings.readReceipts}
+                            aria-label="Read receipts"
+                            className={`visibility-switch-btn ${messagePermissionSettings.readReceipts ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('readReceipts', !messagePermissionSettings.readReceipts)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Typing indicators</span>
+                            <span className="visibility-toggle-desc">Show when you are actively typing a response in direct chat</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="msg-permission-toggle-typing"
+                            aria-checked={messagePermissionSettings.typingIndicators}
+                            aria-label="Typing indicators"
+                            className={`visibility-switch-btn ${messagePermissionSettings.typingIndicators ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('typingIndicators', !messagePermissionSettings.typingIndicators)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Group chat invitations</span>
+                            <span className="visibility-toggle-desc">Allow people to add you to group chats without waiting for invite confirmation</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="msg-permission-toggle-group-invites"
+                            aria-checked={messagePermissionSettings.allowGroupInvites}
+                            aria-label="Group chat invitations"
+                            className={`visibility-switch-btn ${messagePermissionSettings.allowGroupInvites ? 'active' : ''}`}
+                            onClick={() => handleUpdateMessagePermission('allowGroupInvites', !messagePermissionSettings.allowGroupInvites)}
                           >
                             <span className="visibility-switch-thumb" />
                           </button>
