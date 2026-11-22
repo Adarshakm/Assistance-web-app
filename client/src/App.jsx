@@ -679,32 +679,6 @@ function App() {
       return 'communities';
     }
     if (
-      window.location.pathname === '/community-management' ||
-      window.location.hash === '#community-management' ||
-      window.location.pathname === '/community-manage' ||
-      window.location.hash === '#community-manage'
-    ) {
-      return 'community-management';
-    }
-    if (
-      window.location.pathname === '/events-and-meetups' ||
-      window.location.hash === '#events-and-meetups' ||
-      window.location.pathname === '/events' ||
-      window.location.hash === '#events'
-    ) {
-      return 'events-and-meetups';
-    }
-    if (
-      window.location.pathname === '/public-page' ||
-      window.location.hash === '#public-page' ||
-      window.location.pathname === '/public-pages' ||
-      window.location.hash === '#public-pages' ||
-      window.location.pathname === '/public' ||
-      window.location.hash === '#public'
-    ) {
-      return 'public-page';
-    }
-    if (
       window.location.pathname === '/file-and-document-sharing' ||
       window.location.hash === '#file-and-document-sharing' ||
       window.location.pathname === '/files-and-documents' ||
@@ -715,66 +689,6 @@ function App() {
       window.location.hash === '#documents'
     ) {
       return 'file-and-document-sharing';
-    }
-    if (
-      window.location.pathname === '/learning-and-knowledge-sharing' ||
-      window.location.hash === '#learning-and-knowledge-sharing' ||
-      window.location.pathname === '/learning-knowledge-sharing' ||
-      window.location.hash === '#learning-knowledge-sharing' ||
-      window.location.pathname === '/learning' ||
-      window.location.hash === '#learning' ||
-      window.location.pathname === '/knowledge' ||
-      window.location.hash === '#knowledge'
-    ) {
-      return 'learning-and-knowledge-sharing';
-    }
-    if (
-      window.location.pathname === '/developer-and-technology-community' ||
-      window.location.hash === '#developer-and-technology-community' ||
-      window.location.pathname === '/developer-technology-community' ||
-      window.location.hash === '#developer-technology-community' ||
-      window.location.pathname === '/developer-community' ||
-      window.location.hash === '#developer-community' ||
-      window.location.pathname === '/developers' ||
-      window.location.hash === '#developers'
-    ) {
-      return 'developer-and-technology-community';
-    }
-    if (
-      window.location.pathname === '/business-and-professional-networking' ||
-      window.location.hash === '#business-and-professional-networking' ||
-      window.location.pathname === '/business-networking' ||
-      window.location.hash === '#business-networking' ||
-      window.location.pathname === '/professional-networking' ||
-      window.location.hash === '#professional-networking' ||
-      window.location.pathname === '/business' ||
-      window.location.hash === '#business'
-    ) {
-      return 'business-and-professional-networking';
-    }
-    if (
-      window.location.pathname === '/polls-and-voting' ||
-      window.location.hash === '#polls-and-voting' ||
-      window.location.pathname === '/polls' ||
-      window.location.hash === '#polls' ||
-      window.location.pathname === '/voting' ||
-      window.location.hash === '#voting'
-    ) {
-      return 'polls-and-voting';
-    }
-    if (
-      window.location.pathname === '/advertising' ||
-      window.location.hash === '#advertising'
-    ) {
-      return 'advertising';
-    }
-    if (
-      window.location.pathname === '/subscription-and-payments' ||
-      window.location.hash === '#subscription-and-payments' ||
-      window.location.pathname === '/subscriptions-and-payments' ||
-      window.location.hash === '#subscriptions-and-payments'
-    ) {
-      return 'subscription-and-payments';
     }
     if (
       window.location.pathname === '/settings-and-personalization' ||
@@ -889,27 +803,9 @@ function App() {
                                               ? '/live-stream'
                                               : view === 'communities'
                                                 ? '/communities'
-                                                : view === 'community-management'
-                                                  ? '/community-management'
-                                                  : view === 'events-and-meetups'
-                                                    ? '/events-and-meetups'
-                                                    : view === 'public-page'
-                                                      ? '/public-page'
-                                                      : view === 'file-and-document-sharing'
+                                                : view === 'file-and-document-sharing'
                                                         ? '/file-and-document-sharing'
-                                                        : view === 'learning-and-knowledge-sharing'
-                                                          ? '/learning-and-knowledge-sharing'
-                                                          : view === 'developer-and-technology-community'
-                                                            ? '/developer-and-technology-community'
-                                                            : view === 'business-and-professional-networking'
-                                                              ? '/business-and-professional-networking'
-                                                              : view === 'polls-and-voting'
-                                                                ? '/polls-and-voting'
-                                                                : view === 'advertising'
-                                                                  ? '/advertising'
-                                                                  : view === 'subscription-and-payments'
-                                                                    ? '/subscription-and-payments'
-                                                                    : view === 'settings-and-personalization'
+                                                        : view === 'settings-and-personalization'
                                                                       ? '/settings-and-personalization'
                                                                       : view === 'blocking-and-safety'
                                                                         ? '/blocking-and-safety'
@@ -1041,29 +937,6 @@ function App() {
       ) {
         setCurrentView('communities');
       } else if (
-        window.location.pathname === '/community-management' ||
-        window.location.hash === '#community-management' ||
-        window.location.pathname === '/community-manage' ||
-        window.location.hash === '#community-manage'
-      ) {
-        setCurrentView('community-management');
-      } else if (
-        window.location.pathname === '/events-and-meetups' ||
-        window.location.hash === '#events-and-meetups' ||
-        window.location.pathname === '/events' ||
-        window.location.hash === '#events'
-      ) {
-        setCurrentView('events-and-meetups');
-      } else if (
-        window.location.pathname === '/public-page' ||
-        window.location.hash === '#public-page' ||
-        window.location.pathname === '/public-pages' ||
-        window.location.hash === '#public-pages' ||
-        window.location.pathname === '/public' ||
-        window.location.hash === '#public'
-      ) {
-        setCurrentView('public-page');
-      } else if (
         window.location.pathname === '/file-and-document-sharing' ||
         window.location.hash === '#file-and-document-sharing' ||
         window.location.pathname === '/files-and-documents' ||
@@ -1074,60 +947,6 @@ function App() {
         window.location.hash === '#documents'
       ) {
         setCurrentView('file-and-document-sharing');
-      } else if (
-        window.location.pathname === '/learning-and-knowledge-sharing' ||
-        window.location.hash === '#learning-and-knowledge-sharing' ||
-        window.location.pathname === '/learning-knowledge-sharing' ||
-        window.location.hash === '#learning-knowledge-sharing' ||
-        window.location.pathname === '/learning' ||
-        window.location.hash === '#learning' ||
-        window.location.pathname === '/knowledge' ||
-        window.location.hash === '#knowledge'
-      ) {
-        setCurrentView('learning-and-knowledge-sharing');
-      } else if (
-        window.location.pathname === '/developer-and-technology-community' ||
-        window.location.hash === '#developer-and-technology-community' ||
-        window.location.pathname === '/developer-technology-community' ||
-        window.location.hash === '#developer-technology-community' ||
-        window.location.pathname === '/developer-community' ||
-        window.location.hash === '#developer-community' ||
-        window.location.pathname === '/developers' ||
-        window.location.hash === '#developers'
-      ) {
-        setCurrentView('developer-and-technology-community');
-      } else if (
-        window.location.pathname === '/business-and-professional-networking' ||
-        window.location.hash === '#business-and-professional-networking' ||
-        window.location.pathname === '/business-networking' ||
-        window.location.hash === '#business-networking' ||
-        window.location.pathname === '/professional-networking' ||
-        window.location.hash === '#professional-networking' ||
-        window.location.pathname === '/business' ||
-        window.location.hash === '#business'
-      ) {
-        setCurrentView('business-and-professional-networking');
-      } else if (
-        window.location.pathname === '/polls-and-voting' ||
-        window.location.hash === '#polls-and-voting' ||
-        window.location.pathname === '/polls' ||
-        window.location.hash === '#polls' ||
-        window.location.pathname === '/voting' ||
-        window.location.hash === '#voting'
-      ) {
-        setCurrentView('polls-and-voting');
-      } else if (
-        window.location.pathname === '/advertising' ||
-        window.location.hash === '#advertising'
-      ) {
-        setCurrentView('advertising');
-      } else if (
-        window.location.pathname === '/subscription-and-payments' ||
-        window.location.hash === '#subscription-and-payments' ||
-        window.location.pathname === '/subscriptions-and-payments' ||
-        window.location.hash === '#subscriptions-and-payments'
-      ) {
-        setCurrentView('subscription-and-payments');
       } else if (
         window.location.pathname === '/settings-and-personalization' ||
         window.location.hash === '#settings-and-personalization' ||
@@ -9582,16 +9401,7 @@ function App() {
     currentView === 'stories' ||
     currentView === 'live-stream' ||
     currentView === 'communities' ||
-    currentView === 'community-management' ||
-    currentView === 'events-and-meetups' ||
-    currentView === 'public-page' ||
     currentView === 'file-and-document-sharing' ||
-    currentView === 'learning-and-knowledge-sharing' ||
-    currentView === 'developer-and-technology-community' ||
-    currentView === 'business-and-professional-networking' ||
-    currentView === 'polls-and-voting' ||
-    currentView === 'advertising' ||
-    currentView === 'subscription-and-payments' ||
     currentView === 'settings-and-personalization' ||
     currentView === 'blocking-and-safety' ||
     currentView === 'voice-and-video-call'
@@ -9877,67 +9687,6 @@ function App() {
 
                 <button
                   type="button"
-                  className={`sidebar-nav-item ${currentView === 'community-management' ? 'active' : ''}`}
-                  id="community-management-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'community-management'
-                        ? 'blank'
-                        : 'community-management'
-                    )
-                  }
-                  title="Community Management"
-                  aria-label="Community Management"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="9" cy="7" r="4"></circle>
-                    <polyline points="16 11 18 13 22 9"></polyline>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Community Management</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'events-and-meetups' ? 'active' : ''}`}
-                  id="events-and-meetups-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'events-and-meetups' ? 'blank' : 'events-and-meetups'
-                    )
-                  }
-                  title="Events and Meetups"
-                  aria-label="Events and Meetups"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Events and Meetups</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'public-page' ? 'active' : ''}`}
-                  id="public-page-btn"
-                  onClick={() =>
-                    navigateTo(currentView === 'public-page' ? 'blank' : 'public-page')
-                  }
-                  title="Public Page"
-                  aria-label="Public Page"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Public Page</span>}
-                </button>
-
-                <button
-                  type="button"
                   className={`sidebar-nav-item ${currentView === 'file-and-document-sharing' ? 'active' : ''}`}
                   id="file-and-document-sharing-btn"
                   onClick={() =>
@@ -9958,125 +9707,6 @@ function App() {
                     <polyline points="10 9 9 9 8 9"></polyline>
                   </svg>
                   {!isSidebarCollapsed && <span>File and Document Sharing</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'learning-and-knowledge-sharing' ? 'active' : ''}`}
-                  id="learning-and-knowledge-sharing-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'learning-and-knowledge-sharing'
-                        ? 'blank'
-                        : 'learning-and-knowledge-sharing'
-                    )
-                  }
-                  title="Learning and Knowledge Sharing"
-                  aria-label="Learning and Knowledge Sharing"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Learning and Knowledge Sharing</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'developer-and-technology-community' ? 'active' : ''}`}
-                  id="developer-and-technology-community-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'developer-and-technology-community'
-                        ? 'blank'
-                        : 'developer-and-technology-community'
-                    )
-                  }
-                  title="Developer and Technology Community"
-                  aria-label="Developer and Technology Community"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="16 18 22 12 16 6"></polyline>
-                    <polyline points="8 6 2 12 8 18"></polyline>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Developer and Technology Community</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'business-and-professional-networking' ? 'active' : ''}`}
-                  id="business-and-professional-networking-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'business-and-professional-networking'
-                        ? 'blank'
-                        : 'business-and-professional-networking'
-                    )
-                  }
-                  title="Business and Professional Networking"
-                  aria-label="Business and Professional Networking"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Business and Professional Networking</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'polls-and-voting' ? 'active' : ''}`}
-                  id="polls-and-voting-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'polls-and-voting' ? 'blank' : 'polls-and-voting'
-                    )
-                  }
-                  title="Polls and Voting"
-                  aria-label="Polls and Voting"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="20" x2="18" y2="10"></line>
-                    <line x1="12" y1="20" x2="12" y2="4"></line>
-                    <line x1="6" y1="20" x2="6" y2="14"></line>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Polls and Voting</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'advertising' ? 'active' : ''}`}
-                  id="advertising-btn"
-                  onClick={() => navigateTo(currentView === 'advertising' ? 'blank' : 'advertising')}
-                  title="Advertising"
-                  aria-label="Advertising"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Advertising</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'subscription-and-payments' ? 'active' : ''}`}
-                  id="subscription-and-payments-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'subscription-and-payments'
-                        ? 'blank'
-                        : 'subscription-and-payments'
-                    )
-                  }
-                  title="Subscription and Payments"
-                  aria-label="Subscription and Payments"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                    <line x1="1" y1="10" x2="23" y2="10"></line>
-                  </svg>
-                  {!isSidebarCollapsed && <span>Subscription and Payments</span>}
                 </button>
 
                 <button
@@ -10198,7 +9828,7 @@ function App() {
               <div className="navbar-links">
                 <button
                   type="button"
-                  className={`navbar-item ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' || currentView === 'advertising' || currentView === 'subscription-and-payments' ? 'active' : ''}`}
+                  className={`navbar-item ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' ? 'active' : ''}`}
                   id="main-space-navbar-btn"
                   onClick={() =>
                     navigateTo(currentView === 'blank' ? 'whats-happening' : 'blank')
@@ -26382,7 +26012,7 @@ function App() {
             <nav className="workspace-bottom-navbar" id="bottom-navbar" aria-label="Bottom Navigation">
               <button
                 type="button"
-                className={`bottom-nav-item highlight-ad ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' || currentView === 'advertising' || currentView === 'subscription-and-payments' ? 'active' : ''}`}
+                className={`bottom-nav-item highlight-ad ${currentView === 'blank' || currentView === 'main' || currentView === 'main-space' ? 'active' : ''}`}
                 id="bottom-nav-main-space-btn"
                 onClick={() => navigateTo('blank')}
                 title="Main Space (Advertisements & Offers)"
