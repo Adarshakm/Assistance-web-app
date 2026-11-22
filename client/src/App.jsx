@@ -2913,6 +2913,24 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    setLoggedInUser('');
+    setActiveChatContact(null);
+    setChatMessages({});
+    setRecentConversations([]);
+    setTotalUnreadMessages(0);
+    setIncomingToast(null);
+    try {
+      localStorage.removeItem('assistance_user');
+      localStorage.removeItem('assistance_active_chat_contact');
+      localStorage.removeItem('assistance_chat_history');
+      localStorage.removeItem('assistance_display_name');
+      localStorage.removeItem('assistance_profile_picture');
+      localStorage.removeItem('assistance_cover_photo');
+    } catch { }
+    navigateTo('login');
+  };
+
   const handleDeactivateAccount = () => {
     setShowDeactivateModal(false);
     setGeneralAccountFeedback('Account deactivated. Signing out...');
@@ -9330,6 +9348,34 @@ function App() {
             </div>
 
             <div className="sidebar-footer">
+              {loggedInUser && (
+                <div
+                  className="sidebar-user"
+                  title={`Logged in as ${displayName || loggedInUser}`}
+                  onClick={() => navigateTo('profile')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {profilePicture ? (
+                    <img
+                      src={profilePicture}
+                      alt={displayName || loggedInUser}
+                      className="user-avatar"
+                      style={{ objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div className="user-avatar">
+                      {(displayName || loggedInUser || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  {!isSidebarCollapsed && (
+                    <div className="user-details">
+                      <span className="user-name">{displayName || loggedInUser}</span>
+                      <span className="user-status">Online</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 type="button"
                 className={`account-btn ${currentView === 'account' ? 'active' : ''}`}
@@ -9348,20 +9394,8 @@ function App() {
               <button
                 type="button"
                 className="logout-btn"
-                onClick={() => {
-                  setLoggedInUser('');
-                  setActiveChatContact(null);
-                  setChatMessages({});
-                  setRecentConversations([]);
-                  setTotalUnreadMessages(0);
-                  setIncomingToast(null);
-                  try {
-                    localStorage.removeItem('assistance_user');
-                    localStorage.removeItem('assistance_active_chat_contact');
-                    localStorage.removeItem('assistance_chat_history');
-                  } catch { }
-                  navigateTo('login');
-                }}
+                id="logout-btn"
+                onClick={handleLogout}
                 title="Logout"
                 aria-label="Logout"
               >
