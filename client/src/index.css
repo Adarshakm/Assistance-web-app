@@ -4484,6 +4484,298 @@ body.light-theme .visibility-switch-btn.active {
 }
 
 /* ==========================================================================
+   Blocked Account Settings
+   ========================================================================== */
+.blocked-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.blocked-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #09090b;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.blocked-input-wrapper:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.blocked-input-prefix {
+  padding-left: 1rem;
+  padding-right: 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #71717a;
+  user-select: none;
+}
+
+.blocked-account-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.9rem;
+  color: #ffffff;
+  outline: none;
+}
+
+.blocked-account-input::placeholder {
+  color: #52525b;
+}
+
+.blocked-account-submit-btn {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  padding: 0.65rem 1.25rem;
+  margin-right: 0.35rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.blocked-account-submit-btn:hover {
+  background: #dc2626;
+}
+
+.blocked-input-error-msg {
+  font-size: 0.8rem;
+  color: #f87171;
+  margin: 0;
+  padding-left: 0.25rem;
+}
+
+.blocked-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.blocked-count-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  background: #27272a;
+  color: #a1a1aa;
+  border-radius: 9999px;
+}
+
+.blocked-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  background: #09090b;
+  border: 1px dashed #27272a;
+  border-radius: 12px;
+}
+
+.blocked-empty-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.blocked-empty-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  margin: 0 0 0.35rem 0;
+}
+
+.blocked-empty-desc {
+  font-size: 0.8rem;
+  color: #71717a;
+  max-width: 360px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.blocked-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.blocked-account-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #09090b;
+  border: 1px solid #1f1f23;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+}
+
+.blocked-account-item:hover {
+  background: #101014;
+  border-color: #27272a;
+}
+
+.blocked-user-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.blocked-user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #27272a;
+  flex-shrink: 0;
+}
+
+.blocked-user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.blocked-user-names {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.blocked-user-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blocked-user-handle {
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.blocked-user-date {
+  font-size: 0.75rem;
+  color: #52525b;
+}
+
+.blocked-unblock-btn {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 0.45rem 0.95rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.blocked-unblock-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+/* Light Theme Support for Blocked Account Settings */
+body.light-theme .blocked-input-wrapper {
+  background: #fafafa;
+  border-color: #e4e4e7;
+}
+
+body.light-theme .blocked-input-wrapper:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+body.light-theme .blocked-input-prefix {
+  color: #71717a;
+}
+
+body.light-theme .blocked-account-input {
+  color: #09090b;
+}
+
+body.light-theme .blocked-account-input::placeholder {
+  color: #a1a1aa;
+}
+
+body.light-theme .blocked-account-submit-btn {
+  background: #dc2626;
+}
+
+body.light-theme .blocked-account-submit-btn:hover {
+  background: #b91c1c;
+}
+
+body.light-theme .blocked-count-badge {
+  background: #e4e4e7;
+  color: #3f3f46;
+}
+
+body.light-theme .blocked-empty-state {
+  background: #fafafa;
+  border-color: #e4e4e7;
+}
+
+body.light-theme .blocked-empty-title {
+  color: #09090b;
+}
+
+body.light-theme .blocked-empty-desc {
+  color: #71717a;
+}
+
+body.light-theme .blocked-account-item {
+  background: #fafafa;
+  border-color: #e4e4e7;
+}
+
+body.light-theme .blocked-account-item:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+}
+
+body.light-theme .blocked-user-avatar {
+  border-color: #e4e4e7;
+}
+
+body.light-theme .blocked-user-name {
+  color: #09090b;
+}
+
+body.light-theme .blocked-user-handle {
+  color: #71717a;
+}
+
+body.light-theme .blocked-user-date {
+  color: #a1a1aa;
+}
+
+body.light-theme .blocked-unblock-btn {
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #dc2626;
+}
+
+body.light-theme .blocked-unblock-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: #dc2626;
+}
+
+/* ==========================================================================
    My Profile Page (Professional View)
    ========================================================================== */
 .profile-space {

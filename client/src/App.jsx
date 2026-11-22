@@ -1648,6 +1648,40 @@ function App() {
   });
   const [onlineStatusFeedback, setOnlineStatusFeedback] = useState(null);
 
+  // Blocked Account Settings state
+  const [blockedAccountsSettings, setBlockedAccountsSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_blocked_accounts_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      blockedUsers: [
+        {
+          id: 'blocked-1',
+          username: 'spambot_300',
+          displayName: 'Spam Promotion Bot',
+          blockedAt: 'Nov 14, 2026',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces'
+        },
+        {
+          id: 'blocked-2',
+          username: 'crypto_trader_hq',
+          displayName: 'Crypto Signals HQ',
+          blockedAt: 'Nov 02, 2026',
+          avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop&crop=faces'
+        }
+      ],
+      blockingStrictness: 'strict',
+      blockNewAccountsCreatedByThem: true,
+      hideInMutualGroups: true,
+      blockCallsAndInvites: true,
+      preventNetworkMentions: true,
+    };
+  });
+  const [blockedAccountsFeedback, setBlockedAccountsFeedback] = useState(null);
+  const [blockNewUserInput, setBlockNewUserInput] = useState('');
+  const [blockInputError, setBlockInputError] = useState('');
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3265,6 +3299,75 @@ function App() {
     setOnlineStatusFeedback('Online status privacy updated ✨');
     setTimeout(() => {
       setOnlineStatusFeedback(null);
+    }, 2500);
+  };
+
+  const handleUpdateBlockedAccountsSetting = (key, value) => {
+    setBlockedAccountsSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_blocked_accounts_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setBlockedAccountsFeedback('Blocked account settings updated ✨');
+    setTimeout(() => {
+      setBlockedAccountsFeedback(null);
+    }, 2500);
+  };
+
+  const handleUnblockUser = (userId) => {
+    setBlockedAccountsSettings((prev) => {
+      const userToUnblock = prev.blockedUsers.find((u) => u.id === userId);
+      const updatedUsers = prev.blockedUsers.filter((u) => u.id !== userId);
+      const updated = { ...prev, blockedUsers: updatedUsers };
+      try {
+        localStorage.setItem('planet_blocked_accounts_settings', JSON.stringify(updated));
+      } catch { }
+      setBlockedAccountsFeedback(`Unblocked @${userToUnblock?.username || 'user'} ✨`);
+      setTimeout(() => {
+        setBlockedAccountsFeedback(null);
+      }, 2500);
+      return updated;
+    });
+  };
+
+  const handleBlockNewUser = (e) => {
+    e.preventDefault();
+    const cleanInput = blockNewUserInput.trim().replace(/^@/, '');
+    if (!cleanInput) {
+      setBlockInputError('Please enter a username or handle to block.');
+      return;
+    }
+
+    const alreadyBlocked = blockedAccountsSettings.blockedUsers.some(
+      (u) => u.username.toLowerCase() === cleanInput.toLowerCase()
+    );
+    if (alreadyBlocked) {
+      setBlockInputError(`@${cleanInput} is already in your blocked list.`);
+      return;
+    }
+
+    const newUser = {
+      id: `blocked-${Date.now()}`,
+      username: cleanInput,
+      displayName: cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1),
+      blockedAt: 'Just now',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
+    };
+
+    setBlockedAccountsSettings((prev) => {
+      const updated = { ...prev, blockedUsers: [newUser, ...prev.blockedUsers] };
+      try {
+        localStorage.setItem('planet_blocked_accounts_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setBlockNewUserInput('');
+    setBlockInputError('');
+    setBlockedAccountsFeedback(`Blocked @${cleanInput} ✨`);
+    setTimeout(() => {
+      setBlockedAccountsFeedback(null);
     }, 2500);
   };
 
@@ -17453,6 +17556,227 @@ function App() {
                             aria-label="Automatically mark offline when idle"
                             className={`visibility-switch-btn ${onlineStatusPrivacySettings.hideOnlineWhenIdle ? 'active' : ''}`}
                             onClick={() => handleUpdateOnlineStatusPrivacy('hideOnlineWhenIdle', !onlineStatusPrivacySettings.hideOnlineWhenIdle)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 7: Blocked Account Settings */}
+                    <div className="privacy-card" id="blocked-accounts-settings-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="blocked-accounts-settings-title">
+                            Blocked account settings
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Manage blocked accounts and configure how blocking restricts profiles, direct messages, calls, and interactions across Planet.
+                          </p>
+                        </div>
+                        {blockedAccountsFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {blockedAccountsFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Block new account quick input form */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Block an account</label>
+                        <form className="blocked-add-form" onSubmit={handleBlockNewUser}>
+                          <div className="blocked-input-wrapper">
+                            <span className="blocked-input-prefix">@</span>
+                            <input
+                              type="text"
+                              id="blocked-account-input"
+                              className="blocked-account-input"
+                              placeholder="Enter username to block..."
+                              value={blockNewUserInput}
+                              onChange={(e) => {
+                                setBlockNewUserInput(e.target.value);
+                                if (blockInputError) setBlockInputError('');
+                              }}
+                              aria-label="Enter username to block"
+                            />
+                            <button
+                              type="submit"
+                              id="blocked-account-add-btn"
+                              className="blocked-account-submit-btn"
+                            >
+                              Block
+                            </button>
+                          </div>
+                          {blockInputError && (
+                            <p className="blocked-input-error-msg" role="alert">{blockInputError}</p>
+                          )}
+                        </form>
+                      </div>
+
+                      {/* Currently Blocked Accounts List */}
+                      <div className="visibility-section">
+                        <div className="blocked-list-header">
+                          <label className="visibility-section-label" style={{ marginBottom: 0 }}>
+                            Blocked accounts ({blockedAccountsSettings.blockedUsers.length})
+                          </label>
+                          <span className="blocked-count-badge">
+                            {blockedAccountsSettings.blockedUsers.length} blocked
+                          </span>
+                        </div>
+
+                        {blockedAccountsSettings.blockedUsers.length === 0 ? (
+                          <div className="blocked-empty-state" id="blocked-empty-state">
+                            <div className="blocked-empty-icon">🛡️</div>
+                            <p className="blocked-empty-title">No blocked accounts</p>
+                            <p className="blocked-empty-desc">
+                              Accounts you block won't be able to see your profile, follow you, message you, or find your posts.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="blocked-accounts-list" id="blocked-accounts-list">
+                            {blockedAccountsSettings.blockedUsers.map((user) => (
+                              <div className="blocked-account-item" key={user.id} id={`blocked-user-${user.id}`}>
+                                <div className="blocked-user-meta">
+                                  <img
+                                    src={user.avatar}
+                                    alt={user.displayName}
+                                    className="blocked-user-avatar"
+                                    onError={(e) => {
+                                      e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces';
+                                    }}
+                                  />
+                                  <div className="blocked-user-details">
+                                    <div className="blocked-user-names">
+                                      <span className="blocked-user-name">{user.displayName}</span>
+                                      <span className="blocked-user-handle">@{user.username}</span>
+                                    </div>
+                                    <span className="blocked-user-date">Blocked {user.blockedAt}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="blocked-unblock-btn"
+                                  id={`unblock-btn-${user.id}`}
+                                  onClick={() => handleUnblockUser(user.id)}
+                                  aria-label={`Unblock ${user.displayName}`}
+                                >
+                                  Unblock
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section: Blocking Strictness Scope */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Blocking strictness level</label>
+                        <div
+                          className="visibility-scope-group two-cols"
+                          role="radiogroup"
+                          aria-label="Blocking strictness level"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="block-strictness-strict"
+                            aria-checked={blockedAccountsSettings.blockingStrictness === 'strict'}
+                            className={`visibility-scope-option ${blockedAccountsSettings.blockingStrictness === 'strict' ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('blockingStrictness', 'strict')}
+                          >
+                            <div className="visibility-scope-icon">🚫</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Complete Block (Recommended)</span>
+                              <span className="visibility-scope-desc">Total blackout: profile, posts, stories, search, and messages hidden</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="block-strictness-restricted"
+                            aria-checked={blockedAccountsSettings.blockingStrictness === 'restricted'}
+                            className={`visibility-scope-option ${blockedAccountsSettings.blockingStrictness === 'restricted' ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('blockingStrictness', 'restricted')}
+                          >
+                            <div className="visibility-scope-icon">⚠️</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Restricted Interaction</span>
+                              <span className="visibility-scope-desc">Can view public posts, but comments & messages are silently hidden</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Blocking Protection Switches */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Block new accounts they may create</span>
+                            <span className="visibility-toggle-desc">Automatically prevent new profiles associated with blocked accounts from contacting you</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="blocked-toggle-future-accounts"
+                            aria-checked={blockedAccountsSettings.blockNewAccountsCreatedByThem}
+                            aria-label="Block new accounts they may create"
+                            className={`visibility-switch-btn ${blockedAccountsSettings.blockNewAccountsCreatedByThem ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('blockNewAccountsCreatedByThem', !blockedAccountsSettings.blockNewAccountsCreatedByThem)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Hide interactions in mutual groups</span>
+                            <span className="visibility-toggle-desc">Automatically hide messages and posts from blocked members in shared community channels</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="blocked-toggle-mutual-groups"
+                            aria-checked={blockedAccountsSettings.hideInMutualGroups}
+                            aria-label="Hide interactions in mutual groups"
+                            className={`visibility-switch-btn ${blockedAccountsSettings.hideInMutualGroups ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('hideInMutualGroups', !blockedAccountsSettings.hideInMutualGroups)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Block voice and video calls</span>
+                            <span className="visibility-toggle-desc">Instantly reject incoming direct audio or video calls from blocked accounts without alerting you</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="blocked-toggle-calls"
+                            aria-checked={blockedAccountsSettings.blockCallsAndInvites}
+                            aria-label="Block voice and video calls"
+                            className={`visibility-switch-btn ${blockedAccountsSettings.blockCallsAndInvites ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('blockCallsAndInvites', !blockedAccountsSettings.blockCallsAndInvites)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Prevent mentions and tags from their network</span>
+                            <span className="visibility-toggle-desc">Disallow blocked users and their associated accounts from tagging or mentioning you in posts</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="blocked-toggle-network-mentions"
+                            aria-checked={blockedAccountsSettings.preventNetworkMentions}
+                            aria-label="Prevent mentions and tags from their network"
+                            className={`visibility-switch-btn ${blockedAccountsSettings.preventNetworkMentions ? 'active' : ''}`}
+                            onClick={() => handleUpdateBlockedAccountsSetting('preventNetworkMentions', !blockedAccountsSettings.preventNetworkMentions)}
                           >
                             <span className="visibility-switch-thumb" />
                           </button>
