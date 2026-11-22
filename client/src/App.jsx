@@ -1598,6 +1598,23 @@ function App() {
   });
   const [messagePermissionFeedback, setMessagePermissionFeedback] = useState(null);
 
+  // Follow and Friend Request Permissions state
+  const [followFriendPermissionSettings, setFollowFriendPermissionSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_follow_friend_permission_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      whoCanSendFriendRequests: 'everyone',
+      whoCanFollow: 'everyone',
+      requireApprovalForFollow: false,
+      contactSyncSuggestions: true,
+      showMutualConnections: true,
+      autoAcceptVerifiedContacts: false,
+    };
+  });
+  const [followFriendPermissionFeedback, setFollowFriendPermissionFeedback] = useState(null);
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3173,6 +3190,20 @@ function App() {
     setMessagePermissionFeedback('Message permissions updated ✨');
     setTimeout(() => {
       setMessagePermissionFeedback(null);
+    }, 2500);
+  };
+
+  const handleUpdateFollowFriendPermission = (key, value) => {
+    setFollowFriendPermissionSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_follow_friend_permission_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setFollowFriendPermissionFeedback('Permissions updated ✨');
+    setTimeout(() => {
+      setFollowFriendPermissionFeedback(null);
     }, 2500);
   };
 
@@ -16782,6 +16813,195 @@ function App() {
                             aria-label="Group chat invitations"
                             className={`visibility-switch-btn ${messagePermissionSettings.allowGroupInvites ? 'active' : ''}`}
                             onClick={() => handleUpdateMessagePermission('allowGroupInvites', !messagePermissionSettings.allowGroupInvites)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 4: Follow and Friend Request Permissions */}
+                    <div className="privacy-card" id="follow-friend-permission-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="follow-friend-permission-title">
+                            Follow and friend request permissions
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Manage who can send you friend requests, follow your profile updates, and connect with you.
+                          </p>
+                        </div>
+                        {followFriendPermissionFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {followFriendPermissionFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Section 1: Who can send friend requests */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can send you friend requests</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can send you friend requests"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="friend-req-scope-everyone"
+                            aria-checked={followFriendPermissionSettings.whoCanSendFriendRequests === 'everyone'}
+                            className={`visibility-scope-option ${followFriendPermissionSettings.whoCanSendFriendRequests === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('whoCanSendFriendRequests', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🌐</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Anyone on Planet can send a request</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="friend-req-scope-mutual"
+                            aria-checked={followFriendPermissionSettings.whoCanSendFriendRequests === 'friends_of_friends'}
+                            className={`visibility-scope-option ${followFriendPermissionSettings.whoCanSendFriendRequests === 'friends_of_friends' ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('whoCanSendFriendRequests', 'friends_of_friends')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Friends of Friends</span>
+                              <span className="visibility-scope-desc">Only people with mutual contacts</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="friend-req-scope-none"
+                            aria-checked={followFriendPermissionSettings.whoCanSendFriendRequests === 'none'}
+                            className={`visibility-scope-option ${followFriendPermissionSettings.whoCanSendFriendRequests === 'none' ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('whoCanSendFriendRequests', 'none')}
+                          >
+                            <div className="visibility-scope-icon">🔒</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">No One</span>
+                              <span className="visibility-scope-desc">Turn off new friend requests</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Who can follow your profile */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can follow your profile</label>
+                        <div
+                          className="visibility-scope-group two-cols"
+                          role="radiogroup"
+                          aria-label="Who can follow your profile"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="follow-scope-everyone"
+                            aria-checked={followFriendPermissionSettings.whoCanFollow === 'everyone'}
+                            className={`visibility-scope-option ${followFriendPermissionSettings.whoCanFollow === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('whoCanFollow', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">✨</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Public Following</span>
+                              <span className="visibility-scope-desc">Anyone can follow your feed instantly</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="follow-scope-approved"
+                            aria-checked={followFriendPermissionSettings.whoCanFollow === 'approved'}
+                            className={`visibility-scope-option ${followFriendPermissionSettings.whoCanFollow === 'approved' ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('whoCanFollow', 'approved')}
+                          >
+                            <div className="visibility-scope-icon">🛡️</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Requires Approval</span>
+                              <span className="visibility-scope-desc">You must approve new followers</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Follow and Friend Controls */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Require approval for follow requests</span>
+                            <span className="visibility-toggle-desc">Review every new follower before they can see your personal posts</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="follow-perm-toggle-require-approval"
+                            aria-checked={followFriendPermissionSettings.requireApprovalForFollow}
+                            aria-label="Require approval for follow requests"
+                            className={`visibility-switch-btn ${followFriendPermissionSettings.requireApprovalForFollow ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('requireApprovalForFollow', !followFriendPermissionSettings.requireApprovalForFollow)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Contact list syncing & suggestions</span>
+                            <span className="visibility-toggle-desc">Allow people who have your phone number to find you in Friend suggestions</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="follow-perm-toggle-contact-sync"
+                            aria-checked={followFriendPermissionSettings.contactSyncSuggestions}
+                            aria-label="Contact list syncing and suggestions"
+                            className={`visibility-switch-btn ${followFriendPermissionSettings.contactSyncSuggestions ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('contactSyncSuggestions', !followFriendPermissionSettings.contactSyncSuggestions)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show mutual friends on profile</span>
+                            <span className="visibility-toggle-desc">Display shared connections and common friends to potential new contacts</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="follow-perm-toggle-mutual"
+                            aria-checked={followFriendPermissionSettings.showMutualConnections}
+                            aria-label="Show mutual friends on profile"
+                            className={`visibility-switch-btn ${followFriendPermissionSettings.showMutualConnections ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('showMutualConnections', !followFriendPermissionSettings.showMutualConnections)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Auto-accept requests from address book</span>
+                            <span className="visibility-toggle-desc">Automatically accept friend requests if their phone number matches your contacts</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="follow-perm-toggle-auto-accept"
+                            aria-checked={followFriendPermissionSettings.autoAcceptVerifiedContacts}
+                            aria-label="Auto-accept requests from address book"
+                            className={`visibility-switch-btn ${followFriendPermissionSettings.autoAcceptVerifiedContacts ? 'active' : ''}`}
+                            onClick={() => handleUpdateFollowFriendPermission('autoAcceptVerifiedContacts', !followFriendPermissionSettings.autoAcceptVerifiedContacts)}
                           >
                             <span className="visibility-switch-thumb" />
                           </button>

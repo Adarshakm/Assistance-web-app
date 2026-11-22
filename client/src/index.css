@@ -4277,8 +4277,13 @@ body.light-theme .privacy-side-btn.active {
   gap: 0.75rem;
 }
 
+.visibility-scope-group.two-cols {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 @media (max-width: 640px) {
-  .visibility-scope-group {
+  .visibility-scope-group,
+  .visibility-scope-group.two-cols {
     grid-template-columns: 1fr;
   }
 }
