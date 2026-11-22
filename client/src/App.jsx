@@ -679,18 +679,6 @@ function App() {
       return 'communities';
     }
     if (
-      window.location.pathname === '/file-and-document-sharing' ||
-      window.location.hash === '#file-and-document-sharing' ||
-      window.location.pathname === '/files-and-documents' ||
-      window.location.hash === '#files-and-documents' ||
-      window.location.pathname === '/file-sharing' ||
-      window.location.hash === '#file-sharing' ||
-      window.location.pathname === '/documents' ||
-      window.location.hash === '#documents'
-    ) {
-      return 'file-and-document-sharing';
-    }
-    if (
       window.location.pathname === '/settings-and-personalization' ||
       window.location.hash === '#settings-and-personalization' ||
       window.location.pathname === '/settings' ||
@@ -791,11 +779,9 @@ function App() {
                                               ? '/live-stream'
                                               : view === 'communities'
                                                 ? '/communities'
-                                                : view === 'file-and-document-sharing'
-                                                        ? '/file-and-document-sharing'
-                                                        : view === 'settings-and-personalization'
-                                                                      ? '/settings-and-personalization'
-                                                                      : view === 'voice-and-video-call'
+                                                : view === 'settings-and-personalization'
+                                                  ? '/settings-and-personalization'
+                                                  : view === 'voice-and-video-call'
                                                                           ? '/voice-and-video-call'
                                                                           : view === 'blank'
                                                                             ? '/blank'
@@ -922,17 +908,6 @@ function App() {
         window.location.hash === '#communities'
       ) {
         setCurrentView('communities');
-      } else if (
-        window.location.pathname === '/file-and-document-sharing' ||
-        window.location.hash === '#file-and-document-sharing' ||
-        window.location.pathname === '/files-and-documents' ||
-        window.location.hash === '#files-and-documents' ||
-        window.location.pathname === '/file-sharing' ||
-        window.location.hash === '#file-sharing' ||
-        window.location.pathname === '/documents' ||
-        window.location.hash === '#documents'
-      ) {
-        setCurrentView('file-and-document-sharing');
       } else if (
         window.location.pathname === '/settings-and-personalization' ||
         window.location.hash === '#settings-and-personalization' ||
@@ -9376,7 +9351,6 @@ function App() {
     currentView === 'stories' ||
     currentView === 'live-stream' ||
     currentView === 'communities' ||
-    currentView === 'file-and-document-sharing' ||
     currentView === 'settings-and-personalization' ||
     currentView === 'voice-and-video-call'
   ) {
@@ -9657,30 +9631,6 @@ function App() {
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                   </svg>
                   {!isSidebarCollapsed && <span>Communities</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`sidebar-nav-item ${currentView === 'file-and-document-sharing' ? 'active' : ''}`}
-                  id="file-and-document-sharing-btn"
-                  onClick={() =>
-                    navigateTo(
-                      currentView === 'file-and-document-sharing'
-                        ? 'blank'
-                        : 'file-and-document-sharing'
-                    )
-                  }
-                  title="File and Document Sharing"
-                  aria-label="File and Document Sharing"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  {!isSidebarCollapsed && <span>File and Document Sharing</span>}
                 </button>
 
                 <button
