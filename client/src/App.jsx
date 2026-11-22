@@ -1615,6 +1615,23 @@ function App() {
   });
   const [followFriendPermissionFeedback, setFollowFriendPermissionFeedback] = useState(null);
 
+  // Mention and Tagging Controls state
+  const [mentionTaggingSettings, setMentionTaggingSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_mention_tagging_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      whoCanMention: 'everyone',
+      whoCanTag: 'everyone',
+      manuallyReviewTags: false,
+      notifyOnMentions: true,
+      allowMentionsInComments: true,
+      autoRemoveSpamTags: true,
+    };
+  });
+  const [mentionTaggingFeedback, setMentionTaggingFeedback] = useState(null);
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3204,6 +3221,20 @@ function App() {
     setFollowFriendPermissionFeedback('Permissions updated ✨');
     setTimeout(() => {
       setFollowFriendPermissionFeedback(null);
+    }, 2500);
+  };
+
+  const handleUpdateMentionTagging = (key, value) => {
+    setMentionTaggingSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_mention_tagging_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setMentionTaggingFeedback('Mention & tagging settings updated ✨');
+    setTimeout(() => {
+      setMentionTaggingFeedback(null);
     }, 2500);
   };
 
@@ -17002,6 +17033,210 @@ function App() {
                             aria-label="Auto-accept requests from address book"
                             className={`visibility-switch-btn ${followFriendPermissionSettings.autoAcceptVerifiedContacts ? 'active' : ''}`}
                             onClick={() => handleUpdateFollowFriendPermission('autoAcceptVerifiedContacts', !followFriendPermissionSettings.autoAcceptVerifiedContacts)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 5: Mention and Tagging Controls */}
+                    <div className="privacy-card" id="mention-tagging-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="mention-tagging-title">
+                            Mention and tagging controls
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Choose who can @mention your handle in posts or comments, and manage tags in shared photos and videos.
+                          </p>
+                        </div>
+                        {mentionTaggingFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {mentionTaggingFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Section 1: Who can @mention you */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can @mention you</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can @mention you"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="mention-scope-everyone"
+                            aria-checked={mentionTaggingSettings.whoCanMention === 'everyone'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanMention === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanMention', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🌐</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Anyone can mention @yourhandle</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="mention-scope-contacts"
+                            aria-checked={mentionTaggingSettings.whoCanMention === 'contacts'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanMention === 'contacts' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanMention', 'contacts')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Contacts & Following</span>
+                              <span className="visibility-scope-desc">Only people you follow or know</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="mention-scope-none"
+                            aria-checked={mentionTaggingSettings.whoCanMention === 'none'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanMention === 'none' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanMention', 'none')}
+                          >
+                            <div className="visibility-scope-icon">🚫</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">No One</span>
+                              <span className="visibility-scope-desc">Block mentions across all feeds</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Who can tag you in photos & posts */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can tag you in posts & photos</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can tag you in posts and photos"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="tag-scope-everyone"
+                            aria-checked={mentionTaggingSettings.whoCanTag === 'everyone'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanTag === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanTag', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🏷️</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Anyone can tag you in media</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="tag-scope-contacts"
+                            aria-checked={mentionTaggingSettings.whoCanTag === 'contacts'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanTag === 'contacts' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanTag', 'contacts')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Contacts Only</span>
+                              <span className="visibility-scope-desc">Only people you follow & friends</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="tag-scope-none"
+                            aria-checked={mentionTaggingSettings.whoCanTag === 'none'}
+                            className={`visibility-scope-option ${mentionTaggingSettings.whoCanTag === 'none' ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('whoCanTag', 'none')}
+                          >
+                            <div className="visibility-scope-icon">🔒</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">No One</span>
+                              <span className="visibility-scope-desc">Don't allow anyone to tag you</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Mention & Tagging Switches */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Manually approve tagged posts</span>
+                            <span className="visibility-toggle-desc">Review posts and photos you are tagged in before they appear on your profile</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="tag-perm-toggle-manual-review"
+                            aria-checked={mentionTaggingSettings.manuallyReviewTags}
+                            aria-label="Manually approve tagged posts"
+                            className={`visibility-switch-btn ${mentionTaggingSettings.manuallyReviewTags ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('manuallyReviewTags', !mentionTaggingSettings.manuallyReviewTags)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Notify me on mentions</span>
+                            <span className="visibility-toggle-desc">Receive instant notification alerts whenever someone mentions @yourhandle</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="tag-perm-toggle-notify"
+                            aria-checked={mentionTaggingSettings.notifyOnMentions}
+                            aria-label="Notify me on mentions"
+                            className={`visibility-switch-btn ${mentionTaggingSettings.notifyOnMentions ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('notifyOnMentions', !mentionTaggingSettings.notifyOnMentions)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Allow mentions in discussion comments</span>
+                            <span className="visibility-toggle-desc">Let members mention you in community discussion threads and post replies</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="tag-perm-toggle-comments"
+                            aria-checked={mentionTaggingSettings.allowMentionsInComments}
+                            aria-label="Allow mentions in discussion comments"
+                            className={`visibility-switch-btn ${mentionTaggingSettings.allowMentionsInComments ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('allowMentionsInComments', !mentionTaggingSettings.allowMentionsInComments)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Auto-filter spam tags</span>
+                            <span className="visibility-toggle-desc">Automatically hide tags and mentions from newly created or suspicious accounts</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="tag-perm-toggle-spam"
+                            aria-checked={mentionTaggingSettings.autoRemoveSpamTags}
+                            aria-label="Auto-filter spam tags"
+                            className={`visibility-switch-btn ${mentionTaggingSettings.autoRemoveSpamTags ? 'active' : ''}`}
+                            onClick={() => handleUpdateMentionTagging('autoRemoveSpamTags', !mentionTaggingSettings.autoRemoveSpamTags)}
                           >
                             <span className="visibility-switch-thumb" />
                           </button>
