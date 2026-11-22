@@ -486,7 +486,7 @@ const INITIAL_CONTACT_STATUSES = [
   },
 ];
 
-// Planet Social Media Categorized Membership Plans: Free, 300 Rupees, 500 Rupees, 1000 Rupees
+// Planet Social Media Categorized Membership Plans: Free & 300 Rupees
 export const SUBSCRIPTION_PLANS = [
   {
     id: 'free',
@@ -524,7 +524,7 @@ export const SUBSCRIPTION_PLANS = [
     priceFormatted: '₹300',
     cadence: '300 rupees per month',
     badge: 'Popular',
-    popular: false,
+    popular: true,
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
@@ -543,61 +543,6 @@ export const SUBSCRIPTION_PLANS = [
       'Priority message delivery',
     ],
     ctaText: 'Subscribe for ₹300/mo',
-  },
-  {
-    id: '500',
-    name: 'Pro Creator',
-    tierName: 'Creator Pro',
-    price: 500,
-    priceFormatted: '₹500',
-    cadence: '500 rupees per month',
-    badge: 'Most Popular',
-    popular: true,
-    color: '#a855f7',
-    accentClass: 'plan-500',
-    description: 'High-power tools, group calls, and reach insights for active creators.',
-    highlights: ['Gold Checkmark Badge', 'Unlimited High-Res Images', 'Unlimited Video Posts (30 min)', '4K Calling & Screen Share'],
-    features: [
-      'Everything in ₹300 Plan, plus:',
-      'Unlimited high-resolution image posts',
-      'Unlimited daily video posts up to 30 min duration',
-      'Create & join unlimited groups & communities',
-      'Gold Checkmark Badge & Pro Creator status',
-      'Unlimited 4K Ultra HD Video Calling & Screen Sharing',
-      'Group video calls up to 50 participants',
-      '250 GB ultra-fast media cloud storage',
-      'Create & manage up to 10 community discussion feeds',
-      'Audience reach insights & viewer engagement stats',
-      'Priority 24/7 dedicated creator support',
-    ],
-    ctaText: 'Subscribe for ₹500/mo',
-  },
-  {
-    id: '1000',
-    name: 'VIP Executive',
-    tierName: 'VIP Elite',
-    price: 1000,
-    priceFormatted: '₹1000',
-    cadence: '1000 rupees per month',
-    badge: 'VIP Elite',
-    popular: false,
-    color: '#eab308',
-    accentClass: 'plan-1000',
-    description: 'The ultimate tier for businesses, VIPs, and high-impact leaders.',
-    highlights: ['Diamond VIP Badge', 'Unlimited Groups & 250-Person Calls', '1 TB Cloud Storage', 'Algorithm Boost'],
-    features: [
-      'Everything in ₹500 Plan, plus:',
-      'Create & join unlimited groups, channels & spaces',
-      'Diamond VIP Badge & Official Verified Business Seal',
-      '1 TB (1,000 GB) Dedicated high-speed cloud vault',
-      'Group calls & webinars up to 250 participants',
-      'Unlimited communities, channels & group spaces',
-      'Featured placement & algorithm boost on feeds',
-      'Uncompressed original 4K video uploads',
-      'Business monetization & direct creator tipping',
-      'Dedicated 1-on-1 VIP concierge & account manager',
-    ],
-    ctaText: 'Subscribe for ₹1000/mo',
   },
 ];
 
@@ -5491,11 +5436,11 @@ function App() {
   const lastNotifiedMessageRef = useRef(new Map());
   const isInitialRecentFetchRef = useRef(true);
 
-  // Categorized Subscription Plans (Free, 300, 500, 1000) State
+  // Categorized Subscription Plans (Free & 300) State
   const [currentPlanId, setCurrentPlanId] = useState(() => {
     try {
       const savedPlan = localStorage.getItem('assistance_subscribed_plan');
-      if (savedPlan) return savedPlan;
+      if (savedPlan && SUBSCRIPTION_PLANS.some((p) => p.id === savedPlan)) return savedPlan;
       return localStorage.getItem('assistance_subscribed') === 'true' ? '300' : 'free';
     } catch {
       return 'free';
@@ -12311,14 +12256,6 @@ function App() {
                                 <span className="tier-pill-name">Standard ₹300</span>
                                 <span className="tier-pill-val">Unlimited Groups</span>
                               </div>
-                              <div className="limit-tier-pill highlight-purple">
-                                <span className="tier-pill-name">Pro Creator ₹500</span>
-                                <span className="tier-pill-val">Unlimited + 50 Calls</span>
-                              </div>
-                              <div className="limit-tier-pill highlight-gold">
-                                <span className="tier-pill-name">VIP Elite ₹1000</span>
-                                <span className="tier-pill-val">Unlimited + 1 TB Vault</span>
-                              </div>
                             </div>
                           </div>
 
@@ -18031,7 +17968,7 @@ function App() {
                               </svg>
                               MEMBERSHIP PLANS
                             </span>
-                            <span className="feed-ad-price-pill">Free • ₹300 • ₹500 • ₹1000</span>
+                            <span className="feed-ad-price-pill">Free • ₹300</span>
                           </div>
                           <button
                             type="button"
@@ -18055,10 +17992,10 @@ function App() {
                           </div>
                           <div className="feed-ad-text-wrap">
                             <h4 className="feed-ad-headline">
-                              Planet Membership Plans: Free, ₹300, ₹500 &amp; ₹1000
+                              Planet Membership Plans: Free &amp; ₹300
                             </h4>
                             <p className="feed-ad-description">
-                              Categorized plans tailored for everyone: Free starter, 300 rupees standard, 500 rupees creator pro, or 1000 rupees VIP executive. Blue/gold/diamond badges, 4K calling, and high-speed cloud vaults.
+                              Categorized plans tailored for everyone: Free starter or 300 rupees standard premium. Blue verified checkmark, ad-free browsing, and 50 GB high-speed cloud storage.
                             </p>
                           </div>
                           <div className="feed-ad-btn-wrap">
@@ -18080,7 +18017,7 @@ function App() {
                                 id="feed-ad-subscribe-btn"
                                 onClick={() => handleOpenSubscriptionModal('300')}
                               >
-                                Explore Plans (Free to ₹1000)
+                                Explore Plans (Free &amp; ₹300)
                               </button>
                             )}
                           </div>
@@ -26052,11 +25989,11 @@ function App() {
                         className={`ad-filter-tab-btn ${mainSpaceAdFilter === 'subscription' ? 'active' : ''}`}
                         onClick={() => setMainSpaceAdFilter('subscription')}
                       >
-                        💎 Membership Plans (Free, ₹300, ₹500, ₹1000)
+                        💎 Membership Plans (Free &amp; ₹300)
                       </button>
                     </div>
 
-                    {/* Main Space Advertisement 1: Categorized Membership Plans (Free, 300, 500, 1000 rupees) */}
+                    {/* Main Space Advertisement 1: Categorized Membership Plans (Free & 300 rupees) */}
                     {(mainSpaceAdFilter === 'all' || mainSpaceAdFilter === 'subscription') && (
                       <div className="main-space-ad-card membership-plans-main-card" id="main-space-subscription-ad">
                         <div className="main-space-ad-header-row">
@@ -26085,7 +26022,7 @@ function App() {
                           </h1>
 
                           <p className="main-space-ad-subtitle">
-                            Choose from 4 tiers tailored for your social journey: Free, 300 rupees, 500 rupees, or 1000 rupees per month. Upgrade, switch, or cancel anytime with zero lock-in.
+                            Choose from our membership plans: Free or 300 rupees per month. Upgrade, switch, or cancel anytime with zero lock-in.
                           </p>
 
                           {/* Active Membership Notification Banner if subscribed */}
@@ -26919,14 +26856,6 @@ function App() {
                       <span className="tier-pill-name">Standard ₹300</span>
                       <span className="tier-pill-val">Unlimited Videos (5m)</span>
                     </div>
-                    <div className="limit-tier-pill highlight-purple">
-                      <span className="tier-pill-name">Pro Creator ₹500</span>
-                      <span className="tier-pill-val">Unlimited Full HD (30m)</span>
-                    </div>
-                    <div className="limit-tier-pill highlight-gold">
-                      <span className="tier-pill-name">VIP Elite ₹1000</span>
-                      <span className="tier-pill-val">Unlimited 4K Original</span>
-                    </div>
                   </div>
                 </div>
 
@@ -27010,14 +26939,6 @@ function App() {
                     <div className="limit-tier-pill highlight">
                       <span className="tier-pill-name">Standard ₹300</span>
                       <span className="tier-pill-val">Unlimited Images</span>
-                    </div>
-                    <div className="limit-tier-pill highlight-purple">
-                      <span className="tier-pill-name">Pro Creator ₹500</span>
-                      <span className="tier-pill-val">Unlimited + High-Res</span>
-                    </div>
-                    <div className="limit-tier-pill highlight-gold">
-                      <span className="tier-pill-name">VIP Elite ₹1000</span>
-                      <span className="tier-pill-val">Unlimited + 1 TB Vault</span>
                     </div>
                   </div>
                 </div>
@@ -27103,14 +27024,6 @@ function App() {
                     <div className="limit-tier-pill highlight">
                       <span className="tier-pill-name">Standard ₹300</span>
                       <span className="tier-pill-val">Join Unlimited Groups</span>
-                    </div>
-                    <div className="limit-tier-pill highlight-purple">
-                      <span className="tier-pill-name">Pro Creator ₹500</span>
-                      <span className="tier-pill-val">Unlimited Groups + Feeds</span>
-                    </div>
-                    <div className="limit-tier-pill highlight-gold">
-                      <span className="tier-pill-name">VIP Elite ₹1000</span>
-                      <span className="tier-pill-val">Unlimited Everything</span>
                     </div>
                   </div>
                 </div>
@@ -27214,7 +27127,7 @@ function App() {
                         <div className="free-plan-notice-icon">✓</div>
                         <div className="free-plan-notice-text">
                           <h4>No Payment Required for Free Plan</h4>
-                          <p>Enjoy public feed updates, 1-on-1 chats, and standard HD calls without any credit card or fees. You can upgrade to ₹300, ₹500, or ₹1000 anytime.</p>
+                          <p>Enjoy public feed updates, 1-on-1 chats, and standard HD calls without any credit card or fees. You can upgrade to the ₹300 Standard Premium plan anytime.</p>
                         </div>
                       </div>
                     ) : (
