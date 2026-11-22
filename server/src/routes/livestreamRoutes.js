@@ -5,43 +5,7 @@ import LiveStream from '../models/LiveStream.js';
 const router = express.Router();
 
 // Fallback demo active streams for immediate experience if database has 0 active streams
-const getDemoStreams = () => [
-  {
-    _id: 'demo_stream_1',
-    title: '🎵 Live Acoustic Jam & Music Chat',
-    category: 'Music',
-    host: 'sarah_music',
-    hostName: 'Sarah Jenkins',
-    hostAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    status: 'live',
-    viewerCount: 42,
-    likesCount: 128,
-    comments: [
-      { id: 'dc_1', user: 'alex', userName: 'Alex Chen', text: 'Sounds incredible! Love this tune! 🎶', createdAt: new Date(Date.now() - 30000) },
-      { id: 'dc_2', user: 'david', userName: 'David Miller', text: 'What guitar are you playing today?', createdAt: new Date(Date.now() - 15000) },
-      { id: 'dc_3', user: 'elena', userName: 'Elena Rostova', text: 'Greetings from Berlin! ❤️', createdAt: new Date(Date.now() - 5000) },
-    ],
-    startedAt: new Date(Date.now() - 12 * 60 * 1000),
-    isDemo: true,
-  },
-  {
-    _id: 'demo_stream_2',
-    title: '💻 Building Modern Web Apps Live',
-    category: 'Technology',
-    host: 'dev_marcus',
-    hostName: 'Marcus Vance',
-    hostAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    status: 'live',
-    viewerCount: 89,
-    likesCount: 254,
-    comments: [
-      { id: 'dc_4', user: 'kavita', userName: 'Kavita Rao', text: 'Clean architecture as always!', createdAt: new Date(Date.now() - 25000) },
-      { id: 'dc_5', user: 'priya', userName: 'Priya Patel', text: 'Can you show the WebSocket handler again?', createdAt: new Date(Date.now() - 10000) },
-    ],
-    startedAt: new Date(Date.now() - 34 * 60 * 1000),
-    isDemo: true,
-  },
-];
+const getDemoStreams = () => [];
 
 /**
  * GET /api/livestreams

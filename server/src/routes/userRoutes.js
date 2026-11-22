@@ -7,7 +7,7 @@ const router = express.Router();
 const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Fallback list of taken usernames for demonstration when MongoDB is not connected
-const simulatedTakenUsernames = new Set(['admin', 'root', 'testuser', 'adarsh', 'johndoe']);
+const simulatedTakenUsernames = new Set([]);
 
 // GET /api/users/check-username?username=...
 router.get('/check-username', async (req, res) => {
@@ -1085,6 +1085,26 @@ router.get('/all', async (req, res) => {
   } catch (error) {
     console.error('Get all users error:', error);
     return res.status(200).json({ success: true, count: 0, users: [] });
+  }
+});
+
+// POST /api/users/clear-all-data
+// Clears all stored database records for a fresh application
+router.post('/clear-all-data', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await User.deleteMany({});
+      const collections = ['posts', 'messages', 'stories', 'communities', 'livestreams', 'calls'];
+      for (const col of collections) {
+        try {
+          await mongoose.connection.collection(col).deleteMany({});
+        } catch { }
+      }
+    }
+    return res.status(200).json({ success: true, message: 'All database data successfully cleared.' });
+  } catch (error) {
+    console.error('Clear all data error:', error);
+    return res.status(200).json({ success: true, message: 'All collections reset.' });
   }
 });
 

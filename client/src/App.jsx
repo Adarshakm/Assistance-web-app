@@ -47,92 +47,7 @@ const parseVideoContent = (content = '', fallbackTitle = '') => {
   return { title: content, desc: '' };
 };
 
-const DEFAULT_COMMUNITY_VIDEOS = [
-  {
-    id: 'sample_video_1',
-    author: 'alexchen',
-    authorName: 'Alex Chen',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    content: 'Coastal Aerial Flight in 4K 🌊\n\nSunset drone footage gliding over coastal cliffs and ocean waves. The golden hour breeze was unbelievable! #Nature #Travel #Shorts',
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    mediaType: 'video',
-    likes: ['alexchen', 'sophiat', 'marcusv'],
-    likesCount: 38,
-    comments: [
-      {
-        id: 'c_sample_1',
-        author: 'sophiat',
-        authorName: 'Sophia Taylor',
-        authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-        content: 'Breathtaking colors! What camera settings were you using for this?',
-        createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-        time: '3h ago',
-      },
-    ],
-    commentsCount: 1,
-    time: '3h ago',
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-  },
-  {
-    id: 'sample_video_2',
-    author: 'marcusv',
-    authorName: 'Marcus Vance',
-    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    content: 'Full-Stack Architecture & Reactive State 💻\n\nWalkthrough on structuring high-speed responsive web applications with microservices and optimistic mutations. #Tech #Tutorial #Education',
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    mediaType: 'video',
-    likes: ['marcusv', 'alexchen', 'dev_sarah'],
-    likesCount: 64,
-    comments: [
-      {
-        id: 'c_sample_2',
-        author: 'dev_sarah',
-        authorName: 'Sarah Jenkins',
-        authorAvatar: '',
-        content: 'Super clean breakdown of state propagation. Thanks for sharing!',
-        createdAt: new Date(Date.now() - 3600000 * 7).toISOString(),
-        time: '7h ago',
-      },
-    ],
-    commentsCount: 1,
-    time: '7h ago',
-    createdAt: new Date(Date.now() - 3600000 * 7).toISOString(),
-  },
-  {
-    id: 'sample_video_3',
-    author: 'sophiat',
-    authorName: 'Sophia Taylor',
-    authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    content: 'Championship Speedrun Highlights 🎮\n\nClutched the final stage in under 90 seconds! Sound on for the reaction at the end. #Gaming #Shorts #Entertainment',
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    mediaType: 'video',
-    likes: ['sophiat', 'alexchen'],
-    likesCount: 42,
-    comments: [],
-    commentsCount: 0,
-    time: '1d ago',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    id: 'sample_video_4',
-    author: 'emilyrose',
-    authorName: 'Emily Rose',
-    authorAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    content: 'Big Buck Bunny 3D Animated Short Feature 🐇\n\nTimeless open-source animation showcasing fluid 3D character rigging and particle effects. #Shorts #Animation #Cinema',
-    video: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    mediaType: 'video',
-    likes: ['emilyrose', 'marcusv'],
-    likesCount: 51,
-    comments: [],
-    commentsCount: 0,
-    time: '2d ago',
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-  },
-];
+const DEFAULT_COMMUNITY_VIDEOS = [];
 
 const PRESET_VIDEO_SAMPLES = [
   {
@@ -190,7 +105,7 @@ const STORY_SAMPLE_PRESETS = [
     overlayText: 'Chasing sunset horizons 🌅',
     caption: 'Nature is the best therapy. Taking a breather before the sprint.',
     stickers: [{ id: 'stk_p1', type: 'location', content: '📍 Malibu Coast', x: 50, y: 75 }],
-    mentions: ['alexchen'],
+    mentions: [],
     link: { url: 'https://visitcalifornia.com', title: 'Malibu Guide' },
     audience: 'public',
   },
@@ -216,7 +131,7 @@ const STORY_SAMPLE_PRESETS = [
     textStyle: { color: '#ffffff', background: 'transparent', align: 'center', fontSize: 'large', fontFamily: 'serif' },
     caption: 'Daily tech motivation ✨ Stay curious and keep shipping.',
     stickers: [{ id: 'stk_p3', type: 'emoji', content: '✨', x: 50, y: 75 }],
-    mentions: ['tonystark'],
+    mentions: [],
     link: { url: 'https://github.com', title: 'Open Source' },
     audience: 'public',
   },
@@ -228,263 +143,17 @@ const STORY_SAMPLE_PRESETS = [
     overlayText: 'Clean code & hot coffee ☕',
     caption: 'Shipping the new stories feature to production! 🚀',
     stickers: [{ id: 'stk_p4', type: 'time', content: '⏰ 10:45 AM', x: 50, y: 80 }],
-    mentions: ['sophia_p'],
+    mentions: [],
     link: { url: 'https://planet-app.internal', title: 'Release Notes' },
     audience: 'friends',
   },
 ];
 
-const DEFAULT_ACTIVE_STORIES = [
-  {
-    id: 'story_sophia_1',
-    author: 'sophia_p',
-    authorName: 'Sophia Patel',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    media: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-    mediaType: 'image',
-    backgroundColor: '#18181b',
-    overlayText: 'Sunset bliss at Malibu Beach 🌅✨',
-    textStyle: { color: '#ffffff', background: 'rgba(0,0,0,0.45)', align: 'center', fontSize: 'medium', fontFamily: 'sans' },
-    caption: 'Chasing the last golden rays before tomorrow\'s sprint! #BeachLife #Sunset',
-    stickers: [
-      { id: 'stk_1', type: 'location', content: '📍 Malibu, California', x: 50, y: 72 },
-      { id: 'stk_2', type: 'emoji', content: '✨', x: 25, y: 28 },
-    ],
-    mentions: ['alexchen'],
-    link: { url: 'https://visitcalifornia.com', title: 'Malibu Travel Guide' },
-    audience: 'public',
-    viewers: [
-      { user: 'alexchen', username: 'alexchen', displayName: 'Alex Chen', avatar: '', viewedAt: new Date(Date.now() - 3600000).toISOString() },
-      { user: 'liam_smith', username: 'liam_smith', displayName: 'Liam Smith', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80', viewedAt: new Date(Date.now() - 7200000).toISOString() },
-    ],
-    viewersCount: 2,
-    replies: [
-      { user: 'alexchen', username: 'alexchen', displayName: 'Alex Chen', content: 'Looks stunning Sophia! 🌊', reaction: '🔥', createdAt: new Date(Date.now() - 1800000).toISOString() },
-    ],
-    expiresAt: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    isArchived: false,
-  },
-  {
-    id: 'story_sophia_2',
-    author: 'sophia_p',
-    authorName: 'Sophia Patel',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    media: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80',
-    mediaType: 'image',
-    backgroundColor: '#0f172a',
-    overlayText: 'Midnight coding session 🚀💻',
-    textStyle: { color: '#38bdf8', background: 'rgba(15,23,42,0.75)', align: 'center', fontSize: 'large', fontFamily: 'mono' },
-    caption: 'New release dropping tomorrow morning! Stoked for the community feedback.',
-    stickers: [
-      { id: 'stk_3', type: 'time', content: '⏰ 11:45 PM', x: 50, y: 78 },
-    ],
-    mentions: ['tonystark'],
-    link: { url: 'https://github.com', title: 'View Repo' },
-    audience: 'friends',
-    viewers: [
-      { user: 'alexchen', username: 'alexchen', displayName: 'Alex Chen', avatar: '', viewedAt: new Date(Date.now() - 1200000).toISOString() },
-    ],
-    viewersCount: 1,
-    replies: [],
-    expiresAt: new Date(Date.now() + 22 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    isArchived: false,
-  },
-  {
-    id: 'story_liam_1',
-    author: 'liam_smith',
-    authorName: 'Liam Smith',
-    authorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    media: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    mediaType: 'video',
-    backgroundColor: '#18181b',
-    overlayText: 'Golden hour drone run 🔥🚁',
-    textStyle: { color: '#fef08a', background: 'rgba(0,0,0,0.5)', align: 'center', fontSize: 'medium', fontFamily: 'sans' },
-    caption: 'FPV flight along the Pacific Ridge. Shot in 4K 60fps! Turn sound on 🔊',
-    stickers: [
-      { id: 'stk_4', type: 'emoji', content: '🔥', x: 80, y: 25 },
-    ],
-    mentions: [],
-    link: { url: 'https://youtube.com', title: 'Watch Full 4K Clip' },
-    audience: 'public',
-    viewers: [],
-    viewersCount: 0,
-    replies: [],
-    expiresAt: new Date(Date.now() + 16 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    isArchived: false,
-  },
-  {
-    id: 'story_tony_1',
-    author: 'tonystark',
-    authorName: 'Tony Stark',
-    authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-    media: '',
-    mediaType: 'text',
-    backgroundColor: 'linear-gradient(135deg, #10b981 0%, #064e3b 100%)',
-    overlayText: '⭐ Close Friends Only:\nArc Reactor v4 tests succeeded! Prototype flight tomorrow at dawn.',
-    textStyle: { color: '#ffffff', background: 'transparent', align: 'center', fontSize: 'large', fontFamily: 'serif' },
-    caption: 'Top secret preview for the core team.',
-    stickers: [
-      { id: 'stk_5', type: 'emoji', content: '⭐', x: 50, y: 22 },
-      { id: 'stk_6', type: 'emoji', content: '🦾', x: 50, y: 80 },
-    ],
-    mentions: ['alexchen', 'sophia_p'],
-    link: { url: 'https://starkindustries.internal', title: 'Telemetry Data' },
-    audience: 'close_friends',
-    viewers: [
-      { user: 'sophia_p', username: 'sophia_p', displayName: 'Sophia Patel', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', viewedAt: new Date(Date.now() - 500000).toISOString() },
-    ],
-    viewersCount: 1,
-    replies: [],
-    expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    isArchived: false,
-  },
-];
+const DEFAULT_ACTIVE_STORIES = [];
 
-const DEFAULT_ARCHIVED_STORIES = [
-  {
-    id: 'archive_alex_1',
-    author: 'alexchen',
-    authorName: 'Alex Chen',
-    authorAvatar: '',
-    media: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80',
-    mediaType: 'image',
-    backgroundColor: '#18181b',
-    overlayText: 'Finished sprint goals ahead of deadline! 🚀',
-    textStyle: { color: '#ffffff', background: 'rgba(0,0,0,0.5)', align: 'center', fontSize: 'medium', fontFamily: 'sans' },
-    caption: 'Celebration dinner with the team!',
-    stickers: [{ id: 'stk_a1', type: 'emoji', content: '🎉', x: 50, y: 70 }],
-    mentions: ['sophia_p', 'tonystark'],
-    link: { url: '', title: '' },
-    audience: 'friends',
-    viewers: [
-      { user: 'sophia_p', username: 'sophia_p', displayName: 'Sophia Patel', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', viewedAt: new Date(Date.now() - 86400000 * 3).toISOString() },
-      { user: 'liam_smith', username: 'liam_smith', displayName: 'Liam Smith', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80', viewedAt: new Date(Date.now() - 86400000 * 3 + 1800000).toISOString() },
-    ],
-    viewersCount: 2,
-    replies: [
-      { user: 'sophia_p', username: 'sophia_p', displayName: 'Sophia Patel', content: 'Way to go Alex! Proud of us! 💪', reaction: '👏', createdAt: new Date(Date.now() - 86400000 * 3 + 3600000).toISOString() },
-    ],
-    isArchived: true,
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    expiresAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: 'archive_alex_2',
-    author: 'alexchen',
-    authorName: 'Alex Chen',
-    authorAvatar: '',
-    media: '',
-    mediaType: 'text',
-    backgroundColor: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-    overlayText: 'Never stop building.\nEvery great journey starts with a single step.',
-    textStyle: { color: '#ffffff', background: 'transparent', align: 'center', fontSize: 'large', fontFamily: 'serif' },
-    caption: 'Daily morning meditation and reflection.',
-    stickers: [{ id: 'stk_a2', type: 'emoji', content: '✨', x: 50, y: 25 }],
-    mentions: [],
-    link: { url: '', title: '' },
-    audience: 'public',
-    viewers: [
-      { user: 'tonystark', username: 'tonystark', displayName: 'Tony Stark', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80', viewedAt: new Date(Date.now() - 86400000 * 6).toISOString() },
-    ],
-    viewersCount: 1,
-    replies: [],
-    isArchived: true,
-    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
-    expiresAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-];
+const DEFAULT_ARCHIVED_STORIES = [];
 
-
-const INITIAL_CONTACT_STATUSES = [
-  {
-    id: 'status_init_1',
-    type: 'text',
-    author: 'Sophia Patel',
-    authorUsername: 'sophiap',
-    authorPhone: '+1 (555) 345-6789',
-    authorAvatar: null,
-    text: '☕ Working remotely today! Enjoying a hot cup of coffee & deep focus vibes ✨',
-    background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-    fontFamily: 'sans',
-    textColor: '#ffffff',
-    timestamp: Date.now() - 1000 * 60 * 15,
-    timeFormatted: '15m ago',
-    viewsCount: 8,
-  },
-  {
-    id: 'status_init_2',
-    type: 'image',
-    author: 'Olivia Taylor',
-    authorUsername: 'oliviat',
-    authorPhone: '+1 (555) 567-8901',
-    authorAvatar: null,
-    mediaUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-    caption: 'Exploring beautiful mountain trails this weekend 🌲⛰️',
-    timestamp: Date.now() - 1000 * 60 * 65,
-    timeFormatted: '1h ago',
-    viewsCount: 14,
-  },
-  {
-    id: 'status_init_3',
-    type: 'video',
-    author: 'David Miller',
-    authorUsername: 'davidm',
-    authorPhone: '+1 (555) 678-9012',
-    authorAvatar: null,
-    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    caption: 'Cinematic sunset timelapse from today 🌅🔥',
-    duration: '0:15',
-    timestamp: Date.now() - 1000 * 60 * 140,
-    timeFormatted: '2h ago',
-    viewsCount: 19,
-  },
-  {
-    id: 'status_init_4',
-    type: 'text',
-    author: 'Liam Smith',
-    authorUsername: 'liamsmith',
-    authorPhone: '+1 (555) 456-7890',
-    authorAvatar: null,
-    text: 'Design review meeting in 15 mins. DM me for urgent matters 📝',
-    background: 'linear-gradient(135deg, #059669, #10b981)',
-    fontFamily: 'serif',
-    textColor: '#ffffff',
-    timestamp: Date.now() - 1000 * 60 * 200,
-    timeFormatted: '3h ago',
-    viewsCount: 11,
-  },
-  {
-    id: 'status_init_5',
-    type: 'image',
-    author: 'Alex Rivera',
-    authorUsername: 'alexr',
-    authorPhone: '+1 (555) 234-5678',
-    authorAvatar: null,
-    mediaUrl: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80',
-    caption: 'Shipping new features! Online and building 🚀💻',
-    timestamp: Date.now() - 1000 * 60 * 260,
-    timeFormatted: '4h ago',
-    viewsCount: 23,
-  },
-  {
-    id: 'status_init_6',
-    type: 'video',
-    author: 'Sophia Patel',
-    authorUsername: 'sophiap',
-    authorPhone: '+1 (555) 345-6789',
-    authorAvatar: null,
-    mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    caption: 'Quick drone view over the coast 🌊🌴',
-    duration: '0:15',
-    timestamp: Date.now() - 1000 * 60 * 320,
-    timeFormatted: '5h ago',
-    viewsCount: 17,
-  },
-];
+const INITIAL_CONTACT_STATUSES = [];
 
 // Planet Social Media Categorized Membership Plans: Free & 300 Rupees
 export const SUBSCRIPTION_PLANS = [
@@ -549,6 +218,18 @@ export const SUBSCRIPTION_PLANS = [
 ];
 
 function App() {
+  // Fresh application initialization: clear any legacy dummy/test user data from localStorage
+  try {
+    if (typeof window !== 'undefined' && localStorage.getItem('planet_fresh_clean_app_v5') !== 'ready') {
+      const allKeys = Object.keys(localStorage);
+      for (const k of allKeys) {
+        if (k.startsWith('assistance_') || k.startsWith('planet_')) {
+          localStorage.removeItem(k);
+        }
+      }
+      localStorage.setItem('planet_fresh_clean_app_v5', 'ready');
+    }
+  } catch { }
   const [currentView, setCurrentView] = useState(() => {
     if (
       window.location.pathname === '/groups' ||
@@ -3219,6 +2900,19 @@ function App() {
     }, 2500);
   };
 
+  const handleClearAllDataAndReset = async () => {
+    if (window.confirm('Are you sure you want to completely clear all data of all users and dummy users to start with a fresh application?')) {
+      try {
+        await fetch('/api/users/clear-all-data', { method: 'POST' }).catch(() => {});
+      } catch { }
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch { }
+      window.location.href = '/register';
+    }
+  };
+
   const handleDeactivateAccount = () => {
     setShowDeactivateModal(false);
     setGeneralAccountFeedback('Account deactivated. Signing out...');
@@ -4444,7 +4138,7 @@ function App() {
   useEffect(() => {
     const fetchStoriesFromBackend = async () => {
       try {
-        const u = loggedInUser || 'alexchen';
+        const u = loggedInUser || ''; if (!u) return;
         const res = await fetch(`/api/stories?user=${encodeURIComponent(u)}`);
         if (res.ok) {
           const data = await res.json();
@@ -4456,7 +4150,7 @@ function App() {
       } catch (e) { }
 
       try {
-        const u = loggedInUser || 'alexchen';
+        const u = loggedInUser || ''; if (!u) return;
         const resArch = await fetch(`/api/stories/archive?user=${encodeURIComponent(u)}`);
         if (resArch.ok) {
           const dataArch = await resArch.json();
@@ -4590,8 +4284,8 @@ function App() {
   };
 
   const handlePublishStory = async () => {
-    const author = (loggedInUser || 'alexchen').trim().toLowerCase();
-    const authorDisplayName = displayName || loggedInUser || 'Alex Chen';
+    const author = (loggedInUser || '').trim().toLowerCase();
+    const authorDisplayName = displayName || loggedInUser || 'User';
     const authorUserAvatar = profilePicture || '';
 
     if (storyStudioMediaType !== 'text' && !storyStudioMedia) {
@@ -4691,7 +4385,7 @@ function App() {
       return new Date(s.expiresAt).getTime() > Date.now();
     });
 
-    const currentU = (loggedInUser || 'alexchen').toLowerCase();
+    const currentU = (loggedInUser || '').toLowerCase();
     const groups = {};
     active.forEach((s) => {
       const auth = s.author.toLowerCase();
@@ -4720,7 +4414,7 @@ function App() {
     const auth = authorUsername.toLowerCase();
     const group = groupedStories.find((g) => g.author.toLowerCase() === auth);
     if (!group || !group.stories || group.stories.length === 0) {
-      if (auth === (loggedInUser || 'alexchen').toLowerCase()) {
+      if (auth && auth === (loggedInUser || '').toLowerCase()) {
         setStoriesTab('create');
       }
       return;
@@ -4746,8 +4440,8 @@ function App() {
   };
 
   const handleStoryView = async (storyId) => {
-    const currentUser = (loggedInUser || 'alexchen').toLowerCase();
-    const currentDisplayName = displayName || loggedInUser || 'Alex Chen';
+    const currentUser = (loggedInUser || '').toLowerCase();
+    const currentDisplayName = displayName || loggedInUser || 'User';
     const currentAvatar = profilePicture || '';
 
     setStoriesList((prev) =>
@@ -4851,8 +4545,8 @@ function App() {
 
     if (!cleanContent && !cleanReaction) return;
 
-    const currentUser = (loggedInUser || 'alexchen').toLowerCase();
-    const currentDisplayName = displayName || loggedInUser || 'Alex Chen';
+    const currentUser = (loggedInUser || '').toLowerCase();
+    const currentDisplayName = displayName || loggedInUser || 'User';
     const currentAvatar = profilePicture || '';
 
     const newReply = {
@@ -4911,7 +4605,7 @@ function App() {
       await fetch(`/api/stories/${encodeURIComponent(storyId)}/archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: loggedInUser || 'alexchen' }),
+        body: JSON.stringify({ user: loggedInUser || '' }),
       });
     } catch { }
 
@@ -7086,58 +6780,7 @@ function App() {
     return (str[0] || '?').toUpperCase();
   };
 
-  const fallbackActiveUsersList = useMemo(() => [
-    {
-      id: 'contact-alex',
-      phoneBookName: 'Alex Chen',
-      username: 'alexchen',
-      phone: '+1 (555) 234-5678',
-      avatar: null,
-      status: '🚀 Developing new features on Planet! Online and available.',
-      registeredAt: 'Just now',
-      isRegistered: true,
-    },
-    {
-      id: 'contact-sophia',
-      phoneBookName: 'Sophia Patel',
-      username: 'sophiap',
-      phone: '+1 (555) 345-6789',
-      avatar: null,
-      status: '☕ Working remotely today. Enjoying a hot cup of coffee!',
-      registeredAt: '12m ago',
-      isRegistered: true,
-    },
-    {
-      id: 'contact-liam',
-      phoneBookName: 'Liam Smith',
-      username: 'liamsmith',
-      phone: '+1 (555) 456-7890',
-      avatar: null,
-      status: 'In design review meeting. Message me for urgent updates.',
-      registeredAt: '45m ago',
-      isRegistered: true,
-    },
-    {
-      id: 'contact-olivia',
-      phoneBookName: 'Olivia Taylor',
-      username: 'oliviat',
-      phone: '+1 (555) 567-8901',
-      avatar: null,
-      status: 'Exploring beautiful mountain trails this weekend 🌲✨',
-      registeredAt: '2h ago',
-      isRegistered: true,
-    },
-    {
-      id: 'contact-david',
-      phoneBookName: 'David Miller',
-      username: 'davidm',
-      phone: '+1 (555) 678-9012',
-      avatar: null,
-      status: 'Hey there! I am using Planet',
-      registeredAt: 'Today',
-      isRegistered: true,
-    },
-  ], []);
+  const fallbackActiveUsersList = useMemo(() => [], []);
 
   const effectiveRegisteredList = useMemo(() => {
     if (registeredContacts && registeredContacts.length > 0) return registeredContacts;
@@ -7153,8 +6796,8 @@ function App() {
         isRegistered: true,
       }));
     }
-    return fallbackActiveUsersList;
-  }, [registeredContacts, discoveryUsers, fallbackActiveUsersList]);
+    return [];
+  }, [registeredContacts, discoveryUsers]);
 
   const filteredRegisteredContacts = effectiveRegisteredList.filter((contact) => {
     if (!contact) return false;
@@ -21795,7 +21438,7 @@ function App() {
                           <div className="story-rings-carousel" id="story-rings-carousel">
                             {/* Current User's Ring */}
                             {(() => {
-                              const myAuth = (loggedInUser || 'alexchen').toLowerCase();
+                              const myAuth = (loggedInUser || '').toLowerCase();
                               const myGroup = groupedStories.find((g) => g.author.toLowerCase() === myAuth);
                               const hasActiveStories = myGroup && myGroup.stories.length > 0;
 
@@ -21834,7 +21477,7 @@ function App() {
 
                             {/* Friends / Community Rings */}
                             {groupedStories
-                              .filter((g) => g.author.toLowerCase() !== (loggedInUser || 'alexchen').toLowerCase())
+                              .filter((g) => g.author.toLowerCase() !== (loggedInUser || '').toLowerCase())
                               .map((group) => (
                                 <div
                                   key={group.author}
@@ -22076,7 +21719,7 @@ function App() {
                                           )}
                                         </div>
 
-                                        {story.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase() ? (
+                                        {story.author.toLowerCase() === (loggedInUser || '').toLowerCase() ? (
                                           <button
                                             type="button"
                                             className="story-card-archive-btn"
@@ -22566,7 +22209,7 @@ function App() {
                                 {/* Mention Quick Suggestions */}
                                 <div className="story-mention-suggestions">
                                   <span className="story-style-sublabel">Suggestions:</span>
-                                  {['alexchen', 'sophia_p', 'tonystark', 'liam_smith'].map((u) => (
+                                  {(Array.isArray(effectiveFriendsList) ? effectiveFriendsList.slice(0, 5) : []).map((u) => (
                                     <button
                                       key={u}
                                       type="button"
@@ -22776,7 +22419,7 @@ function App() {
                     if (!currentStory) return null;
 
                     const isAuthor =
-                      currentStory.author.toLowerCase() === (loggedInUser || 'alexchen').toLowerCase();
+                      currentStory.author.toLowerCase() === (loggedInUser || '').toLowerCase();
 
                     return (
                       <div
@@ -25507,6 +25150,22 @@ function App() {
                             onClick={() => setShowDeactivateModal(true)}
                           >
                             Deactivate
+                          </button>
+                        </div>
+
+                        <div className="settings-danger-box" style={{ marginTop: '0.75rem' }}>
+                          <div className="settings-danger-info">
+                            <span className="settings-danger-title">Reset application & clear all data</span>
+                            <span className="settings-danger-desc">Permanently wipe all user accounts, messages, posts, and dummy records to start with a fresh application.</span>
+                          </div>
+                          <button
+                            type="button"
+                            id="general-reset-app-btn"
+                            className="settings-deactivate-btn"
+                            style={{ backgroundColor: '#dc2626', borderColor: '#b91c1c' }}
+                            onClick={handleClearAllDataAndReset}
+                          >
+                            Reset All Data
                           </button>
                         </div>
                       </div>
