@@ -1632,6 +1632,22 @@ function App() {
   });
   const [mentionTaggingFeedback, setMentionTaggingFeedback] = useState(null);
 
+  // Online Status Privacy state
+  const [onlineStatusPrivacySettings, setOnlineStatusPrivacySettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('planet_online_status_privacy_settings');
+      if (saved) return JSON.parse(saved);
+    } catch { }
+    return {
+      whoCanSeeOnline: 'everyone',
+      whoCanSeeLastSeen: 'everyone',
+      showActiveGreenDot: true,
+      showActiveInSameChat: true,
+      hideOnlineWhenIdle: true,
+    };
+  });
+  const [onlineStatusFeedback, setOnlineStatusFeedback] = useState(null);
+
   // Text, image & video posts state for feeds
   const [postContent, setPostContent] = useState('');
   const [postImage, setPostImage] = useState(null);
@@ -3235,6 +3251,20 @@ function App() {
     setMentionTaggingFeedback('Mention & tagging settings updated ✨');
     setTimeout(() => {
       setMentionTaggingFeedback(null);
+    }, 2500);
+  };
+
+  const handleUpdateOnlineStatusPrivacy = (key, value) => {
+    setOnlineStatusPrivacySettings((prev) => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('planet_online_status_privacy_settings', JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    setOnlineStatusFeedback('Online status privacy updated ✨');
+    setTimeout(() => {
+      setOnlineStatusFeedback(null);
     }, 2500);
   };
 
@@ -17237,6 +17267,192 @@ function App() {
                             aria-label="Auto-filter spam tags"
                             className={`visibility-switch-btn ${mentionTaggingSettings.autoRemoveSpamTags ? 'active' : ''}`}
                             onClick={() => handleUpdateMentionTagging('autoRemoveSpamTags', !mentionTaggingSettings.autoRemoveSpamTags)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Feature 6: Online Status Privacy */}
+                    <div className="privacy-card" id="online-status-privacy-card">
+                      <div className="privacy-card-header">
+                        <div className="privacy-card-title-wrap">
+                          <h2 className="privacy-card-title" id="online-status-privacy-title">
+                            Online status privacy
+                          </h2>
+                          <p className="privacy-card-desc">
+                            Choose who can see when you are active on Planet and control last seen presence indicators.
+                          </p>
+                        </div>
+                        {onlineStatusFeedback && (
+                          <span className="privacy-feedback-pill" role="status">
+                            {onlineStatusFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Section 1: Who can see when you're online */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can see when you're online</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can see when you're online"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="online-status-scope-everyone"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeOnline === 'everyone'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeOnline === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeOnline', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🟢</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Anyone can see when you are active</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="online-status-scope-contacts"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeOnline === 'contacts'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeOnline === 'contacts' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeOnline', 'contacts')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Contacts & Following</span>
+                              <span className="visibility-scope-desc">Only people you follow or know</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="online-status-scope-nobody"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeOnline === 'nobody'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeOnline === 'nobody' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeOnline', 'nobody')}
+                          >
+                            <div className="visibility-scope-icon">🔒</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Nobody</span>
+                              <span className="visibility-scope-desc">Keep your active status private</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Who can see your last seen timestamp */}
+                      <div className="visibility-section">
+                        <label className="visibility-section-label">Who can see your last seen time</label>
+                        <div
+                          className="visibility-scope-group"
+                          role="radiogroup"
+                          aria-label="Who can see your last seen time"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            id="last-seen-scope-everyone"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeLastSeen === 'everyone'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeLastSeen === 'everyone' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeLastSeen', 'everyone')}
+                          >
+                            <div className="visibility-scope-icon">🕒</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Everyone</span>
+                              <span className="visibility-scope-desc">Show exact last active timestamp</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="last-seen-scope-contacts"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeLastSeen === 'contacts'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeLastSeen === 'contacts' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeLastSeen', 'contacts')}
+                          >
+                            <div className="visibility-scope-icon">👥</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Contacts Only</span>
+                              <span className="visibility-scope-desc">Only contacts see last seen</span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            role="radio"
+                            id="last-seen-scope-nobody"
+                            aria-checked={onlineStatusPrivacySettings.whoCanSeeLastSeen === 'nobody'}
+                            className={`visibility-scope-option ${onlineStatusPrivacySettings.whoCanSeeLastSeen === 'nobody' ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('whoCanSeeLastSeen', 'nobody')}
+                          >
+                            <div className="visibility-scope-icon">🚫</div>
+                            <div className="visibility-scope-info">
+                              <span className="visibility-scope-title">Nobody</span>
+                              <span className="visibility-scope-desc">Hide last seen time from everyone</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Granular Online Presence Toggles */}
+                      <div className="visibility-toggles-list">
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show active green dot indicator</span>
+                            <span className="visibility-toggle-desc">Display a green badge on your avatar across chats and profile when active</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="online-status-toggle-green-dot"
+                            aria-checked={onlineStatusPrivacySettings.showActiveGreenDot}
+                            aria-label="Show active green dot indicator"
+                            className={`visibility-switch-btn ${onlineStatusPrivacySettings.showActiveGreenDot ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('showActiveGreenDot', !onlineStatusPrivacySettings.showActiveGreenDot)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Show when active in same conversation</span>
+                            <span className="visibility-toggle-desc">Let conversation members see when you are actively viewing the open chat window</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="online-status-toggle-same-chat"
+                            aria-checked={onlineStatusPrivacySettings.showActiveInSameChat}
+                            aria-label="Show when active in same conversation"
+                            className={`visibility-switch-btn ${onlineStatusPrivacySettings.showActiveInSameChat ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('showActiveInSameChat', !onlineStatusPrivacySettings.showActiveInSameChat)}
+                          >
+                            <span className="visibility-switch-thumb" />
+                          </button>
+                        </div>
+
+                        <div className="visibility-toggle-item">
+                          <div className="visibility-toggle-info">
+                            <span className="visibility-toggle-title">Automatically mark offline when idle</span>
+                            <span className="visibility-toggle-desc">Set status to away / offline after 5 minutes of inactivity</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            id="online-status-toggle-idle"
+                            aria-checked={onlineStatusPrivacySettings.hideOnlineWhenIdle}
+                            aria-label="Automatically mark offline when idle"
+                            className={`visibility-switch-btn ${onlineStatusPrivacySettings.hideOnlineWhenIdle ? 'active' : ''}`}
+                            onClick={() => handleUpdateOnlineStatusPrivacy('hideOnlineWhenIdle', !onlineStatusPrivacySettings.hideOnlineWhenIdle)}
                           >
                             <span className="visibility-switch-thumb" />
                           </button>
