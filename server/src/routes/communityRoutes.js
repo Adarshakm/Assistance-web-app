@@ -580,7 +580,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/join', async (req, res) => {
   try {
     const { id } = req.params;
-    const { user } = req.body;
+    const { user, plan } = req.body;
 
     if (!id) {
       return res.status(400).json({ success: false, error: 'Community ID is required.' });
@@ -590,6 +590,8 @@ router.post('/:id/join', async (req, res) => {
     if (!cleanUser) {
       return res.status(400).json({ success: false, error: 'User is required to join.' });
     }
+
+    const cleanPlan = String(plan || '').trim().toLowerCase();
 
     if (!mongoose.Types.ObjectId.isValid(id) || mongoose.connection.readyState !== 1) {
       return res.status(200).json({
@@ -615,6 +617,21 @@ router.post('/:id/join', async (req, res) => {
         message: 'Already a member of this community.',
         community,
       });
+    }
+
+    if (cleanPlan === 'free') {
+      const joinedCount = await Community.countDocuments({
+        'members.username': cleanUser,
+      }).maxTimeMS(3000);
+      if (joinedCount >= 5) {
+        return res.status(403).json({
+          success: false,
+          error: 'In the Free plan, you can only join up to 5 groups. Please upgrade your subscription plan to join more groups.',
+          limitReached: true,
+          plan: 'free',
+          maxAllowed: 5,
+        });
+      }
     }
 
     community.members.push({

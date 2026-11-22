@@ -499,8 +499,8 @@ export const SUBSCRIPTION_PLANS = [
     popular: false,
     color: '#71717a',
     accentClass: 'plan-free',
-    description: 'Essential social network access (1 group, 2 videos/day, 5 images/day).',
-    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '5 Images / Day', '2 Videos / Day', '1 Group Limit'],
+    description: 'Essential social network access (1 group create, join up to 5 groups, 2 videos/day, 5 images/day).',
+    highlights: ['Public Social Feed', 'Direct 1-on-1 Chats', '5 Images / Day', '2 Videos / Day', 'Join up to 5 Groups'],
     features: [
       'Full access to What\'s Happening public feed',
       'Direct chat and messaging with contacts',
@@ -508,6 +508,7 @@ export const SUBSCRIPTION_PLANS = [
       'Post up to 5 images per day (Upgrade for unlimited)',
       'Post up to 2 videos per day (Upgrade for unlimited)',
       'Create 1 Group only (Upgrade to create more groups)',
+      'Join up to 5 groups (Upgrade to join unlimited groups)',
       '1-on-1 voice & 720p video calls',
       'Follow friends and discover public creators',
       '5 GB standard media cloud storage',
@@ -527,12 +528,13 @@ export const SUBSCRIPTION_PLANS = [
     color: '#38bdf8',
     accentClass: 'plan-300',
     description: 'Verified checkmark credibility and ad-free experience for social enthusiasts.',
-    highlights: ['Blue Verified Badge', 'Unlimited Image Posts', 'Unlimited Video Posts', 'Unlimited Groups', '50 GB Storage'],
+    highlights: ['Blue Verified Badge', 'Unlimited Image Posts', 'Unlimited Video Posts', 'Join & Create Unlimited Groups', '50 GB Storage'],
     features: [
       'Everything in Free Plan, plus:',
       'Unlimited daily image and photo posts',
       'Unlimited daily video posts (Up to 5 min duration)',
       'Create and manage unlimited groups',
+      'Join and participate in unlimited groups',
       'Blue Verified Checkmark Badge across profile & feed',
       '100% Ad-Free browsing across all feeds & tabs',
       'Unlimited HD voice & 1080p video calls',
@@ -559,7 +561,7 @@ export const SUBSCRIPTION_PLANS = [
       'Everything in ₹300 Plan, plus:',
       'Unlimited high-resolution image posts',
       'Unlimited daily video posts up to 30 min duration',
-      'Create unlimited groups & communities',
+      'Create & join unlimited groups & communities',
       'Gold Checkmark Badge & Pro Creator status',
       'Unlimited 4K Ultra HD Video Calling & Screen Sharing',
       'Group video calls up to 50 participants',
@@ -585,7 +587,7 @@ export const SUBSCRIPTION_PLANS = [
     highlights: ['Diamond VIP Badge', 'Unlimited Groups & 250-Person Calls', '1 TB Cloud Storage', 'Algorithm Boost'],
     features: [
       'Everything in ₹500 Plan, plus:',
-      'Create unlimited groups, channels & spaces',
+      'Create & join unlimited groups, channels & spaces',
       'Diamond VIP Badge & Official Verified Business Seal',
       '1 TB (1,000 GB) Dedicated high-speed cloud vault',
       'Group calls & webinars up to 250 participants',
@@ -5107,6 +5109,7 @@ function App() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showVideoLimitUpgradeModal, setShowVideoLimitUpgradeModal] = useState(false);
   const [showImageLimitUpgradeModal, setShowImageLimitUpgradeModal] = useState(false);
+  const [showJoinGroupLimitUpgradeModal, setShowJoinGroupLimitUpgradeModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('upi');
   const [upiIdInput, setUpiIdInput] = useState('');
   const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
@@ -7733,6 +7736,27 @@ function App() {
     }
   });
 
+  // Joined Groups Tracking (Free plan limit: join up to 5 groups)
+  const getJoinedGroupsCount = () => {
+    const cleanUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim().toLowerCase();
+    const joinedCommunities = (communitiesList || []).filter((c) =>
+      Array.isArray(c.members) &&
+      c.members.some((m) => {
+        const u = typeof m === 'string' ? m : (m?.username || m?.name || '');
+        return u.trim().toLowerCase() === cleanUser;
+      })
+    );
+    const joinedExternalGroups = (userGroups || []).filter((g) => {
+      const isCreator = g.creator && g.creator.toLowerCase() === cleanUser;
+      if (isCreator) return false;
+      return Array.isArray(g.members) && g.members.some((m) => {
+        const u = typeof m === 'string' ? m : (m?.username || m?.name || '');
+        return u.trim().toLowerCase() === cleanUser;
+      });
+    });
+    return joinedCommunities.length + joinedExternalGroups.length;
+  };
+
   // Create Community State
   const [showCreateCommunityModal, setShowCreateCommunityModal] = useState(false);
   const [newCommunityName, setNewCommunityName] = useState('');
@@ -8037,14 +8061,33 @@ function App() {
     const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || 'user').trim();
     if (!currentUser) return;
 
+    // In Free plan, user can join up to 5 groups
+    if (currentPlanId === 'free') {
+      const cleanUser = currentUser.toLowerCase();
+      const targetComm = (communitiesList || []).find((c) => (c._id || c.id) === communityId);
+      const isAlreadyMember = targetComm && Array.isArray(targetComm.members) && targetComm.members.some((m) => {
+        const u = typeof m === 'string' ? m : (m?.username || m?.name || '');
+        return u.trim().toLowerCase() === cleanUser;
+      });
+
+      if (!isAlreadyMember && getJoinedGroupsCount() >= 5) {
+        setShowJoinGroupLimitUpgradeModal(true);
+        return;
+      }
+    }
+
     setJoiningCommunityId(communityId);
     try {
       const res = await fetch(`/api/communities/${communityId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: currentUser }),
+        body: JSON.stringify({ user: currentUser, plan: currentPlanId }),
       });
       const data = await res.json();
+      if (!res.ok && (data.limitReached || (data.error && data.error.includes('limit')))) {
+        setShowJoinGroupLimitUpgradeModal(true);
+        return;
+      }
       if (res.ok && data.success && data.community) {
         setCommunitiesList((prev) => {
           const updated = prev.map((c) =>
@@ -19854,7 +19897,7 @@ function App() {
                                           id={`join-community-btn-${commId}`}
                                           onClick={() => handleJoinCommunity(commId)}
                                           disabled={joiningCommunityId === commId}
-                                          title="Join communities"
+                                          title={currentPlanId === 'free' && getJoinedGroupsCount() >= 5 ? 'In the Free plan, you can join up to 5 groups. Upgrade to join more groups.' : 'Join communities'}
                                         >
                                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -25127,6 +25170,99 @@ function App() {
                     type="button"
                     className="group-limit-cancel-btn"
                     onClick={() => setShowImageLimitUpgradeModal(false)}
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Free Plan Group Join Limit Upgrade Modal */}
+          {showJoinGroupLimitUpgradeModal && (
+            <div
+              className="group-modal-backdrop group-limit-modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowJoinGroupLimitUpgradeModal(false);
+                }
+              }}
+            >
+              <div className="group-modal-dialog group-limit-dialog" role="dialog" aria-modal="true" aria-labelledby="join-group-limit-title">
+                <button
+                  type="button"
+                  className="group-limit-close-btn"
+                  onClick={() => setShowJoinGroupLimitUpgradeModal(false)}
+                  aria-label="Close modal"
+                >
+                  &times;
+                </button>
+
+                <div className="group-limit-icon-wrap">
+                  <div className="group-limit-icon-circle join-limit-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                  </div>
+                  <span className="group-limit-badge join-badge">GROUP JOIN LIMIT REACHED</span>
+                </div>
+
+                <div className="group-limit-header">
+                  <h2 className="group-limit-title" id="join-group-limit-title">
+                    Free Plan Group Join Limit
+                  </h2>
+                  <p className="group-limit-sub">
+                    In the <strong>Free plan</strong>, you can only join up to <strong>5 groups</strong> ({getJoinedGroupsCount()}/5 groups joined). To join more groups, please upgrade your subscription plan.
+                  </p>
+                </div>
+
+                <div className="group-limit-info-box">
+                  <p className="group-limit-note">
+                    Upgrade to any of our premium membership tiers to join unlimited groups and communities:
+                  </p>
+
+                  <div className="group-limit-tiers-preview">
+                    <div className="limit-tier-pill">
+                      <span className="tier-pill-name">Free Plan</span>
+                      <span className="tier-pill-val">Join up to 5 Groups</span>
+                    </div>
+                    <div className="limit-tier-pill highlight">
+                      <span className="tier-pill-name">Standard ₹300</span>
+                      <span className="tier-pill-val">Join Unlimited Groups</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-purple">
+                      <span className="tier-pill-name">Pro Creator ₹500</span>
+                      <span className="tier-pill-val">Unlimited Groups + Feeds</span>
+                    </div>
+                    <div className="limit-tier-pill highlight-gold">
+                      <span className="tier-pill-name">VIP Elite ₹1000</span>
+                      <span className="tier-pill-val">Unlimited Everything</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="group-limit-actions">
+                  <button
+                    type="button"
+                    className="group-limit-upgrade-btn"
+                    id="join-group-limit-upgrade-btn"
+                    onClick={() => {
+                      setShowJoinGroupLimitUpgradeModal(false);
+                      handleOpenSubscriptionModal('300');
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>Upgrade Subscription Plan</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="group-limit-cancel-btn"
+                    onClick={() => setShowJoinGroupLimitUpgradeModal(false)}
                   >
                     Maybe Later
                   </button>
