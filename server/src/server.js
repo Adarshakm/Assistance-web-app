@@ -85,8 +85,8 @@ app.get('/health', (req, res) => {
 app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities', '/livestreams'], async (req, res, next) => {
   if (req.path === '/health' || req.path === '/api/health') return next();
 
-  if (mongoose.connection.readyState !== 1 && req.method !== 'GET') {
-    await waitForDBConnection(4500);
+  if (mongoose.connection.readyState !== 1) {
+    await waitForDBConnection(10000);
   }
 
   if (mongoose.connection.readyState !== 1) {
@@ -132,10 +132,11 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
         offline: true,
       });
     }
+    const dbErr = getLastDbError();
     return res.status(503).json({
       success: false,
-      message: 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
-      error: 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
+      message: dbErr ? `Database error: ${dbErr}` : 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
+      error: dbErr || 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
     });
   }
   next();

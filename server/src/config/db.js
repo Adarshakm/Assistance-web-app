@@ -78,7 +78,7 @@ const connectDB = async () => {
   return activeConnectPromise;
 };
 
-export const waitForDBConnection = async (timeoutMs = 4500) => {
+export const waitForDBConnection = async (timeoutMs = 10000) => {
   if (mongoose.connection.readyState === 1) return true;
   const pending = activeConnectPromise || connectDB();
   let timer;
