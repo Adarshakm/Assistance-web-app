@@ -1426,14 +1426,19 @@ function App() {
           `/api/users/check-username?username=${encodeURIComponent(trimmed)}`,
           { signal: controller.signal }
         );
-        const data = await response.json();
+        const data = await response.json().catch(() => null);
 
-        if (data.isUnique) {
-          setUsernameStatus('available');
-          setStatusMessage(data.message || 'Username is available');
+        if (response.ok && data) {
+          if (data.isUnique) {
+            setUsernameStatus('available');
+            setStatusMessage(data.message || 'Username is available');
+          } else {
+            setUsernameStatus('taken');
+            setStatusMessage(data.message || 'Username is already taken');
+          }
         } else {
-          setUsernameStatus('taken');
-          setStatusMessage(data.message || 'Username is already taken');
+          setUsernameStatus('error');
+          setStatusMessage(data?.message || data?.error || 'Could not verify username');
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -1454,10 +1459,25 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFeedback(null);
 
-    if (!email || !phone || !username || !password || !confirmPassword) {
+    const trimmedEmail = String(email || '').trim();
+    const trimmedPhone = String(phone || '').trim();
+    const trimmedUsername = String(username || '').trim();
+
+    if (!trimmedEmail || !trimmedPhone || !trimmedUsername || !password || !confirmPassword) {
       setFeedback({ type: 'error', text: 'Please fill in all fields' });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setFeedback({ type: 'error', text: 'Please enter a valid email address' });
+      return;
+    }
+
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 30) {
+      setFeedback({ type: 'error', text: 'Username must be between 3 and 30 characters' });
       return;
     }
 
@@ -1472,18 +1492,27 @@ function App() {
     }
 
     setIsSubmitting(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const response = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phone, username, password }),
+        body: JSON.stringify({
+          email: trimmedEmail,
+          phone: trimmedPhone,
+          username: trimmedUsername,
+          password,
+        }),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      clearTimeout(timeoutId);
+      const data = await response.json().catch(() => null);
 
-      if (response.ok) {
-        const activeUser = data.user?.username || username;
+      if (response.ok && data) {
+        const activeUser = data.user?.username || trimmedUsername.toLowerCase();
         setLoggedInUser(activeUser);
         setActiveChatContact(null);
         setChatMessages({});
@@ -1497,11 +1526,23 @@ function App() {
         setFeedback({ type: 'success', text: data.message || 'Registered successfully!' });
         navigateTo('whats-happening');
       } else {
-        setFeedback({ type: 'error', text: data.message || 'Registration failed' });
+        const errText =
+          data?.message ||
+          data?.error ||
+          (response.status === 504
+            ? 'Server timed out while registering. Please try again.'
+            : `Registration failed (HTTP ${response.status})`);
+        setFeedback({ type: 'error', text: errText });
       }
-    } catch {
-      setFeedback({ type: 'error', text: 'Unable to connect to server. Please try again.' });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err?.name === 'AbortError') {
+        setFeedback({ type: 'error', text: 'Server took too long to respond. Please try again.' });
+      } else {
+        setFeedback({ type: 'error', text: 'Unable to connect to server. Please try again.' });
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsSubmitting(false);
     }
   };
@@ -5780,6 +5821,98 @@ function App() {
     return false;
   };
 
+  const getMessageDeliveryState = (msg) => {
+    if (!msg) return { state: 'sent', label: 'Sent', detailText: 'Sent' };
+    if (msg.status === 'sending') {
+      return { state: 'sending', label: 'Sending...', detailText: 'Sending message...' };
+    }
+    if (msg.status === 'failed') {
+      return { state: 'failed', label: 'Failed', detailText: 'Delivery failed' };
+    }
+
+    const formatReceiptTime = (ts) => {
+      if (!ts) return '';
+      try {
+        return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return '';
+      }
+    };
+
+    const isRead = Boolean(
+      msg.receiptRead !== undefined ? msg.receiptRead : (msg.status === 'read' || msg.read)
+    );
+    const isDelivered = Boolean(isRead || msg.delivered || msg.status === 'delivered');
+
+    if (isRead) {
+      const readTime = formatReceiptTime(msg.readAt);
+      return {
+        state: 'read',
+        label: readTime ? `Read • ${readTime}` : 'Read',
+        detailText: readTime ? `Read at ${readTime}` : 'Read',
+      };
+    }
+
+    if (isDelivered) {
+      const deliveredTime = formatReceiptTime(msg.deliveredAt);
+      return {
+        state: 'delivered',
+        label: 'Delivered',
+        detailText: deliveredTime ? `Delivered at ${deliveredTime}` : 'Delivered',
+      };
+    }
+
+    return { state: 'sent', label: 'Sent', detailText: 'Sent to server' };
+  };
+
+  const renderMessageStatusIcon = (state, titleText = '') => {
+    if (state === 'sending') {
+      return (
+        <span className="chat-status-icon sending" title={titleText || 'Sending...'} aria-label="Sending">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <polyline points="12 7 12 12 15 14"></polyline>
+          </svg>
+        </span>
+      );
+    }
+
+    if (state === 'failed') {
+      return (
+        <span className="chat-status-icon failed" title={titleText || 'Failed'} aria-label="Delivery failed">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        </span>
+      );
+    }
+
+    if (state === 'delivered' || state === 'read') {
+      return (
+        <span
+          className={`chat-status-icon ${state}`}
+          title={titleText || (state === 'read' ? 'Read' : 'Delivered')}
+          aria-label={state === 'read' ? 'Read' : 'Delivered'}
+        >
+          <svg width="16" height="13" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1.5 8.5 6 13 14.5 3"></polyline>
+            <polyline points="8.5 8.5 13 13 21.5 3"></polyline>
+          </svg>
+        </span>
+      );
+    }
+
+    return (
+      <span className="chat-status-icon sent" title={titleText || 'Sent'} aria-label="Sent">
+        <svg width="13" height="13" viewBox="0 0 18 16" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="2.5 8.5 7 13 15.5 3"></polyline>
+        </svg>
+      </span>
+    );
+  };
+
   const handleOpenChatWithContact = (contact) => {
     if (!contact) return;
 
@@ -5823,8 +5956,8 @@ function App() {
         signal: signal || undefined,
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.conversations)) {
+        const data = await res.json().catch(() => null);
+        if (data?.success && !data.offline && Array.isArray(data.conversations)) {
           setRecentConversations(data.conversations);
           setTotalUnreadMessages(data.totalUnread || 0);
 
@@ -5885,6 +6018,20 @@ function App() {
   const isFetchingConversationRef = useRef(false);
   const activeConversationAbortRef = useRef(null);
 
+  const persistChatHistorySafely = (historyObj) => {
+    try {
+      const cleanHistory = {};
+      Object.keys(historyObj).slice(-10).forEach((k) => {
+        const arr = Array.isArray(historyObj[k]) ? historyObj[k] : [];
+        cleanHistory[k] = arr.slice(-25).map((m) => ({
+          ...m,
+          mediaUrl: m.mediaUrl && m.mediaUrl.startsWith('data:') ? '[data]' : m.mediaUrl,
+        }));
+      });
+      localStorage.setItem('assistance_chat_history', JSON.stringify(cleanHistory));
+    } catch { }
+  };
+
   // Fetch messages from backend for active contact
   const fetchActiveConversation = async (contact, signal) => {
     if (!contact || isFetchingConversationRef.current) return;
@@ -5895,16 +6042,17 @@ function App() {
 
     isFetchingConversationRef.current = true;
     try {
+      const allowReadReceipts = messagePermissionSettings.readReceipts !== false;
       const res = await fetch(
-        `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&_t=${Date.now()}`,
+        `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&readReceipts=${allowReadReceipts}&_t=${Date.now()}`,
         {
           cache: 'no-store',
           signal: signal || undefined,
         }
       );
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.messages)) {
+        const data = await res.json().catch(() => null);
+        if (data?.success && !data.offline && Array.isArray(data.messages)) {
           const normalized = data.messages.map((m) => {
             const senderStr = (m.sender || '').trim().toLowerCase();
             const isMe =
@@ -5919,38 +6067,46 @@ function App() {
 
           setChatMessages((prev) => {
             const existing = prev[contactKey] || [];
-            // Optimization: if message count and latest message status are identical, skip state update to prevent re-render loops
+            // Preserve in-flight or failed optimistic messages so background polls never wipe them out
+            const serverIdSet = new Set(normalized.map((m) => m.id || m._id).filter(Boolean));
+            const pendingLocal = existing.filter(
+              (m) =>
+                typeof m.id === 'string' &&
+                m.id.startsWith('temp_') &&
+                (m.status === 'sending' || m.status === 'failed') &&
+                !serverIdSet.has(m.id)
+            );
+            const merged = pendingLocal.length > 0 ? [...normalized, ...pendingLocal] : normalized;
+
+            // Skip state update only when all messages and their delivery/read states are identical
             if (
-              existing.length === normalized.length &&
+              existing.length === merged.length &&
               existing.length > 0 &&
-              existing[existing.length - 1]?.id === normalized[normalized.length - 1]?.id &&
-              existing[existing.length - 1]?.read === normalized[normalized.length - 1]?.read
+              existing.every(
+                (m, idx) =>
+                  m.id === merged[idx]?.id &&
+                  m.status === merged[idx]?.status &&
+                  Boolean(m.delivered) === Boolean(merged[idx]?.delivered) &&
+                  Boolean(m.read) === Boolean(merged[idx]?.read) &&
+                  Boolean(m.receiptRead) === Boolean(merged[idx]?.receiptRead)
+              )
             ) {
               return prev;
             }
 
             const updated = {
               ...prev,
-              [contactKey]: normalized,
+              [contactKey]: merged,
             };
             if (contact.username) {
               const uLower = contact.username.toLowerCase();
-              updated[uLower] = normalized;
-              updated[contact.username] = normalized;
+              updated[uLower] = merged;
+              updated[contact.username] = merged;
             }
             if (contact.phone) {
-              updated[contact.phone] = normalized;
+              updated[contact.phone] = merged;
             }
-            try {
-              const cleanHistory = {};
-              Object.keys(updated).slice(-10).forEach((k) => {
-                cleanHistory[k] = updated[k].slice(-25).map((m) => ({
-                  ...m,
-                  mediaUrl: m.mediaUrl && m.mediaUrl.startsWith('data:') ? '[data]' : m.mediaUrl,
-                }));
-              });
-              localStorage.setItem('assistance_chat_history', JSON.stringify(cleanHistory));
-            } catch { }
+            persistChatHistorySafely(updated);
             return updated;
           });
         }
@@ -6032,7 +6188,7 @@ function App() {
       if (timerId) clearTimeout(timerId);
       isFetchingConversationRef.current = false;
     };
-  }, [currentView, activeChatKey, loggedInUser]);
+  }, [currentView, activeChatKey, loggedInUser, messagePermissionSettings.readReceipts]);
 
   useEffect(() => {
     if (!showAttachmentMenu) return;
@@ -6117,6 +6273,115 @@ function App() {
     reader.readAsDataURL(file);
   };
 
+  const dispatchChatMessage = async (optimisticMsg, contactKey) => {
+    const localId = optimisticMsg.id;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          sender: optimisticMsg.sender,
+          senderName: optimisticMsg.senderName,
+          recipient: contactKey,
+          recipientName: optimisticMsg.recipientName,
+          text: optimisticMsg.text,
+          mediaType: optimisticMsg.mediaType,
+          mediaUrl: optimisticMsg.mediaUrl,
+          fileName: optimisticMsg.fileName,
+          fileSize: optimisticMsg.fileSize,
+        }),
+      });
+
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success && data?.message) {
+        const serverMsg = {
+          ...data.message,
+          isSent: true,
+        };
+        const resolvedRecipient = (data.message.recipient || '').toLowerCase();
+        setChatMessages((prev) => {
+          const existing = prev[contactKey] || [];
+          const hasLocal = existing.some((m) => m.id === localId);
+          const alreadyHasServer = existing.some((m) => (m.id || m._id) === (serverMsg.id || serverMsg._id));
+          let replaced;
+          if (hasLocal) {
+            replaced = existing.map((m) => (m.id === localId ? serverMsg : m));
+          } else if (!alreadyHasServer) {
+            replaced = [...existing, serverMsg];
+          } else {
+            replaced = existing;
+          }
+          const updated = {
+            ...prev,
+            [contactKey]: replaced,
+          };
+          if (resolvedRecipient && resolvedRecipient !== contactKey) {
+            updated[resolvedRecipient] = replaced;
+          }
+          persistChatHistorySafely(updated);
+          return updated;
+        });
+
+        if (data.message.recipient && activeChatContact && !activeChatContact.username) {
+          setActiveChatContact((prevContact) => {
+            if (!prevContact) return prevContact;
+            const next = { ...prevContact, username: data.message.recipient };
+            try {
+              localStorage.setItem('assistance_active_chat_contact', JSON.stringify(next));
+            } catch { }
+            return next;
+          });
+        }
+
+        fetchRecentConversations();
+      } else {
+        console.error('[Send Message Error]:', res.status, data);
+        const failReason =
+          res.status === 413
+            ? 'File too large (413)'
+            : data?.error || data?.message || `Failed (${res.status})`;
+        setChatMessages((prev) => {
+          const existing = prev[contactKey] || [];
+          const updated = {
+            ...prev,
+            [contactKey]: existing.map((m) =>
+              m.id === localId ? { ...m, status: 'failed', errorMessage: failReason } : m
+            ),
+          };
+          persistChatHistorySafely(updated);
+          return updated;
+        });
+        if (res.status === 413) {
+          alert('Upload failed: File exceeds the server upload limit (413). Please choose a smaller file.');
+        }
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn('[Send Message Warning]:', err);
+      const failReason = err?.name === 'AbortError' ? 'Timed out' : 'Network error';
+      setChatMessages((prev) => {
+        const existing = prev[contactKey] || [];
+        const updated = {
+          ...prev,
+          [contactKey]: existing.map((m) =>
+            m.id === localId ? { ...m, status: 'failed', errorMessage: failReason } : m
+          ),
+        };
+        persistChatHistorySafely(updated);
+        return updated;
+      });
+    } finally {
+      clearTimeout(timeoutId);
+      setIsSendingMessage(false);
+    }
+  };
+
   const handleSendChatMessage = async (e) => {
     if (e && typeof e.preventDefault === 'function') e.preventDefault();
     const text = messageInputText.trim();
@@ -6149,6 +6414,10 @@ function App() {
       time: formattedTime,
       timestamp: Date.now(),
       createdAt: new Date().toISOString(),
+      status: 'sending',
+      delivered: false,
+      read: false,
+      receiptRead: false,
       isSent: true, // Sending messages are in right side
     };
 
@@ -6158,107 +6427,29 @@ function App() {
         ...prev,
         [contactKey]: [...existing, optimisticMsg],
       };
-      try {
-        localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-      } catch { }
+      persistChatHistorySafely(updated);
       return updated;
     });
 
     setIsSendingMessage(true);
+    await dispatchChatMessage(optimisticMsg, contactKey);
+  };
 
-    try {
-      const res = await fetch('/api/chat/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: currentUser,
-          senderName: currentUserName,
-          recipient: contactKey,
-          recipientName: recipientName,
-          text: text,
-          mediaType: attachmentToSend ? attachmentToSend.fileType : 'text',
-          mediaUrl: attachmentToSend ? attachmentToSend.dataUrl : '',
-          fileName: attachmentToSend ? attachmentToSend.name : '',
-          fileSize: attachmentToSend ? attachmentToSend.sizeFormatted : '',
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.message) {
-          const serverMsg = {
-            ...data.message,
-            isSent: true,
-          };
-          const resolvedRecipient = (data.message.recipient || '').toLowerCase();
-          setChatMessages((prev) => {
-            const existing = prev[contactKey] || [];
-            const replaced = existing.map((m) => (m.id === localId ? serverMsg : m));
-            const updated = {
-              ...prev,
-              [contactKey]: replaced,
-            };
-            if (resolvedRecipient && resolvedRecipient !== contactKey) {
-              updated[resolvedRecipient] = replaced;
-            }
-            try {
-              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-            } catch { }
-            return updated;
-          });
-
-          if (data.message.recipient && !activeChatContact.username) {
-            setActiveChatContact((prevContact) => {
-              if (!prevContact) return prevContact;
-              const next = { ...prevContact, username: data.message.recipient };
-              try {
-                localStorage.setItem('assistance_active_chat_contact', JSON.stringify(next));
-              } catch { }
-              return next;
-            });
-          }
-
-          fetchRecentConversations();
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        console.error('[Send Message Error]:', res.status, errData);
-        // Remove optimistic message on server rejection
-        setChatMessages((prev) => {
-          const existing = prev[contactKey] || [];
-          const updated = {
-            ...prev,
-            [contactKey]: existing.filter((m) => m.id !== localId),
-          };
-          try {
-            localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-          } catch { }
-          return updated;
-        });
-        if (res.status === 413) {
-          alert('Upload failed: File exceeds the server upload limit (413). Please choose a smaller file or update Nginx client_max_body_size.');
-        } else {
-          alert(`Message delivery failed (${res.status}): ${errData.error || errData.message || 'Please check your connection.'}`);
-        }
-      }
-    } catch (err) {
-      console.warn('[Send Message Warning]:', err);
-      // Remove optimistic message on failure
-      setChatMessages((prev) => {
-        const existing = prev[contactKey] || [];
-        const updated = {
-          ...prev,
-          [contactKey]: existing.filter((m) => m.id !== localId),
-        };
-        try {
-          localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-        } catch { }
-        return updated;
-      });
-      alert('Message delivery failed: Network connection error. Please try again.');
-    } finally {
-      setIsSendingMessage(false);
-    }
+  const handleRetryChatMessage = async (failedMsg) => {
+    if (!failedMsg || !activeChatContact || isSendingMessage) return;
+    const contactKey = getActiveChatKey(activeChatContact);
+    const retryingMsg = { ...failedMsg, status: 'sending', errorMessage: '' };
+    setChatMessages((prev) => {
+      const existing = prev[contactKey] || [];
+      const updated = {
+        ...prev,
+        [contactKey]: existing.map((m) => (m.id === failedMsg.id ? retryingMsg : m)),
+      };
+      persistChatHistorySafely(updated);
+      return updated;
+    });
+    setIsSendingMessage(true);
+    await dispatchChatMessage(retryingMsg, contactKey);
   };
 
   const handleSimulateReply = async () => {
@@ -6294,9 +6485,7 @@ function App() {
               ...prev,
               [contactKey]: [...existing, receivedMsg],
             };
-            try {
-              localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-            } catch { }
+            persistChatHistorySafely(updated);
             return updated;
           });
         }
@@ -6322,9 +6511,17 @@ function App() {
         ...prev,
         [contactKey]: [],
       };
-      try {
-        localStorage.setItem('assistance_chat_history', JSON.stringify(updated));
-      } catch { }
+      if (activeChatContact.username) {
+        updated[activeChatContact.username.toLowerCase()] = [];
+        updated[activeChatContact.username] = [];
+      }
+      if (activeChatContact.phone) {
+        updated[activeChatContact.phone] = [];
+      }
+      if (activeChatContact.name) {
+        updated[activeChatContact.name] = [];
+      }
+      persistChatHistorySafely(updated);
       return updated;
     });
 
@@ -23850,20 +24047,29 @@ function App() {
 
                           {(() => {
                             const contactKey = getActiveChatKey(activeChatContact);
+                            const candidateLists = activeChatContact
+                              ? [
+                                  chatMessages[contactKey],
+                                  activeChatContact.username && chatMessages[activeChatContact.username.toLowerCase()],
+                                  activeChatContact.username && chatMessages[activeChatContact.username],
+                                  activeChatContact.phone && chatMessages[activeChatContact.phone],
+                                  chatMessages[activeChatContact.name],
+                                ]
+                              : [];
                             const list =
-                              (activeChatContact &&
-                                (chatMessages[contactKey] ||
-                                  (activeChatContact.username &&
-                                    chatMessages[activeChatContact.username.toLowerCase()]) ||
-                                  (activeChatContact.username &&
-                                    chatMessages[activeChatContact.username]) ||
-                                  (activeChatContact.phone &&
-                                    chatMessages[activeChatContact.phone]) ||
-                                  chatMessages[activeChatContact.name])) ||
+                              candidateLists.find((arr) => Array.isArray(arr) && arr.length > 0) ||
+                              candidateLists.find((arr) => Array.isArray(arr)) ||
                               [];
 
-                            return list.map((msg) => {
+                            const lastSentIdx = list.reduce(
+                              (acc, m, idx) => (isMessageSentByMe(m, activeChatContact) ? idx : acc),
+                              -1
+                            );
+
+                            return list.map((msg, msgIdx) => {
                               const isSent = isMessageSentByMe(msg, activeChatContact);
+                              const delivery = isSent ? getMessageDeliveryState(msg) : null;
+                              const isLatestSent = isSent && msgIdx === lastSentIdx;
 
                               return (
                                 <div
@@ -23896,10 +24102,11 @@ function App() {
                                       )}
                                     </div>
                                   )}
-                                  <div
-                                    className={`chat-bubble ${isSent ? 'sent' : 'received'} ${msg.mediaType && msg.mediaType !== 'text' ? 'chat-bubble-media' : ''
-                                      }`}
-                                  >
+                                  <div className={`chat-bubble-col ${isSent ? 'sent' : 'received'}`}>
+                                    <div
+                                      className={`chat-bubble ${isSent ? 'sent' : 'received'} ${msg.mediaType && msg.mediaType !== 'text' ? 'chat-bubble-media' : ''
+                                        }`}
+                                    >
                                     {!isSent && (
                                       <span className="chat-bubble-sender-name">
                                         {msg.senderName || activeChatContact.name}
@@ -23990,7 +24197,42 @@ function App() {
                                     )}
 
                                     {msg.text ? <p className="chat-bubble-text">{msg.text}</p> : null}
-                                    <span className="chat-bubble-time">{msg.time}</span>
+                                    <div className="chat-bubble-meta">
+                                      <span className="chat-bubble-time">{msg.time}</span>
+                                      {isSent && delivery && renderMessageStatusIcon(delivery.state, delivery.detailText)}
+                                    </div>
+                                  </div>
+                                  {isLatestSent && delivery && (
+                                    <div
+                                      className={`chat-delivery-receipt-label ${delivery.state}`}
+                                      title={delivery.detailText}
+                                    >
+                                      {renderMessageStatusIcon(delivery.state, delivery.detailText)}
+                                      <span>{delivery.state === 'failed' && msg.errorMessage ? msg.errorMessage : delivery.label}</span>
+                                      {delivery.state === 'failed' && (
+                                        <button
+                                          type="button"
+                                          className="chat-msg-retry-btn"
+                                          onClick={() => handleRetryChatMessage(msg)}
+                                        >
+                                          Retry
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {!isLatestSent && delivery?.state === 'failed' && (
+                                    <div className="chat-delivery-receipt-label failed">
+                                      {renderMessageStatusIcon('failed', msg.errorMessage || delivery.detailText)}
+                                      <span>{msg.errorMessage || 'Failed'}</span>
+                                      <button
+                                        type="button"
+                                        className="chat-msg-retry-btn"
+                                        onClick={() => handleRetryChatMessage(msg)}
+                                      >
+                                        Retry
+                                      </button>
+                                    </div>
+                                  )}
                                   </div>
                                 </div>
                               );
@@ -24396,7 +24638,12 @@ function App() {
                                   </div>
                                   <div className="chat-inbox-bottom-row">
                                     <p className="chat-inbox-snippet">
-                                      {conv.isSentByMe ? <span className="chat-snippet-you">You: </span> : null}
+                                      {conv.isSentByMe ? (
+                                        <span className="chat-snippet-you">
+                                          {conv.lastStatus && renderMessageStatusIcon(conv.lastStatus, conv.lastStatus === 'read' ? 'Read' : conv.lastStatus === 'delivered' ? 'Delivered' : 'Sent')}
+                                          {' '}You:{' '}
+                                        </span>
+                                      ) : null}
                                       {conv.lastMessage}
                                     </p>
                                     {conv.unread > 0 && (
