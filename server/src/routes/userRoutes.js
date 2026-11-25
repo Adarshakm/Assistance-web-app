@@ -32,21 +32,33 @@ router.get('/check-username', async (req, res) => {
 
     // Check against MongoDB if connected
     if (mongoose.connection.readyState === 1) {
-      const existingUser = await User.findOne({
-        username: { $regex: new RegExp(`^${escapeRegex(cleanedUsername)}$`, 'i') },
-      });
+      try {
+        const existingUser = await User.findOne(
+          { username: cleanedUsername },
+          '_id username'
+        )
+          .maxTimeMS(3000)
+          .lean();
 
-      if (existingUser) {
+        if (existingUser) {
+          return res.json({
+            isUnique: false,
+            message: 'Username is already taken',
+          });
+        }
+
         return res.json({
-          isUnique: false,
-          message: 'Username is already taken',
+          isUnique: true,
+          message: 'Username is available',
+        });
+      } catch (dbErr) {
+        console.warn('[Check Username DB Warning]:', dbErr.message);
+        const isTaken = simulatedTakenUsernames.has(cleanedUsername);
+        return res.json({
+          isUnique: !isTaken,
+          message: isTaken ? 'Username is already taken' : 'Username is available',
         });
       }
-
-      return res.json({
-        isUnique: true,
-        message: 'Username is available',
-      });
     } else {
       // Offline fallback
       const isTaken = simulatedTakenUsernames.has(cleanedUsername);
@@ -68,15 +80,21 @@ router.get('/check-username', async (req, res) => {
 // POST /api/users/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, phone, username, password } = req.body;
+    const { email, phone, username, password } = req.body || {};
 
-    if (!email || !phone || !username || !password) {
+    const rawUsername = typeof username === 'string' ? username.trim() : '';
+    const cleanedUsername = rawUsername.toLowerCase();
+    const cleanedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const cleanedPhone = typeof phone === 'string' ? phone.trim() : '';
+    const rawPassword = typeof password === 'string' ? password : '';
+
+    if (!cleanedEmail || !cleanedPhone || !cleanedUsername || !rawPassword) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const cleanedUsername = username.trim().toLowerCase();
-    const cleanedEmail = email.trim().toLowerCase();
-    const cleanedPhone = phone.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
 
     if (cleanedUsername.length < 3) {
       return res.status(400).json({ message: 'Username must be at least 3 characters' });
@@ -86,33 +104,65 @@ router.post('/register', async (req, res) => {
     }
 
     if (mongoose.connection.readyState === 1) {
-      const existingByUsername = await User.findOne({
-        username: { $regex: new RegExp(`^${escapeRegex(cleanedUsername)}$`, 'i') },
-      });
-      if (existingByUsername) {
-        return res.status(400).json({ message: 'Username is already taken' });
-      }
+      // Single indexed query with timeout prevents gateway 504 timeouts
+      const existingUser = await User.findOne(
+        {
+          $or: [
+            { username: cleanedUsername },
+            { email: cleanedEmail },
+            { phone: cleanedPhone },
+          ],
+        },
+        'username email phone'
+      )
+        .maxTimeMS(4000)
+        .lean();
 
-      const existingByEmail = await User.findOne({ email: cleanedEmail });
-      if (existingByEmail) {
-        return res.status(400).json({ message: 'Email address is already registered' });
-      }
-
-      const existingByPhone = await User.findOne({ phone: cleanedPhone });
-      if (existingByPhone) {
-        return res.status(400).json({ message: 'Phone number is already registered' });
+      if (existingUser) {
+        if ((existingUser.username || '').toLowerCase() === cleanedUsername) {
+          return res.status(400).json({ message: 'Username is already taken' });
+        }
+        if ((existingUser.email || '').toLowerCase() === cleanedEmail) {
+          return res.status(400).json({ message: 'Email address is already registered' });
+        }
+        if ((existingUser.phone || '').trim() === cleanedPhone) {
+          return res.status(400).json({ message: 'Phone number is already registered' });
+        }
       }
 
       const newUser = new User({
         email: cleanedEmail,
         phone: cleanedPhone,
         username: cleanedUsername,
+        displayName: rawUsername,
+        password: rawPassword,
+        status: 'Hey there! I am using Planet',
       });
-      await newUser.save();
+
+      let saveTimer;
+      try {
+        await Promise.race([
+          newUser.save(),
+          new Promise((_, reject) => {
+            saveTimer = setTimeout(() => {
+              const timeoutErr = new Error('Database write timed out');
+              timeoutErr.isDbTimeout = true;
+              reject(timeoutErr);
+            }, 6000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(saveTimer);
+      }
 
       return res.status(201).json({
         message: 'Account registered successfully!',
-        user: { id: newUser._id, username: newUser.username, email: newUser.email },
+        user: {
+          id: newUser._id,
+          username: newUser.username,
+          displayName: newUser.displayName,
+          email: newUser.email,
+        },
       });
     } else {
       // Offline fallback simulation
@@ -138,7 +188,22 @@ router.post('/register', async (req, res) => {
       const firstErr = Object.values(error.errors || {})[0]?.message;
       return res.status(400).json({ message: firstErr || 'Invalid registration data' });
     }
-    res.status(500).json({ message: 'Server error during registration', error: error.message });
+    const errMsg = String(error?.message || '');
+    const isTimeoutOrNetwork =
+      error?.isDbTimeout ||
+      error?.code === 50 ||
+      error?.name === 'MongoNetworkTimeoutError' ||
+      error?.name === 'MongoServerSelectionError' ||
+      errMsg.includes('timed out') ||
+      errMsg.includes('MaxTimeMSExpired') ||
+      errMsg.includes('buffering');
+    if (isTimeoutOrNetwork) {
+      return res.status(503).json({
+        message: 'Database connection timed out. Please try again in a moment.',
+        error: errMsg,
+      });
+    }
+    res.status(500).json({ message: 'Server error during registration', error: errMsg });
   }
 });
 

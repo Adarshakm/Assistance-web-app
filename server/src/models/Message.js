@@ -53,9 +53,30 @@ const messageSchema = new mongoose.Schema(
       default: () =>
         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
+    status: {
+      type: String,
+      enum: ['sending', 'sent', 'delivered', 'read', 'failed'],
+      default: 'sent',
+    },
+    delivered: {
+      type: Boolean,
+      default: false,
+    },
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
     read: {
       type: Boolean,
       default: false,
+    },
+    receiptRead: {
+      type: Boolean,
+      default: false,
+    },
+    readAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

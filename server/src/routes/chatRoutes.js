@@ -110,36 +110,31 @@ const resolveUserAliases = async (identifier = '') => {
     return Array.from(aliases);
   }
 
+  let foundMatch = false;
   try {
-    // Fast exact match lookup first
-    const exactQuery = {
-      $or: [
-        { username: lowerRaw },
-        { displayName: raw },
-        { phone: raw },
-        ...(digits ? [{ phone: digits }] : []),
-      ],
-    };
+    const escaped = escapeRegex(raw);
+    const phonePattern = makePhonePattern(raw);
 
-    let matchedUsers = await User.find(exactQuery, 'username displayName phone email')
+    const exactOrConditions = [
+      { username: lowerRaw },
+      { email: lowerRaw },
+      { displayName: raw },
+      { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
+      { phone: raw },
+      ...(digits ? [{ phone: digits }] : []),
+      ...(phonePattern ? [{ phone: { $regex: phonePattern } }] : []),
+    ];
+
+    const matchedUsers = await User.find(
+      { $or: exactOrConditions },
+      'username displayName phone email'
+    )
       .limit(5)
       .maxTimeMS(3000)
       .lean();
 
-    if (!matchedUsers || matchedUsers.length === 0) {
-      const escaped = escapeRegex(raw);
-      matchedUsers = await User.find(
-        {
-          $or: [
-            { username: { $regex: '^' + escaped + '$', $options: 'i' } },
-            { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
-          ],
-        },
-        'username displayName phone email'
-      )
-        .limit(5)
-        .maxTimeMS(3000)
-        .lean();
+    if (matchedUsers && matchedUsers.length > 0) {
+      foundMatch = true;
     }
 
     for (const u of matchedUsers) {
@@ -166,7 +161,10 @@ const resolveUserAliases = async (identifier = '') => {
   }
 
   const result = Array.from(aliases);
-  aliasCache.set(cacheKey, { aliases: result, expiresAt: Date.now() + 5 * 60 * 1000 });
+  // Cache resolved user aliases briefly; avoid caching misses so newly registered contacts resolve immediately
+  if (foundMatch) {
+    aliasCache.set(cacheKey, { aliases: result, expiresAt: Date.now() + 30 * 1000 });
+  }
   return result;
 };
 
@@ -184,6 +182,22 @@ const formatMessage = (msg, userAliases = []) => {
         (digits && userAliases.includes(digits))
       )
       : false;
+
+  const isReadReceipt = msg?.receiptRead !== undefined ? !!msg.receiptRead : !!msg?.read;
+  const isDelivered = Boolean(
+    msg?.delivered ||
+    msg?.read ||
+    isReadReceipt ||
+    msg?.status === 'delivered' ||
+    msg?.status === 'read'
+  );
+  const computedStatus = isReadReceipt
+    ? 'read'
+    : isDelivered
+      ? 'delivered'
+      : msg?.status === 'sending' || msg?.status === 'failed'
+        ? msg.status
+        : 'sent';
 
   return {
     id: msg?._id ? msg._id.toString() : msg?.id || String(Date.now()),
@@ -203,7 +217,12 @@ const formatMessage = (msg, userAliases = []) => {
         ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
     createdAt: msg?.createdAt || new Date(),
+    status: computedStatus,
+    delivered: isDelivered,
+    deliveredAt: msg?.deliveredAt || null,
     read: !!msg?.read,
+    receiptRead: isReadReceipt,
+    readAt: msg?.readAt || null,
     isSent: isMe,
   };
 };
@@ -216,8 +235,10 @@ router.post('/send', async (req, res) => {
   try {
     const { sender, senderName, recipient, recipientName, text, mediaType, mediaUrl, fileName, fileSize, autoReply } = req.body;
 
-    const cleanSender = sender ? String(sender).trim().toLowerCase() : '';
-    const cleanRecipient = recipient ? String(recipient).trim().toLowerCase() : '';
+    const rawSender = sender ? String(sender).trim() : '';
+    const rawRecipient = recipient ? String(recipient).trim() : '';
+    const cleanSender = rawSender.toLowerCase();
+    const cleanRecipient = rawRecipient.toLowerCase();
     const cleanText = text ? String(text).trim() : '';
     const cleanMediaType = mediaType && ['image', 'video', 'document'].includes(mediaType) ? mediaType : 'text';
     const cleanMediaUrl = mediaUrl ? String(mediaUrl) : '';
@@ -233,47 +254,78 @@ router.post('/send', async (req, res) => {
 
     // Map recipient and sender to registered accounts if matching
     let targetRecipient = cleanRecipient;
-    let targetRecipientName = recipientName || cleanRecipient;
+    let targetRecipientName = recipientName || rawRecipient;
     let targetSender = cleanSender;
-    let targetSenderName = senderName || cleanSender;
+    let targetSenderName = senderName || rawSender;
+    const senderAliases = new Set([cleanSender, rawSender]);
+    const sRawDigits = normalizeDigits(rawSender);
+    if (sRawDigits) senderAliases.add(sRawDigits);
 
     try {
-      const recipientLower = cleanRecipient.toLowerCase();
-      const rDigits = normalizeDigits(cleanRecipient);
-      const foundRecipient = await User.findOne(
-        {
-          $or: [
-            { username: recipientLower },
-            { displayName: cleanRecipient },
-            { email: recipientLower },
-            { phone: cleanRecipient },
-            ...(rDigits ? [{ phone: rDigits }] : []),
-          ],
-        },
-        'username displayName phone'
-      ).lean();
+      const rDigits = normalizeDigits(rawRecipient);
+      const rPhonePattern = makePhonePattern(rawRecipient);
+      const rEscaped = escapeRegex(rawRecipient);
+
+      const sDigits = normalizeDigits(rawSender);
+      const sPhonePattern = makePhonePattern(rawSender);
+      const sEscaped = escapeRegex(rawSender);
+
+      let lookupTimer;
+      const [foundRecipient, foundSender] = await Promise.race([
+        Promise.all([
+          User.findOne(
+            {
+              $or: [
+                { username: cleanRecipient },
+                { email: cleanRecipient },
+                { displayName: rawRecipient },
+                { displayName: { $regex: '^' + rEscaped + '$', $options: 'i' } },
+                { phone: rawRecipient },
+                ...(rDigits ? [{ phone: rDigits }] : []),
+                ...(rPhonePattern ? [{ phone: { $regex: rPhonePattern } }] : []),
+              ],
+            },
+            'username displayName phone'
+          )
+            .maxTimeMS(2500)
+            .lean(),
+          User.findOne(
+            {
+              $or: [
+                { username: cleanSender },
+                { email: cleanSender },
+                { displayName: rawSender },
+                { displayName: { $regex: '^' + sEscaped + '$', $options: 'i' } },
+                { phone: rawSender },
+                ...(sDigits ? [{ phone: sDigits }] : []),
+                ...(sPhonePattern ? [{ phone: { $regex: sPhonePattern } }] : []),
+              ],
+            },
+            'username displayName phone'
+          )
+            .maxTimeMS(2500)
+            .lean(),
+        ]),
+        new Promise((resolve) => {
+          lookupTimer = setTimeout(() => resolve([null, null]), 2500);
+        }),
+      ]).finally(() => clearTimeout(lookupTimer));
+
       if (foundRecipient && foundRecipient.username) {
         targetRecipient = foundRecipient.username.toLowerCase();
         targetRecipientName = foundRecipient.displayName || foundRecipient.username;
       }
 
-      const senderLower = cleanSender.toLowerCase();
-      const sDigits = normalizeDigits(cleanSender);
-      const foundSender = await User.findOne(
-        {
-          $or: [
-            { username: senderLower },
-            { displayName: cleanSender },
-            { email: senderLower },
-            { phone: cleanSender },
-            ...(sDigits ? [{ phone: sDigits }] : []),
-          ],
-        },
-        'username displayName phone'
-      ).lean();
       if (foundSender && foundSender.username) {
         targetSender = foundSender.username.toLowerCase();
         targetSenderName = foundSender.displayName || foundSender.username;
+        senderAliases.add(targetSender);
+        if (foundSender.displayName) senderAliases.add(foundSender.displayName.toLowerCase());
+        if (foundSender.phone) {
+          senderAliases.add(foundSender.phone.toLowerCase());
+          const fDigits = normalizeDigits(foundSender.phone);
+          if (fDigits) senderAliases.add(fDigits);
+        }
       }
     } catch (e) {
       console.warn('[User Lookup Warning]:', e.message);
@@ -300,10 +352,28 @@ router.post('/send', async (req, res) => {
       fileName: cleanFileName,
       fileSize: cleanFileSize,
       time: formattedTime,
+      status: 'sent',
+      delivered: false,
       read: false,
+      receiptRead: false,
     });
 
-    const saved = await newMsg.save();
+    let saveTimer;
+    let saved;
+    try {
+      saved = await Promise.race([
+        newMsg.save(),
+        new Promise((_, reject) => {
+          saveTimer = setTimeout(() => {
+            const err = new Error('Message save timed out');
+            err.isTimeout = true;
+            reject(err);
+          }, 6000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(saveTimer);
+    }
 
     let replyMessage = null;
     // Optional automated reply for instant test demonstration
@@ -347,20 +417,26 @@ router.post('/send', async (req, res) => {
       replyMessage = await replyMsg.save();
     }
 
-    const senderAliases = [targetSender, cleanSender];
+    const senderAliasList = Array.from(senderAliases);
     const formattedSaved = {
-      ...formatMessage(saved, senderAliases),
+      ...formatMessage(saved, senderAliasList),
       isSent: true,
     };
 
     return res.status(201).json({
       success: true,
       message: formattedSaved,
-      reply: replyMessage ? formatMessage(replyMessage, senderAliases) : null,
+      reply: replyMessage ? formatMessage(replyMessage, senderAliasList) : null,
     });
   } catch (err) {
     console.error('[Chat API Error - Send]:', err);
     if (res.headersSent) return;
+    if (err?.isTimeout) {
+      return res.status(503).json({
+        success: false,
+        error: 'Message server timed out while saving. Please retry.',
+      });
+    }
     return res.status(500).json({
       success: false,
       error: 'Failed to send message: ' + (err.message || 'Server error'),
@@ -422,10 +498,13 @@ router.get('/conversation', async (req, res) => {
       });
     }
 
-    const user1Aliases = await resolveUserAliases(user1);
-    const user2Aliases = await resolveUserAliases(user2);
-    const cleanUser1Aliases = Array.from(new Set(user1Aliases.map((a) => String(a || '').trim()).filter(Boolean)));
-    const cleanUser2Aliases = Array.from(new Set(user2Aliases.map((a) => String(a || '').trim()).filter(Boolean)));
+    const sendReadReceipts = req.query.readReceipts !== 'false';
+    const [user1Aliases, user2Aliases] = await Promise.all([
+      resolveUserAliases(user1),
+      resolveUserAliases(user2),
+    ]);
+    const cleanUser1Aliases = Array.from(new Set(user1Aliases.map((a) => String(a || '').trim().toLowerCase()).filter(Boolean)));
+    const cleanUser2Aliases = Array.from(new Set(user2Aliases.map((a) => String(a || '').trim().toLowerCase()).filter(Boolean)));
 
     const messages = await Message.find({
       $or: [
@@ -438,11 +517,54 @@ router.get('/conversation', async (req, res) => {
       .maxTimeMS(4000)
       .lean();
 
-    // Mark messages received by user1 as read in the background
-    Message.updateMany(
-      { sender: { $in: cleanUser2Aliases }, recipient: { $in: cleanUser1Aliases }, read: false },
-      { $set: { read: true } }
-    ).catch((e) => console.error('[Chat Read Update Error]:', e));
+    const user1Set = new Set(cleanUser1Aliases);
+    const user2Set = new Set(cleanUser2Aliases);
+    const undeliveredIds = [];
+    const unreadIds = [];
+
+    const now = new Date();
+    for (const m of messages) {
+      const s = String(m.sender || '').trim().toLowerCase();
+      const r = String(m.recipient || '').trim().toLowerCase();
+      const isIncoming = user2Set.has(s) && user1Set.has(r);
+      if (!isIncoming) continue;
+
+      if (!m.delivered) {
+        undeliveredIds.push(m._id);
+        m.delivered = true;
+        m.deliveredAt = m.deliveredAt || now;
+      }
+      if (!m.read) {
+        unreadIds.push(m._id);
+        m.read = true;
+        if (sendReadReceipts) {
+          m.receiptRead = true;
+          m.readAt = now;
+          m.status = 'read';
+        } else {
+          m.receiptRead = false;
+          m.status = 'delivered';
+        }
+      }
+    }
+
+    // Only write to DB when there are actually undelivered or unread incoming messages
+    if (undeliveredIds.length > 0) {
+      Message.updateMany(
+        { _id: { $in: undeliveredIds } },
+        { $set: { delivered: true, deliveredAt: now } }
+      ).catch((e) => console.error('[Chat Delivery Update Error]:', e));
+    }
+    if (unreadIds.length > 0) {
+      Message.updateMany(
+        { _id: { $in: unreadIds } },
+        {
+          $set: sendReadReceipts
+            ? { read: true, receiptRead: true, readAt: now, status: 'read' }
+            : { read: true, receiptRead: false, status: 'delivered' },
+        }
+      ).catch((e) => console.error('[Chat Read Update Error]:', e));
+    }
 
     const formatted = messages.map((m) => formatMessage(m, cleanUser1Aliases));
 
@@ -512,6 +634,13 @@ router.post('/simulate-reply', async (req, res) => {
 
     const saved = await replyMsg.save();
 
+    // If contact replied, mark prior messages from currentUser to contact as delivered and read
+    const now = new Date();
+    await Message.updateMany(
+      { sender: currentUserRecipient, recipient: contactSender, read: false },
+      { $set: { delivered: true, deliveredAt: now, read: true, receiptRead: true, readAt: now, status: 'read' } }
+    ).catch(() => {});
+
     const recipientAliases = await resolveUserAliases(currentUserRecipient);
 
     return res.status(201).json({
@@ -548,7 +677,7 @@ router.get('/recent', async (req, res) => {
 
     const userAliases = await resolveUserAliases(user);
     const cleanAliases = Array.from(
-      new Set(userAliases.map((a) => String(a || '').trim()).filter((a) => a.length > 0))
+      new Set(userAliases.map((a) => String(a || '').trim().toLowerCase()).filter((a) => a.length > 0))
     );
 
     const messages = await Message.find({
@@ -558,6 +687,26 @@ router.get('/recent', async (req, res) => {
       .limit(100)
       .maxTimeMS(4000)
       .lean();
+
+    // Mark any pending incoming messages for this user as delivered only when needed
+    const now = new Date();
+    const aliasSet = new Set(cleanAliases);
+    const undeliveredIncomingIds = [];
+    for (const m of messages) {
+      const rLower = String(m?.recipient || '').trim().toLowerCase();
+      if (aliasSet.has(rLower) && !m.delivered && !m.read) {
+        undeliveredIncomingIds.push(m._id);
+        m.delivered = true;
+        m.deliveredAt = now;
+        m.status = 'delivered';
+      }
+    }
+    if (undeliveredIncomingIds.length > 0) {
+      Message.updateMany(
+        { _id: { $in: undeliveredIncomingIds } },
+        { $set: { delivered: true, deliveredAt: now, status: 'delivered' } }
+      ).catch((e) => console.error('[Chat Recent Delivery Error]:', e));
+    }
 
     const conversationMap = new Map();
 
@@ -595,6 +744,12 @@ router.get('/recent', async (req, res) => {
       }
 
       if (!conversationMap.has(otherUser)) {
+        const isLastRead = msg.receiptRead !== undefined ? !!msg.receiptRead : !!msg.read;
+        const isLastDelivered = Boolean(
+          msg.delivered || msg.read || isLastRead || msg.status === 'delivered' || msg.status === 'read'
+        );
+        const lastStatus = isLastRead ? 'read' : isLastDelivered ? 'delivered' : 'sent';
+
         conversationMap.set(otherUser, {
           contact: otherUser,
           contactName: otherName || otherUser,
@@ -604,6 +759,10 @@ router.get('/recent', async (req, res) => {
           lastTimestamp: msg.createdAt || new Date(),
           lastSender: rawSender,
           isSentByMe: isSender,
+          lastStatus,
+          lastDelivered: isLastDelivered,
+          lastRead: isLastRead,
+          lastReadAt: msg.readAt || null,
           unread: !isSender && !msg.read ? 1 : 0,
         });
       } else if (!isSender && !msg.read) {
@@ -612,10 +771,19 @@ router.get('/recent', async (req, res) => {
       }
     }
 
-    const conversations = Array.from(conversationMap.values());
+    let conversations = Array.from(conversationMap.values());
 
     // Enrich conversations with registered user details in a single fast batch query
-    const contactIdentifiers = conversations.map((c) => c.contact).filter(Boolean);
+    const contactIdentifiers = Array.from(
+      new Set(
+        conversations
+          .flatMap((c) => {
+            const d = normalizeDigits(c.contact);
+            return d ? [c.contact, d] : [c.contact];
+          })
+          .filter(Boolean)
+      )
+    );
     if (contactIdentifiers.length > 0) {
       try {
         const foundUsers = await User.find(
@@ -628,7 +796,7 @@ router.get('/recent', async (req, res) => {
           },
           'username displayName avatar phone status'
         )
-          .limit(contactIdentifiers.length)
+          .limit(contactIdentifiers.length * 2)
           .maxTimeMS(3000)
           .lean();
 
@@ -636,12 +804,18 @@ router.get('/recent', async (req, res) => {
         for (const u of foundUsers) {
           if (u.username) userLookup.set(u.username.toLowerCase(), u);
           if (u.displayName) userLookup.set(u.displayName.toLowerCase(), u);
-          if (u.phone) userLookup.set(u.phone, u);
+          if (u.phone) {
+            userLookup.set(u.phone, u);
+            const uDigits = normalizeDigits(u.phone);
+            if (uDigits) userLookup.set(uDigits, u);
+          }
         }
 
+        const mergedByCanonical = new Map();
         for (const conv of conversations) {
           const lowerC = String(conv.contact).toLowerCase();
-          const u = userLookup.get(lowerC) || userLookup.get(conv.contact);
+          const cDigits = normalizeDigits(conv.contact);
+          const u = userLookup.get(lowerC) || userLookup.get(conv.contact) || (cDigits && userLookup.get(cDigits));
           if (u) {
             conv.contactName = u.displayName || u.username || conv.contactName;
             conv.username = u.username;
@@ -649,7 +823,19 @@ router.get('/recent', async (req, res) => {
             conv.avatar = u.avatar || null;
             conv.status = u.status || 'Active on Planet';
           }
+          const canonicalKey = (conv.username || cDigits || lowerC);
+          const existing = mergedByCanonical.get(canonicalKey);
+          if (!existing) {
+            mergedByCanonical.set(canonicalKey, conv);
+          } else {
+            existing.unread = (existing.unread || 0) + (conv.unread || 0);
+            if (new Date(conv.lastTimestamp).getTime() > new Date(existing.lastTimestamp).getTime()) {
+              const combinedUnread = existing.unread;
+              mergedByCanonical.set(canonicalKey, { ...conv, unread: combinedUnread });
+            }
+          }
         }
+        conversations = Array.from(mergedByCanonical.values());
       } catch (e) {
         // Fallback
       }

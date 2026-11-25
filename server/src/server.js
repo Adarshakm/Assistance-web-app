@@ -48,8 +48,18 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 // Serve uploaded media files (images, videos, documents)
 app.use('/uploads', express.static(uploadsDirPath));
 
-// Serve built frontend assets
-app.use(express.static(clientDistPath));
+// Serve built frontend assets (never cache index.html so updates appear immediately)
+app.use(
+  express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  })
+);
 
 // Health Check API
 app.get('/api/health', (req, res) => {
@@ -122,6 +132,7 @@ app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities
     }
     return res.status(503).json({
       success: false,
+      message: 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
       error: 'Database is currently connecting or offline. Please check MongoDB Atlas IP whitelist (0.0.0.0/0).',
     });
   }
