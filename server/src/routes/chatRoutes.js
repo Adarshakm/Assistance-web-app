@@ -332,7 +332,7 @@ router.post('/send', async (req, res) => {
             .lean(),
         ]),
         new Promise((resolve) => {
-          lookupTimer = setTimeout(() => resolve([null, null]), 2500);
+          lookupTimer = setTimeout(() => resolve([null, null]), 4000);
         }),
       ]).finally(() => clearTimeout(lookupTimer));
 
@@ -674,7 +674,7 @@ router.post('/simulate-reply', async (req, res) => {
     await Message.updateMany(
       { sender: currentUserRecipient, recipient: contactSender, read: false },
       { $set: { delivered: true, deliveredAt: now, read: true, receiptRead: true, readAt: now, status: 'read' } }
-    ).catch(() => {});
+    ).catch(() => { });
 
     const recipientAliases = await resolveUserAliases(currentUserRecipient);
 
