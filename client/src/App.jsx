@@ -5950,10 +5950,17 @@ function App() {
     const currentUser = (loggedInUser || localStorage.getItem('assistance_user') || '').trim();
     if (!currentUser || isFetchingRecentRef.current) return;
     isFetchingRecentRef.current = true;
+    const timeoutController = new AbortController();
+    const abortOnParent = () => timeoutController.abort();
+    if (signal) {
+      if (signal.aborted) timeoutController.abort();
+      else signal.addEventListener('abort', abortOnParent, { once: true });
+    }
+    const timeoutId = setTimeout(() => timeoutController.abort(), 9000);
     try {
       const res = await fetch(`/api/chat/recent?user=${encodeURIComponent(currentUser)}&_t=${Date.now()}`, {
         cache: 'no-store',
-        signal: signal || undefined,
+        signal: timeoutController.signal,
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);
@@ -6011,6 +6018,8 @@ function App() {
     } catch {
       // Ignore background poll errors
     } finally {
+      clearTimeout(timeoutId);
+      if (signal) signal.removeEventListener('abort', abortOnParent);
       isFetchingRecentRef.current = false;
     }
   };
@@ -6041,13 +6050,20 @@ function App() {
     const lowerUser = currentUser.toLowerCase();
 
     isFetchingConversationRef.current = true;
+    const timeoutController = new AbortController();
+    const abortOnParent = () => timeoutController.abort();
+    if (signal) {
+      if (signal.aborted) timeoutController.abort();
+      else signal.addEventListener('abort', abortOnParent, { once: true });
+    }
+    const timeoutId = setTimeout(() => timeoutController.abort(), 9000);
     try {
       const allowReadReceipts = messagePermissionSettings.readReceipts !== false;
       const res = await fetch(
         `/api/chat/conversation?user1=${encodeURIComponent(currentUser)}&user2=${encodeURIComponent(contactKey)}&readReceipts=${allowReadReceipts}&_t=${Date.now()}`,
         {
           cache: 'no-store',
-          signal: signal || undefined,
+          signal: timeoutController.signal,
         }
       );
       if (res.ok) {
@@ -6116,6 +6132,8 @@ function App() {
         // Offline fallback: keep existing local messages
       }
     } finally {
+      clearTimeout(timeoutId);
+      if (signal) signal.removeEventListener('abort', abortOnParent);
       isFetchingConversationRef.current = false;
     }
   };
@@ -6276,7 +6294,7 @@ function App() {
   const dispatchChatMessage = async (optimisticMsg, contactKey) => {
     const localId = optimisticMsg.id;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 28000);
 
     try {
       const res = await fetch('/api/chat/send', {

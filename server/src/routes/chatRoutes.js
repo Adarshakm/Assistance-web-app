@@ -87,6 +87,27 @@ const makePhonePattern = (str = '') => {
 const aliasCache = new Map();
 
 /**
+ * Race a promise against a JS timeout so stalled MongoDB sockets never cause 504 Gateway Time-out
+ */
+const withTimeout = (promise, ms, onTimeout) => {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        if (typeof onTimeout === 'function') {
+          resolve(onTimeout());
+        } else {
+          const err = new Error(`Operation timed out after ${ms}ms`);
+          err.isTimeout = true;
+          reject(err);
+        }
+      }, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
+
+/**
  * Resolve all possible aliases (username, phone, email, display name) for a user with in-memory caching
  */
 const resolveUserAliases = async (identifier = '') => {
@@ -125,13 +146,17 @@ const resolveUserAliases = async (identifier = '') => {
       ...(phonePattern ? [{ phone: { $regex: phonePattern } }] : []),
     ];
 
-    const matchedUsers = await User.find(
-      { $or: exactOrConditions },
-      'username displayName phone email'
-    )
-      .limit(5)
-      .maxTimeMS(3000)
-      .lean();
+    const matchedUsers = await withTimeout(
+      User.find(
+        { $or: exactOrConditions },
+        'username displayName phone email'
+      )
+        .limit(5)
+        .maxTimeMS(3000)
+        .lean(),
+      3500,
+      () => []
+    );
 
     if (matchedUsers && matchedUsers.length > 0) {
       foundMatch = true;
@@ -307,7 +332,7 @@ router.post('/send', async (req, res) => {
             .lean(),
         ]),
         new Promise((resolve) => {
-          lookupTimer = setTimeout(() => resolve([null, null]), 4000);
+          lookupTimer = setTimeout(() => resolve([null, null]), 2500);
         }),
       ]).finally(() => clearTimeout(lookupTimer));
 
@@ -362,13 +387,13 @@ router.post('/send', async (req, res) => {
     let saved;
     try {
       saved = await Promise.race([
-        newMsg.save(),
+        newMsg.save({ w: 1 }),
         new Promise((_, reject) => {
           saveTimer = setTimeout(() => {
             const err = new Error('Message save timed out');
             err.isTimeout = true;
             reject(err);
-          }, 15000);
+          }, 20000);
         }),
       ]);
     } finally {
@@ -499,23 +524,33 @@ router.get('/conversation', async (req, res) => {
     }
 
     const sendReadReceipts = req.query.readReceipts !== 'false';
-    const [user1Aliases, user2Aliases] = await Promise.all([
-      resolveUserAliases(user1),
-      resolveUserAliases(user2),
-    ]);
+    const [user1Aliases, user2Aliases] = await withTimeout(
+      Promise.all([
+        resolveUserAliases(user1),
+        resolveUserAliases(user2),
+      ]),
+      3500,
+      () => [
+        [String(user1).trim(), String(user1).trim().toLowerCase()],
+        [String(user2).trim(), String(user2).trim().toLowerCase()],
+      ]
+    );
     const cleanUser1Aliases = Array.from(new Set(user1Aliases.map((a) => String(a || '').trim().toLowerCase()).filter(Boolean)));
     const cleanUser2Aliases = Array.from(new Set(user2Aliases.map((a) => String(a || '').trim().toLowerCase()).filter(Boolean)));
 
-    const messages = await Message.find({
-      $or: [
-        { sender: { $in: cleanUser1Aliases }, recipient: { $in: cleanUser2Aliases } },
-        { sender: { $in: cleanUser2Aliases }, recipient: { $in: cleanUser1Aliases } },
-      ],
-    })
-      .sort({ createdAt: 1 })
-      .limit(300)
-      .maxTimeMS(4000)
-      .lean();
+    const messages = await withTimeout(
+      Message.find({
+        $or: [
+          { sender: { $in: cleanUser1Aliases }, recipient: { $in: cleanUser2Aliases } },
+          { sender: { $in: cleanUser2Aliases }, recipient: { $in: cleanUser1Aliases } },
+        ],
+      })
+        .sort({ createdAt: 1 })
+        .limit(300)
+        .maxTimeMS(4000)
+        .lean(),
+      5000
+    );
 
     const user1Set = new Set(cleanUser1Aliases);
     const user2Set = new Set(cleanUser2Aliases);
@@ -675,18 +710,21 @@ router.get('/recent', async (req, res) => {
       });
     }
 
-    const userAliases = await resolveUserAliases(user);
+    const userAliases = await withTimeout(resolveUserAliases(user), 3500, () => [String(user).trim(), String(user).trim().toLowerCase()]);
     const cleanAliases = Array.from(
       new Set(userAliases.map((a) => String(a || '').trim().toLowerCase()).filter((a) => a.length > 0))
     );
 
-    const messages = await Message.find({
-      $or: [{ sender: { $in: cleanAliases } }, { recipient: { $in: cleanAliases } }],
-    })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .maxTimeMS(4000)
-      .lean();
+    const messages = await withTimeout(
+      Message.find({
+        $or: [{ sender: { $in: cleanAliases } }, { recipient: { $in: cleanAliases } }],
+      })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .maxTimeMS(4000)
+        .lean(),
+      5000
+    );
 
     // Mark any pending incoming messages for this user as delivered only when needed
     const now = new Date();
@@ -786,19 +824,23 @@ router.get('/recent', async (req, res) => {
     );
     if (contactIdentifiers.length > 0) {
       try {
-        const foundUsers = await User.find(
-          {
-            $or: [
-              { username: { $in: contactIdentifiers } },
-              { displayName: { $in: contactIdentifiers } },
-              { phone: { $in: contactIdentifiers } },
-            ],
-          },
-          'username displayName avatar phone status'
-        )
-          .limit(contactIdentifiers.length * 2)
-          .maxTimeMS(3000)
-          .lean();
+        const foundUsers = await withTimeout(
+          User.find(
+            {
+              $or: [
+                { username: { $in: contactIdentifiers } },
+                { displayName: { $in: contactIdentifiers } },
+                { phone: { $in: contactIdentifiers } },
+              ],
+            },
+            'username displayName avatar phone status'
+          )
+            .limit(contactIdentifiers.length * 2)
+            .maxTimeMS(3000)
+            .lean(),
+          3500,
+          () => []
+        );
 
         const userLookup = new Map();
         for (const u of foundUsers) {

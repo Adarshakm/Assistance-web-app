@@ -200,11 +200,11 @@ server.on('error', (err) => {
       console.log(`[Server] Port ${PORT} in use. Automatically freeing port ${PORT} and retrying...`);
       try {
         execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
-      } catch (_) {}
+      } catch (_) { }
       setTimeout(() => {
         try {
           server.close();
-        } catch (_) {}
+        } catch (_) { }
         server.listen(PORT, () => {
           console.log(`[Server] Running on http://localhost:${PORT}`);
         });
@@ -223,7 +223,7 @@ server.on('error', (err) => {
 const handleExit = (signal) => {
   try {
     server.close();
-  } catch (_) {}
+  } catch (_) { }
   if (signal === 'SIGUSR2') {
     process.kill(process.pid, 'SIGUSR2');
   } else {
