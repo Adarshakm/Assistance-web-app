@@ -7,7 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import connectDB from './config/db.js';
+import connectDB, { waitForDBConnection, getLastDbError } from './config/db.js';
 import userRoutes from './routes/userRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import callRoutes from './routes/callRoutes.js';
@@ -62,30 +62,32 @@ app.use(
 );
 
 // Health Check API
+const getHealthPayload = () => ({
+  status: 'ok',
+  message: 'MERN backend server is running',
+  version: '2.2.1',
+  dbConnected: mongoose.connection.readyState === 1,
+  dbState: mongoose.connection.readyState,
+  dbError: mongoose.connection.readyState === 1 ? null : getLastDbError(),
+  chatAvailable: true,
+  callAvailable: true,
+  postsAvailable: true,
+});
+
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    message: 'MERN backend server is running',
-    version: '2.2.1',
-    chatAvailable: true,
-    callAvailable: true,
-    postsAvailable: true,
-  });
+  res.status(200).json(getHealthPayload());
 });
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    message: 'MERN backend server is running',
-    version: '2.2.1',
-    chatAvailable: true,
-    callAvailable: true,
-    postsAvailable: true,
-  });
+  res.status(200).json(getHealthPayload());
 });
 
 // Fast fallback when database is disconnected or connecting (prevents 10000ms buffering timeouts)
-app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities', '/livestreams'], (req, res, next) => {
+app.use(['/api', '/users', '/chat', '/call', '/posts', '/stories', '/communities', '/livestreams'], async (req, res, next) => {
   if (req.path === '/health' || req.path === '/api/health') return next();
+
+  if (mongoose.connection.readyState !== 1 && req.method !== 'GET') {
+    await waitForDBConnection(4500);
+  }
 
   if (mongoose.connection.readyState !== 1) {
     if (req.method === 'GET') {

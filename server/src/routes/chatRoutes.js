@@ -287,7 +287,7 @@ router.post('/send', async (req, res) => {
             },
             'username displayName phone'
           )
-            .maxTimeMS(2500)
+            .maxTimeMS(4000)
             .lean(),
           User.findOne(
             {
@@ -303,11 +303,11 @@ router.post('/send', async (req, res) => {
             },
             'username displayName phone'
           )
-            .maxTimeMS(2500)
+            .maxTimeMS(4000)
             .lean(),
         ]),
         new Promise((resolve) => {
-          lookupTimer = setTimeout(() => resolve([null, null]), 2500);
+          lookupTimer = setTimeout(() => resolve([null, null]), 4000);
         }),
       ]).finally(() => clearTimeout(lookupTimer));
 
@@ -368,7 +368,7 @@ router.post('/send', async (req, res) => {
             const err = new Error('Message save timed out');
             err.isTimeout = true;
             reject(err);
-          }, 6000);
+          }, 15000);
         }),
       ]);
     } finally {

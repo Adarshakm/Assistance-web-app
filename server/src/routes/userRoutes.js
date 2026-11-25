@@ -148,7 +148,7 @@ router.post('/register', async (req, res) => {
               const timeoutErr = new Error('Database write timed out');
               timeoutErr.isDbTimeout = true;
               reject(timeoutErr);
-            }, 6000);
+            }, 12000);
           }),
         ]);
       } finally {
