@@ -6291,7 +6291,7 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const dispatchChatMessage = async (optimisticMsg, contactKey) => {
+  const dispatchChatMessage = async (optimisticMsg, contactKey, isRetry = false) => {
     const localId = optimisticMsg.id;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 28000);
@@ -6315,6 +6315,14 @@ function App() {
       });
 
       clearTimeout(timeoutId);
+
+      // Auto-retry once on transient 503 (e.g. Atlas connection pool reset)
+      if (res.status === 503 && !isRetry) {
+        console.log('[Send Message Auto-Retry]: Server was reconnecting, retrying once in 600ms...');
+        await new Promise((r) => setTimeout(r, 600));
+        return dispatchChatMessage(optimisticMsg, contactKey, true);
+      }
+
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.success && data?.message) {
@@ -6381,6 +6389,11 @@ function App() {
       }
     } catch (err) {
       clearTimeout(timeoutId);
+      if (err?.name === 'AbortError' && !isRetry) {
+        console.log('[Send Message Auto-Retry]: First attempt timed out, retrying once in 600ms...');
+        await new Promise((r) => setTimeout(r, 600));
+        return dispatchChatMessage(optimisticMsg, contactKey, true);
+      }
       console.warn('[Send Message Warning]:', err);
       const failReason = err?.name === 'AbortError' ? 'Timed out' : 'Network error';
       setChatMessages((prev) => {

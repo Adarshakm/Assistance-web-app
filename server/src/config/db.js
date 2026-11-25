@@ -35,12 +35,12 @@ const connectDB = async () => {
         : `${rawUri.replace(/\/$/, '')}/assistance?retryWrites=true&w=majority`;
 
       const conn = await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 20000,
-        socketTimeoutMS: 45000,
-        connectTimeoutMS: 20000,
-        maxIdleTimeMS: 60000,
-        heartbeatFrequencyMS: 10000,
-        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 30000,
+        socketTimeoutMS: 60000,
+        connectTimeoutMS: 30000,
+        maxIdleTimeMS: 120000,
+        heartbeatFrequencyMS: 30000,
+        maxPoolSize: 15,
         minPoolSize: 2,
         autoIndex: false,
       });

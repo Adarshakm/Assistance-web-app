@@ -412,9 +412,32 @@ router.post('/send', async (req, res) => {
             const err = new Error('Message save timed out');
             err.isTimeout = true;
             reject(err);
-          }, 20000);
+          }, 12000);
         }),
       ]);
+    } catch (saveErr) {
+      clearTimeout(saveTimer);
+      if (
+        saveErr?.isTimeout ||
+        saveErr?.message?.includes('pool') ||
+        saveErr?.message?.includes('timed out') ||
+        saveErr?.message?.includes('buffering timed out') ||
+        saveErr?.name === 'MongoNetworkError'
+      ) {
+        console.warn('[Chat Save Retry]: First attempt had network lag/pool reset, retrying write once...');
+        saved = await Promise.race([
+          newMsg.save({ w: 1 }),
+          new Promise((_, reject) => {
+            saveTimer = setTimeout(() => {
+              const err = new Error('Message save timed out on retry');
+              err.isTimeout = true;
+              reject(err);
+            }, 8000);
+          }),
+        ]);
+      } else {
+        throw saveErr;
+      }
     } finally {
       clearTimeout(saveTimer);
     }
