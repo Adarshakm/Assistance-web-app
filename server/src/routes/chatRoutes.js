@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import { getLastDbError } from '../config/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,30 +134,41 @@ const resolveUserAliases = async (identifier = '') => {
 
   let foundMatch = false;
   try {
-    const escaped = escapeRegex(raw);
-    const phonePattern = makePhonePattern(raw);
-
     const exactOrConditions = [
       { username: lowerRaw },
       { email: lowerRaw },
       { displayName: raw },
-      { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
       { phone: raw },
       ...(digits ? [{ phone: digits }] : []),
-      ...(phonePattern ? [{ phone: { $regex: phonePattern } }] : []),
     ];
 
-    const matchedUsers = await withTimeout(
+    let matchedUsers = await withTimeout(
       User.find(
         { $or: exactOrConditions },
         'username displayName phone email'
       )
         .limit(5)
-        .maxTimeMS(3000)
+        .maxTimeMS(2000)
         .lean(),
-      3500,
+      2500,
       () => []
     );
+
+    // If exact indexed lookup didn't match, check case-insensitive match only for name strings
+    if ((!matchedUsers || matchedUsers.length === 0) && raw.length > 2 && !digits) {
+      const escaped = escapeRegex(raw);
+      matchedUsers = await withTimeout(
+        User.find(
+          { displayName: { $regex: '^' + escaped + '$', $options: 'i' } },
+          'username displayName phone email'
+        )
+          .limit(2)
+          .maxTimeMS(1500)
+          .lean(),
+        2000,
+        () => []
+      );
+    }
 
     if (matchedUsers && matchedUsers.length > 0) {
       foundMatch = true;
@@ -186,10 +198,9 @@ const resolveUserAliases = async (identifier = '') => {
   }
 
   const result = Array.from(aliases);
-  // Cache resolved user aliases briefly; avoid caching misses so newly registered contacts resolve immediately
-  if (foundMatch) {
-    aliasCache.set(cacheKey, { aliases: result, expiresAt: Date.now() + 30 * 1000 });
-  }
+  // Cache resolved user aliases: 120s for matches, 30s for non-matches to prevent spamming Atlas
+  const cacheTtl = foundMatch ? 120 * 1000 : 30 * 1000;
+  aliasCache.set(cacheKey, { aliases: result, expiresAt: Date.now() + cacheTtl });
   return result;
 };
 
@@ -277,6 +288,18 @@ router.post('/send', async (req, res) => {
       });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      const dbErr = getLastDbError();
+      const isSslAlert = dbErr && (dbErr.includes('SSL alert') || dbErr.includes('whitelist'));
+      const msg = isSslAlert
+        ? 'MongoDB Atlas connection rejected (SSL Alert 80 / IP Not Whitelisted). Please add 0.0.0.0/0 in MongoDB Atlas Network Access.'
+        : 'Database is currently connecting or offline. Please retry in a few seconds.';
+      return res.status(503).json({
+        success: false,
+        error: msg,
+      });
+    }
+
     // Map recipient and sender to registered accounts if matching
     let targetRecipient = cleanRecipient;
     let targetRecipientName = recipientName || rawRecipient;
@@ -304,15 +327,13 @@ router.post('/send', async (req, res) => {
                 { username: cleanRecipient },
                 { email: cleanRecipient },
                 { displayName: rawRecipient },
-                { displayName: { $regex: '^' + rEscaped + '$', $options: 'i' } },
                 { phone: rawRecipient },
                 ...(rDigits ? [{ phone: rDigits }] : []),
-                ...(rPhonePattern ? [{ phone: { $regex: rPhonePattern } }] : []),
               ],
             },
             'username displayName phone'
           )
-            .maxTimeMS(4000)
+            .maxTimeMS(2500)
             .lean(),
           User.findOne(
             {
@@ -320,19 +341,17 @@ router.post('/send', async (req, res) => {
                 { username: cleanSender },
                 { email: cleanSender },
                 { displayName: rawSender },
-                { displayName: { $regex: '^' + sEscaped + '$', $options: 'i' } },
                 { phone: rawSender },
                 ...(sDigits ? [{ phone: sDigits }] : []),
-                ...(sPhonePattern ? [{ phone: { $regex: sPhonePattern } }] : []),
               ],
             },
             'username displayName phone'
           )
-            .maxTimeMS(4000)
+            .maxTimeMS(2500)
             .lean(),
         ]),
         new Promise((resolve) => {
-          lookupTimer = setTimeout(() => resolve([null, null]), 4000);
+          lookupTimer = setTimeout(() => resolve([null, null]), 2500);
         }),
       ]).finally(() => clearTimeout(lookupTimer));
 
@@ -439,7 +458,7 @@ router.post('/send', async (req, res) => {
         time: formattedTime,
         read: false,
       });
-      replyMessage = await replyMsg.save();
+      replyMessage = await replyMsg.save({ w: 1 });
     }
 
     const senderAliasList = Array.from(senderAliases);
@@ -667,7 +686,7 @@ router.post('/simulate-reply', async (req, res) => {
       read: false,
     });
 
-    const saved = await replyMsg.save();
+    const saved = await replyMsg.save({ w: 1 });
 
     // If contact replied, mark prior messages from currentUser to contact as delivered and read
     const now = new Date();
